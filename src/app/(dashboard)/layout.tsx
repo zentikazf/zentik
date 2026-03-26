@@ -1,17 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
-import { OrgProvider } from '@/providers/org-provider';
+import { OrgProvider, useOrg } from '@/providers/org-provider';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { OnboardingFlow } from '@/components/onboarding/onboarding-flow';
+
+function DashboardContent({ children }: { children: React.ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const { organization, ready } = useOrg();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!ready || !organization || !user) return;
+
+    // Show onboarding if org name is auto-generated ("{name}'s Organization")
+    const isAutoName = organization.name.endsWith("'s Organization");
+    const dismissed = typeof window !== 'undefined'
+      ? localStorage.getItem(`zentik:onboarding:${organization.id}`)
+      : null;
+
+    if (isAutoName && !dismissed) {
+      setShowOnboarding(true);
+    }
+  }, [ready, organization, user]);
+
+  const handleOnboardingComplete = () => {
+    if (organization) {
+      localStorage.setItem(`zentik:onboarding:${organization.id}`, 'done');
+    }
+    setShowOnboarding(false);
+    window.location.reload();
+  };
+
+  return (
+    <>
+      {showOnboarding && <OnboardingFlow onComplete={handleOnboardingComplete} />}
+      <div className="flex h-screen bg-gray-50 dark:bg-background overflow-hidden">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Topbar onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {children}
+          </main>
+        </div>
+      </div>
+    </>
+  );
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading, organizations } = useAuth();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -44,15 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <OrgProvider>
-      <div className="flex h-screen bg-gray-50 dark:bg-background overflow-hidden">
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Topbar onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            {children}
-          </main>
-        </div>
-      </div>
+      <DashboardContent>{children}</DashboardContent>
     </OrgProvider>
   );
 }

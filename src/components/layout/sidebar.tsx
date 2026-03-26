@@ -29,8 +29,8 @@ interface NavItem {
 
 const mainItems: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Proyectos', href: '/projects', icon: FolderKanban, permission: 'read:projects' },
   { name: 'Clientes', href: '/clients', icon: Building, permission: 'manage:members' },
+  { name: 'Proyectos', href: '/projects', icon: FolderKanban, permission: 'read:projects' },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
   { name: 'Reportes', href: '/reports', icon: BarChart3, permission: 'read:projects' },
   { name: 'Equipo', href: '/team', icon: Users, permission: 'read:members' },
