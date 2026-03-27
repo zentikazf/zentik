@@ -68,7 +68,13 @@ export function NotificationPanel({ open }: NotificationPanelProps) {
     try {
       const res = await api.get<any>('/notifications?page=1&limit=30');
       const data = res.data;
-      const items: Notification[] = Array.isArray(data) ? data : data?.data || [];
+      const raw = Array.isArray(data) ? data : data?.data || [];
+      // Map API fields (readAt, message) to frontend interface (read, body)
+      const items: Notification[] = raw.map((n: any) => ({
+        ...n,
+        read: n.read ?? (n.readAt != null),
+        body: n.body ?? n.message ?? null,
+      }));
       setNotifications(items);
     } catch {
       // silent

@@ -4,12 +4,10 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Search, Shield, Trash2, Users, Eye, Settings2 } from 'lucide-react';
+import { UserPlus, Search, Shield, Trash2, Users, Eye, Settings2, X, Copy, EyeOff } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -27,9 +25,191 @@ const roleColorMap: Record<string, string> = {
   'Designer': 'bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-400',
   'DevOps': 'bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400',
   'Soporte': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  'Cliente': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 };
 
 const defaultBadgeColor = 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+
+function CreateMemberDialog({
+  open,
+  onClose,
+  orgId,
+  roles,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  orgId: string;
+  roles: any[];
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [roleId, setRoleId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ temporaryPassword?: string; member?: any } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const assignableRoles = roles.filter((r) => r.name !== 'Owner');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !roleId) return;
+
+    setSaving(true);
+    try {
+      const res = await api.post(`/organizations/${orgId}/members`, { name, email, roleId });
+      setResult(res.data);
+      toast.success('Miembro creado', `${name} ha sido agregado al equipo`);
+      onCreated();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Error al crear miembro';
+      toast.error('Error', message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    setName('');
+    setEmail('');
+    setRoleId('');
+    setResult(null);
+    setShowPassword(false);
+    onClose();
+  };
+
+  const copyPassword = () => {
+    if (result?.temporaryPassword) {
+      navigator.clipboard.writeText(result.temporaryPassword);
+      toast.success('Copiado', 'Contraseña temporal copiada al portapapeles');
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+            {result ? 'Miembro Creado' : 'Agregar Miembro'}
+          </h2>
+          <button onClick={handleClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {result ? (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-green-50 p-4 dark:bg-green-950/30">
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                Usuario creado exitosamente
+              </p>
+              <p className="mt-1 text-xs text-green-600 dark:text-green-500">
+                El usuario deberá cambiar su contraseña en el primer inicio de sesión
+              </p>
+            </div>
+
+            {result.temporaryPassword && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Contraseña temporal</label>
+                <div className="flex items-center gap-2 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
+                  <code className="flex-1 text-sm font-mono text-gray-800 dark:text-gray-200">
+                    {showPassword ? result.temporaryPassword : '••••••••••'}
+                  </code>
+                  <button
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={copyPassword}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Guarda esta contraseña. No se mostrará de nuevo.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={handleClose}
+              className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">Nombre completo</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Juan Pérez"
+                required
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">Correo electrónico</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="juan@empresa.com"
+                required
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">Rol</label>
+              <Select value={roleId} onValueChange={setRoleId}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue placeholder="Seleccionar rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignableRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Se generará una contraseña temporal. El usuario deberá cambiarla al iniciar sesión por primera vez.
+            </p>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving || !name || !email || !roleId}
+                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Creando...' : 'Crear Usuario'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function TeamPage() {
   const { orgId } = useOrg();
@@ -38,9 +218,7 @@ export default function TeamPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRoleId, setInviteRoleId] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
   const [viewingUser, setViewingUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
 
@@ -72,25 +250,8 @@ export default function TeamPage() {
       const res = await api.get(`/organizations/${orgId}/roles`);
       const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
       setRoles(list);
-      const defaultRole = list.find((r: any) => r.isDefault) || list.find((r: any) => r.name !== 'Owner');
-      if (defaultRole) setInviteRoleId(defaultRole.id);
     } catch {
       // silent
-    }
-  };
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orgId || !inviteRoleId) return;
-    try {
-      await api.post(`/organizations/${orgId}/invites`, { email: inviteEmail, roleId: inviteRoleId });
-      toast.success('Invitación enviada', `Se ha enviado una invitación a ${inviteEmail}`);
-      setShowInvite(false);
-      setInviteEmail('');
-      loadMembers();
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Error al enviar invitación';
-      toast.error('Error', message);
     }
   };
 
@@ -125,10 +286,8 @@ export default function TeamPage() {
     (m.role?.name || '').toLowerCase().includes(search.toLowerCase()),
   );
 
-  const inviteRoles = roles.filter((r) => r.name !== 'Owner');
   const assignableRoles = roles.filter((r) => r.name !== 'Owner');
 
-  // Stats
   const totalMembers = members.length;
   const roleDistribution = roles
     .map((r) => ({
@@ -165,7 +324,6 @@ export default function TeamPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Roles y Permisos button */}
           {canManage && (
             <Link href="/settings/roles">
               <Button variant="outline" className="rounded-full">
@@ -173,63 +331,37 @@ export default function TeamPage() {
               </Button>
             </Link>
           )}
-          {/* Invite button */}
           {canManage && (
-            <Dialog open={showInvite} onOpenChange={setShowInvite}>
-              <DialogTrigger asChild>
-                <Button className="rounded-full">
-                  <UserPlus className="mr-2 h-4 w-4" /> Invitar
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Invitar Miembro del Equipo</DialogTitle></DialogHeader>
-                <form onSubmit={handleInvite} className="space-y-4">
-                  <div>
-                    <Label>Email</Label>
-                    <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
-                  </div>
-                  <div>
-                    <Label>Rol</Label>
-                    <Select value={inviteRoleId} onValueChange={setInviteRoleId}>
-                      <SelectTrigger><SelectValue placeholder="Selecciona un rol" /></SelectTrigger>
-                      <SelectContent>
-                        {inviteRoles.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="submit" className="w-full rounded-full" disabled={!inviteRoleId}>Enviar Invitación</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Button className="rounded-full" onClick={() => setShowCreate(true)}>
+              <UserPlus className="mr-2 h-4 w-4" /> Agregar Miembro
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — Blue theme */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950">
+        <div className="flex items-center gap-4 rounded-[20px] border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 dark:border-blue-900/40 dark:from-blue-950/30 dark:to-gray-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/50">
             <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">{totalMembers}</p>
-            <p className="text-xs text-gray-400">Miembros</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Miembros</p>
           </div>
         </div>
-        <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-950">
-            <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+        <div className="flex items-center gap-4 rounded-[20px] border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 dark:border-blue-900/40 dark:from-blue-950/30 dark:to-gray-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/50">
+            <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">{roles.length}</p>
-            <p className="text-xs text-gray-400">Roles activos</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Roles activos</p>
           </div>
         </div>
-        <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 dark:bg-green-950">
-            <Settings2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+        <div className="flex items-center gap-4 rounded-[20px] border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 dark:border-blue-900/40 dark:from-blue-950/30 dark:to-gray-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/50">
+            <Settings2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
             <div className="flex flex-wrap gap-1">
@@ -256,7 +388,7 @@ export default function TeamPage() {
       </div>
 
       {/* Members List */}
-      <div className="rounded-[25px] bg-white p-6 dark:bg-gray-900">
+      <div className="rounded-[25px] border border-blue-100 bg-white p-6 dark:border-blue-900/30 dark:bg-gray-900">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
             {filtered.length} miembro{filtered.length !== 1 ? 's' : ''}
@@ -272,7 +404,7 @@ export default function TeamPage() {
             return (
               <div
                 key={member.id}
-                className="flex items-center gap-4 rounded-xl border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/5"
+                className="flex items-center gap-4 rounded-xl border border-gray-100 p-4 transition-colors hover:bg-blue-50/50 dark:border-gray-800 dark:hover:bg-blue-950/20"
               >
                 <Avatar className="h-11 w-11">
                   <AvatarImage src={member.user?.image} />
@@ -285,9 +417,8 @@ export default function TeamPage() {
                   <p className="text-[13px] text-gray-400">{member.user?.email}</p>
                 </div>
 
-                {/* View profile */}
                 <button
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-blue-400"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-600 dark:bg-blue-950/50 dark:hover:bg-blue-900/50 dark:hover:text-blue-400"
                   onClick={async () => {
                     const userId = member.userId || member.user?.id;
                     if (!userId) return;
@@ -303,7 +434,6 @@ export default function TeamPage() {
                   <Eye className="h-4 w-4" />
                 </button>
 
-                {/* Role selector or badge */}
                 {canManage && !isOwner ? (
                   <Select value={roleId} onValueChange={(v) => handleRoleChange(member.id, v)}>
                     <SelectTrigger className="w-40 rounded-full">
@@ -321,7 +451,6 @@ export default function TeamPage() {
                   </Badge>
                 )}
 
-                {/* Remove button */}
                 {canManage && !isOwner && (
                   <button
                     onClick={() => handleRemove(member.id, member.user?.name || 'este miembro')}
@@ -372,6 +501,14 @@ export default function TeamPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <CreateMemberDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        orgId={orgId || ''}
+        roles={roles}
+        onCreated={loadMembers}
+      />
     </div>
   );
 }

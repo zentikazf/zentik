@@ -10,7 +10,8 @@ import { OnboardingFlow } from '@/components/onboarding/onboarding-flow';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
-function ChangePasswordModal({ onComplete }: { onComplete: () => void }) {
+function WelcomeChangePasswordModal({ onComplete, userName, roleName, orgName }: { onComplete: () => void; userName?: string; roleName?: string; orgName?: string }) {
+  const [step, setStep] = useState<'welcome' | 'password'>('welcome');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
@@ -39,49 +40,84 @@ function ChangePasswordModal({ onComplete }: { onComplete: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl dark:bg-gray-900">
-        <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white text-xl font-bold mx-auto">
-          Z
-        </div>
-        <h2 className="mt-4 text-center text-xl font-semibold text-gray-800 dark:text-white">
-          Cambiar Contraseña
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
-          Por seguridad, debes cambiar tu contraseña temporal antes de continuar.
-        </p>
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">Nueva contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              required
-              minLength={6}
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-2xl border border-blue-100 bg-white p-8 shadow-2xl shadow-blue-900/10 dark:border-blue-900/50 dark:bg-gray-950">
+        {step === 'welcome' ? (
+          <div className="text-center">
+            <div className="mx-auto mb-4 text-5xl">🎉</div>
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-xl font-bold shadow-lg shadow-blue-600/30">
+              Z
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Bienvenido al equipo{userName ? `, ${userName.split(' ')[0]}` : ''}!
+            </h2>
+            {orgName && (
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Te han agregado a <span className="font-semibold text-blue-600 dark:text-blue-400">{orgName}</span>
+              </p>
+            )}
+            {roleName && (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 dark:bg-blue-950/40">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Tu rol:</span>
+                <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{roleName}</span>
+              </div>
+            )}
+            <p className="mt-5 text-sm text-gray-500 dark:text-gray-400">
+              Para comenzar, necesitamos que configures tu contraseña personal.
+            </p>
+            <button
+              onClick={() => setStep('password')}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 shadow-lg shadow-blue-600/20"
+            >
+              Configurar mi contraseña
+            </button>
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">Confirmar contraseña</label>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="Repite tu contraseña"
-              required
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={saving || !password || !confirm}
-            className="w-full rounded-xl bg-blue-600 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'Guardando...' : 'Cambiar Contraseña'}
-          </button>
-        </form>
+        ) : (
+          <>
+            <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white text-xl font-bold mx-auto">
+              Z
+            </div>
+            <h2 className="mt-4 text-center text-xl font-semibold text-gray-800 dark:text-white">
+              Crea tu contraseña
+            </h2>
+            <p className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+              Elige una contraseña segura para tu cuenta.
+            </p>
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-gray-500">Nueva contraseña</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  required
+                  minLength={6}
+                  autoFocus
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-gray-500">Confirmar contraseña</label>
+                <input
+                  type="password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="Repite tu contraseña"
+                  required
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={saving || !password || !confirm}
+                className="w-full rounded-xl bg-blue-600 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-lg shadow-blue-600/20"
+              >
+                {saving ? 'Guardando...' : 'Comenzar'}
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
@@ -117,7 +153,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   return (
     <>
       {showChangePassword && (
-        <ChangePasswordModal onComplete={() => { setShowChangePassword(false); window.location.reload(); }} />
+        <WelcomeChangePasswordModal
+          userName={user?.name}
+          roleName={organization?.roleName}
+          orgName={organization?.name}
+          onComplete={() => { setShowChangePassword(false); window.location.reload(); }}
+        />
       )}
       {showOnboarding && <OnboardingFlow onComplete={handleOnboardingComplete} />}
       <div className="flex h-screen bg-gray-50 dark:bg-background overflow-hidden">
