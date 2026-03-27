@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FolderKanban, Bell, LogOut, X, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, MessageSquarePlus, Bell, LogOut, X, Moon, Sun } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useNotificationStore } from '@/stores/use-notification-store';
@@ -12,7 +12,9 @@ import { api } from '@/lib/api-client';
 import { useTheme } from 'next-themes';
 
 const navItems = [
-  { name: 'Mis Proyectos', href: '/portal', icon: FolderKanban },
+  { name: 'Dashboard', href: '/portal', icon: LayoutDashboard },
+  { name: 'Proyectos', href: '/portal/projects', icon: FolderKanban },
+  { name: 'Sugerencias', href: '/portal/suggestions', icon: MessageSquarePlus },
   { name: 'Notificaciones', href: '/portal/notifications', icon: Bell },
 ];
 

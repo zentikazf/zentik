@@ -69,13 +69,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [loading, isAuthenticated, organizations, router]);
 
-  if (loading) {
+  // Show branded loading while auth or redirect is resolving
+  const isClient = !loading && isAuthenticated && organizations.length > 0 && organizations.every((o) => o.roleName === 'Cliente');
+
+  if (loading || isClient) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="mt-4 text-sm text-muted-foreground">Cargando...</p>
+      <div className="flex h-screen flex-col items-center justify-center bg-gray-50 dark:bg-background">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white text-xl font-bold mb-4">
+          Z
         </div>
+        <p className="text-lg font-semibold text-gray-800 dark:text-white">zentik</p>
+        <div className="mt-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
       </div>
     );
   }
