@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Search, Shield, Eye } from 'lucide-react';
+import { UserPlus, Search, Shield, Trash2, Users, Eye, Settings2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
 import { getInitials } from '@/lib/utils';
+import Link from 'next/link';
 
 const roleColorMap: Record<string, string> = {
   'Owner': 'bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400',
@@ -31,6 +33,7 @@ const defaultBadgeColor = 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-
 
 export default function TeamPage() {
   const { orgId } = useOrg();
+  const { hasPermission } = usePermissions();
   const [members, setMembers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +43,8 @@ export default function TeamPage() {
   const [inviteRoleId, setInviteRoleId] = useState('');
   const [viewingUser, setViewingUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+
+  const canManage = hasPermission('manage:members');
 
   useEffect(() => {
     if (orgId) {
@@ -54,11 +59,8 @@ export default function TeamPage() {
       const res = await api.get(`/organizations/${orgId}/members`);
       setMembers(Array.isArray(res.data) ? res.data : res.data?.data || []);
     } catch (err) {
-      if (err instanceof ApiError) {
-        toast.error('Error al cargar miembros', err.message);
-      } else {
-        toast.error('Error al cargar miembros', 'Ocurrió un error inesperado');
-      }
+      const message = err instanceof ApiError ? err.message : 'Error al cargar miembros';
+      toast.error('Error', message);
     } finally {
       setLoading(false);
     }
@@ -70,7 +72,6 @@ export default function TeamPage() {
       const res = await api.get(`/organizations/${orgId}/roles`);
       const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
       setRoles(list);
-      // Set default role for invite (first non-Owner, preferably isDefault)
       const defaultRole = list.find((r: any) => r.isDefault) || list.find((r: any) => r.name !== 'Owner');
       if (defaultRole) setInviteRoleId(defaultRole.id);
     } catch {
@@ -88,25 +89,64 @@ export default function TeamPage() {
       setInviteEmail('');
       loadMembers();
     } catch (err) {
-      if (err instanceof ApiError) {
-        toast.error('Error al enviar invitación', err.message);
-      } else {
-        toast.error('Error al enviar invitación', 'Ocurrió un error inesperado');
-      }
+      const message = err instanceof ApiError ? err.message : 'Error al enviar invitación';
+      toast.error('Error', message);
+    }
+  };
+
+  const handleRoleChange = async (memberId: string, roleId: string) => {
+    if (!orgId) return;
+    try {
+      await api.patch(`/organizations/${orgId}/members/${memberId}`, { roleId });
+      toast.success('Rol actualizado', 'El rol del miembro ha sido actualizado');
+      loadMembers();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Error al actualizar rol';
+      toast.error('Error', message);
+    }
+  };
+
+  const handleRemove = async (memberId: string, memberName: string) => {
+    if (!confirm(`¿Eliminar a ${memberName} del equipo?`)) return;
+    if (!orgId) return;
+    try {
+      await api.delete(`/organizations/${orgId}/members/${memberId}`);
+      toast.success('Miembro eliminado', `${memberName} ha sido removido del equipo`);
+      setMembers(members.filter((m) => m.id !== memberId));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Error al eliminar miembro';
+      toast.error('Error', message);
     }
   };
 
   const filtered = members.filter((m) =>
     (m.user?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (m.user?.email || '').toLowerCase().includes(search.toLowerCase()),
+    (m.user?.email || '').toLowerCase().includes(search.toLowerCase()) ||
+    (m.role?.name || '').toLowerCase().includes(search.toLowerCase()),
   );
 
-  // Roles available for invitation (exclude Owner)
   const inviteRoles = roles.filter((r) => r.name !== 'Owner');
+  const assignableRoles = roles.filter((r) => r.name !== 'Owner');
+
+  // Stats
+  const totalMembers = members.length;
+  const roleDistribution = roles
+    .map((r) => ({
+      name: r.name,
+      count: members.filter((m) => m.role?.name === r.name).length,
+    }))
+    .filter((r) => r.count > 0)
+    .sort((a, b) => b.count - a.count);
 
   if (loading) {
     return (
       <div className="space-y-4">
+        <Skeleton className="h-10 w-64 rounded-xl" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-[25px]" />
+          ))}
+        </div>
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-20 rounded-[25px]" />
         ))}
@@ -120,43 +160,95 @@ export default function TeamPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[22px] font-semibold text-gray-800 dark:text-white">Equipo</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Gestiona los miembros de tu organización</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Gestiona los miembros, roles y permisos de tu organización
+          </p>
         </div>
-        <Dialog open={showInvite} onOpenChange={setShowInvite}>
-          <DialogTrigger asChild>
-            <Button className="rounded-full">
-              <UserPlus className="mr-2 h-4 w-4" /> Invitar Miembro
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Invitar Miembro del Equipo</DialogTitle></DialogHeader>
-            <form onSubmit={handleInvite} className="space-y-4">
-              <div>
-                <Label>Email</Label>
-                <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
-              </div>
-              <div>
-                <Label>Rol</Label>
-                <Select value={inviteRoleId} onValueChange={setInviteRoleId}>
-                  <SelectTrigger><SelectValue placeholder="Selecciona un rol" /></SelectTrigger>
-                  <SelectContent>
-                    {inviteRoles.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full rounded-full" disabled={!inviteRoleId}>Enviar Invitación</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          {/* Roles y Permisos button */}
+          {canManage && (
+            <Link href="/settings/roles">
+              <Button variant="outline" className="rounded-full">
+                <Shield className="mr-2 h-4 w-4" /> Roles y Permisos
+              </Button>
+            </Link>
+          )}
+          {/* Invite button */}
+          {canManage && (
+            <Dialog open={showInvite} onOpenChange={setShowInvite}>
+              <DialogTrigger asChild>
+                <Button className="rounded-full">
+                  <UserPlus className="mr-2 h-4 w-4" /> Invitar
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Invitar Miembro del Equipo</DialogTitle></DialogHeader>
+                <form onSubmit={handleInvite} className="space-y-4">
+                  <div>
+                    <Label>Email</Label>
+                    <Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
+                  </div>
+                  <div>
+                    <Label>Rol</Label>
+                    <Select value={inviteRoleId} onValueChange={setInviteRoleId}>
+                      <SelectTrigger><SelectValue placeholder="Selecciona un rol" /></SelectTrigger>
+                      <SelectContent>
+                        {inviteRoles.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full rounded-full" disabled={!inviteRoleId}>Enviar Invitación</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950">
+            <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-800 dark:text-white">{totalMembers}</p>
+            <p className="text-xs text-gray-400">Miembros</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-950">
+            <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-800 dark:text-white">{roles.length}</p>
+            <p className="text-xs text-gray-400">Roles activos</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 dark:bg-green-950">
+            <Settings2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <div className="flex flex-wrap gap-1">
+              {roleDistribution.slice(0, 3).map((r) => (
+                <span key={r.name} className="text-xs text-gray-500 dark:text-gray-400">
+                  {r.name} ({r.count})
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">Distribución</p>
+          </div>
+        </div>
       </div>
 
       {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
-          placeholder="Buscar miembros..."
+          placeholder="Buscar por nombre, email o rol..."
           className="w-full rounded-full bg-white py-3 pl-11 pr-4 text-sm text-gray-600 placeholder:text-gray-400 outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 dark:focus:ring-blue-800"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -165,9 +257,16 @@ export default function TeamPage() {
 
       {/* Members List */}
       <div className="rounded-[25px] bg-white p-6 dark:bg-gray-900">
-        <div className="space-y-3">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-white">
+            {filtered.length} miembro{filtered.length !== 1 ? 's' : ''}
+          </h2>
+        </div>
+        <div className="space-y-2">
           {filtered.map((member) => {
             const roleName = member.role?.name || 'Sin rol';
+            const roleId = member.role?.id || '';
+            const isOwner = roleName === 'Owner';
             const badgeColor = roleColorMap[roleName] || defaultBadgeColor;
 
             return (
@@ -177,7 +276,7 @@ export default function TeamPage() {
               >
                 <Avatar className="h-11 w-11">
                   <AvatarImage src={member.user?.image} />
-                  <AvatarFallback className="bg-blue-100 text-sm text-blue-600 dark:bg-blue-900 dark:text-blue-300">
+                  <AvatarFallback className="bg-blue-100 text-sm font-semibold text-blue-600 dark:bg-blue-900 dark:text-blue-300">
                     {getInitials(member.user?.name || '')}
                   </AvatarFallback>
                 </Avatar>
@@ -185,6 +284,8 @@ export default function TeamPage() {
                   <p className="text-[15px] font-medium text-gray-800 dark:text-white">{member.user?.name}</p>
                   <p className="text-[13px] text-gray-400">{member.user?.email}</p>
                 </div>
+
+                {/* View profile */}
                 <button
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:bg-gray-800 dark:hover:bg-gray-700 dark:hover:text-blue-400"
                   onClick={async () => {
@@ -201,9 +302,34 @@ export default function TeamPage() {
                 >
                   <Eye className="h-4 w-4" />
                 </button>
-                <Badge className={badgeColor}>
-                  <Shield className="mr-1 h-3 w-3" />{roleName}
-                </Badge>
+
+                {/* Role selector or badge */}
+                {canManage && !isOwner ? (
+                  <Select value={roleId} onValueChange={(v) => handleRoleChange(member.id, v)}>
+                    <SelectTrigger className="w-40 rounded-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignableRoles.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge className={badgeColor}>
+                    <Shield className="mr-1 h-3 w-3" />{roleName}
+                  </Badge>
+                )}
+
+                {/* Remove button */}
+                {canManage && !isOwner && (
+                  <button
+                    onClick={() => handleRemove(member.id, member.user?.name || 'este miembro')}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             );
           })}

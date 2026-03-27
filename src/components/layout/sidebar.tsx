@@ -39,7 +39,6 @@ const mainItems: NavItem[] = [
 
 const adminItems: NavItem[] = [
   { name: 'Configuración', href: '/settings', icon: Settings, permission: 'manage:members' },
-  { name: 'Roles y Permisos', href: '/settings/roles', icon: Shield, permission: 'manage:members' },
 ];
 
 interface SidebarProps {
