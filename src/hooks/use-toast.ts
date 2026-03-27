@@ -4,12 +4,33 @@ import { useState, useCallback } from 'react';
 
 export type ToastVariant = 'default' | 'destructive' | 'success' | 'notification';
 
+export type NotificationType =
+  | 'TASK_ASSIGNED'
+  | 'TASK_UPDATED'
+  | 'TASK_COMPLETED'
+  | 'TASK_APPROVAL_REQUESTED'
+  | 'TASK_APPROVAL_APPROVED'
+  | 'TASK_APPROVAL_REJECTED'
+  | 'MENTION'
+  | 'SPRINT_STARTED'
+  | 'SPRINT_COMPLETED'
+  | 'ALCANCE_SUBMITTED'
+  | 'ALCANCE_APPROVED'
+  | 'ALCANCE_REJECTED'
+  | 'MEETING_SCHEDULED'
+  | 'SUGGESTION_RECEIVED'
+  | 'MEMBER_JOINED'
+  | 'MEMBER_REMOVED'
+  | 'COMMENT_ADDED'
+  | 'default';
+
 export interface ToastData {
   id: string;
   title: string;
   description?: string;
   variant?: ToastVariant;
   duration?: number;
+  notificationType?: NotificationType;
 }
 
 let toastListeners: Array<(toast: ToastData) => void> = [];
@@ -20,9 +41,10 @@ export function toast({
   description,
   variant = 'default',
   duration = 4000,
+  notificationType,
 }: Omit<ToastData, 'id'>) {
   const id = String(++toastCount);
-  const data: ToastData = { id, title, description, variant, duration };
+  const data: ToastData = { id, title, description, variant, duration, notificationType };
   toastListeners.forEach((listener) => listener(data));
   return id;
 }
@@ -36,8 +58,8 @@ toast.error = (title: string, description?: string) =>
 toast.info = (title: string, description?: string, options?: { duration?: number }) =>
   toast({ title, description, variant: 'default', duration: options?.duration });
 
-toast.notification = (title: string, description?: string) =>
-  toast({ title, description, variant: 'notification', duration: 8000 });
+toast.notification = (title: string, description?: string, notificationType?: NotificationType) =>
+  toast({ title, description, variant: 'notification', duration: 10000, notificationType: notificationType || 'default' });
 
 export function useToastStore() {
   const [toasts, setToasts] = useState<ToastData[]>([]);

@@ -102,6 +102,7 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
               toast.notification(
                 latest.title || 'Nueva notificación',
                 latest.message || latest.body || '',
+                latest.type,
               );
             }
           } catch {}
