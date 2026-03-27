@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Bell, Search, User, Settings, Shield, LogOut, Moon, Sun, ChevronsUpDown, Building2, Check, Plus, KeyRound, Menu } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Bell, Search, User, Settings, Shield, LogOut, Moon, Sun, ChevronsUpDown, Building2, Check, Plus, KeyRound, Menu, FolderKanban } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useNotificationStore } from '@/stores/use-notification-store';
 import { useAuth } from '@/hooks/use-auth';
@@ -53,8 +53,9 @@ interface TopbarProps {
 
 export function Topbar({ onMenuToggle }: TopbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
-  const { organization, organizations, switchOrg } = useOrg();
+  const { organization, organizations, switchOrg, orgId } = useOrg();
   const { unreadCount, setUnreadCount } = useNotificationStore();
   const { theme, setTheme } = useTheme();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -63,8 +64,28 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
   const [createOrgName, setCreateOrgName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
 
   const prevUnreadRef = useRef<number>(0);
+
+  const isDashboard = pathname === '/' || pathname === '/dashboard';
+  const isProjectsPage = pathname.startsWith('/projects');
+
+  // Extract current project ID from URL if on a project-specific page
+  const projectIdMatch = pathname.match(/^\/projects\/([^/]+)/);
+  const currentProjectId = projectIdMatch ? projectIdMatch[1] : null;
+
+  // Load projects for the project switcher
+  useEffect(() => {
+    if (isProjectsPage && orgId) {
+      api.get<any>(`/organizations/${orgId}/projects?limit=50`)
+        .then((res) => {
+          const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+          setProjects(list);
+        })
+        .catch(() => {});
+    }
+  }, [isProjectsPage, orgId]);
 
   useEffect(() => {
     const loadUnread = async () => {
@@ -74,7 +95,6 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
         const prevCount = prevUnreadRef.current;
 
         if (count > prevCount && prevCount > 0) {
-          // New notifications arrived — check if approval-related
           try {
             const notifRes = await api.get<any>('/notifications?limit=1');
             const latest = notifRes.data?.data?.[0];
@@ -131,6 +151,8 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
     }
   };
 
+  const currentProject = projects.find((p) => p.id === currentProjectId);
+
   const pageTitle = getPageTitle(pathname);
 
   return (
@@ -150,39 +172,72 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
 
           <h1 className="text-lg lg:text-2xl font-semibold text-gray-800 dark:text-white">{pageTitle}</h1>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 outline-none dark:border-gray-700 dark:hover:bg-white/5">
-                <Building2 className="h-4 w-4 text-gray-400" />
-                <span className="max-w-[80px] md:max-w-[120px] truncate font-medium text-gray-600 dark:text-gray-300">{organization?.name || 'Organización'}</span>
-                <ChevronsUpDown className="h-3.5 w-3.5 text-gray-400" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel>Organizaciones</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {organizations.map((org) => (
-                <DropdownMenuItem
-                  key={org.id}
-                  onClick={() => switchOrg(org.id)}
-                  className="cursor-pointer"
-                >
-                  <Building2 className="mr-2 h-4 w-4" />
-                  <span className="flex-1 truncate">{org.name}</span>
-                  {org.id === organization?.id && <Check className="ml-2 h-4 w-4 text-blue-600" />}
+          {/* Org Switcher — only on Dashboard */}
+          {isDashboard && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 outline-none dark:border-gray-700 dark:hover:bg-white/5">
+                  <Building2 className="h-4 w-4 text-gray-400" />
+                  <span className="max-w-[80px] md:max-w-[120px] truncate font-medium text-gray-600 dark:text-gray-300">{organization?.name || 'Organización'}</span>
+                  <ChevronsUpDown className="h-3.5 w-3.5 text-gray-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel>Organizaciones</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {organizations.map((org) => (
+                  <DropdownMenuItem
+                    key={org.id}
+                    onClick={() => switchOrg(org.id)}
+                    className="cursor-pointer"
+                  >
+                    <Building2 className="mr-2 h-4 w-4" />
+                    <span className="flex-1 truncate">{org.name}</span>
+                    {org.id === organization?.id && <Check className="ml-2 h-4 w-4 text-blue-600" />}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowCreateOrg(true)} className="cursor-pointer">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear Organización
                 </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setShowCreateOrg(true)} className="cursor-pointer">
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Organización
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowJoinOrg(true)} className="cursor-pointer">
-                <KeyRound className="mr-2 h-4 w-4" />
-                Unirse con código
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={() => setShowJoinOrg(true)} className="cursor-pointer">
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Unirse con código
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* Project Switcher — only on Projects pages */}
+          {isProjectsPage && projects.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50 outline-none dark:border-gray-700 dark:hover:bg-white/5">
+                  <FolderKanban className="h-4 w-4 text-blue-500" />
+                  <span className="max-w-[100px] md:max-w-[160px] truncate font-medium text-gray-600 dark:text-gray-300">
+                    {currentProject?.name || 'Seleccionar proyecto'}
+                  </span>
+                  <ChevronsUpDown className="h-3.5 w-3.5 text-gray-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72">
+                <DropdownMenuLabel>Cambiar Proyecto</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {projects.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => router.push(`/projects/${project.id}`)}
+                    className="cursor-pointer"
+                  >
+                    <FolderKanban className="mr-2 h-4 w-4 text-gray-400" />
+                    <span className="flex-1 truncate">{project.name}</span>
+                    {project.id === currentProjectId && <Check className="ml-2 h-4 w-4 text-blue-600" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Right section */}
