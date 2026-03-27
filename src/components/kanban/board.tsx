@@ -22,7 +22,8 @@ import { KanbanCard } from './card';
 import { Plus } from 'lucide-react';
 import type { BoardColumn, Task } from '@/types';
 import { useBoardStore } from '@/stores/use-board-store';
-import { api } from '@/lib/api-client';
+import { api, ApiError } from '@/lib/api-client';
+import { toast } from '@/hooks/use-toast';
 
 interface KanbanBoardProps {
   boardId: string;
@@ -118,9 +119,11 @@ export function KanbanBoard({
           targetColumnId,
           position: 0,
         });
-      } catch {
+      } catch (err) {
         // Revert on failure
         moveTask(activeId, targetColumnId, sourceColumn.id, 0);
+        const msg = err instanceof ApiError ? err.message : 'No se pudo mover la tarea';
+        toast.error('Movimiento bloqueado', msg);
       }
     },
     [columns, boardId, moveTask, setColumns],

@@ -98,11 +98,10 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
           try {
             const notifRes = await api.get<any>('/notifications?limit=1');
             const latest = notifRes.data?.data?.[0];
-            if (latest && ['TASK_APPROVAL_REQUESTED', 'TASK_APPROVAL_APPROVED', 'TASK_APPROVAL_REJECTED'].includes(latest.type)) {
-              toast.info(
+            if (latest) {
+              toast.notification(
                 latest.title || 'Nueva notificación',
-                latest.message || '',
-                { duration: 8000 },
+                latest.message || latest.body || '',
               );
             }
           } catch {}

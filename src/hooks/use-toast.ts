@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 
-export type ToastVariant = 'default' | 'destructive' | 'success';
+export type ToastVariant = 'default' | 'destructive' | 'success' | 'notification';
 
 export interface ToastData {
   id: string;
@@ -35,6 +35,9 @@ toast.error = (title: string, description?: string) =>
 
 toast.info = (title: string, description?: string, options?: { duration?: number }) =>
   toast({ title, description, variant: 'default', duration: options?.duration });
+
+toast.notification = (title: string, description?: string) =>
+  toast({ title, description, variant: 'notification', duration: 8000 });
 
 export function useToastStore() {
   const [toasts, setToasts] = useState<ToastData[]>([]);

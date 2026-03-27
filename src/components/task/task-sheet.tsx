@@ -21,7 +21,7 @@ import { TimerWidget } from '@/components/timer/timer-widget';
 import {
   Calendar, Tag, User, Clock, CheckCircle2, Paperclip,
   Download, File as FileIcon, Image, FileText, Plus, Send,
-  MessageSquare, Upload, Shield, ExternalLink, Eye, EyeOff,
+  MessageSquare, Upload, Shield, ExternalLink, Eye, EyeOff, Lock, ChevronRight,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
@@ -119,6 +119,8 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
     }
   }, [open, taskId, loadTask, loadComments]);
 
+  const [selectedSubtask, setSelectedSubtask] = useState<any>(null);
+
   const patchTask = async (data: Record<string, unknown>) => {
     if (!taskId) return;
     try {
@@ -129,6 +131,15 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
       const msg = err instanceof ApiError ? err.message : 'Error al actualizar';
       toast.error('Error', msg);
     }
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    if (!task) return;
+    if (newStatus === 'DONE') {
+      toast.error('Acción no permitida', 'La tarea debe ser aprobada explícitamente desde Testing. No se puede cambiar a Completada directamente.');
+      return;
+    }
+    patchTask({ status: newStatus });
   };
 
   const saveTitle = async () => {
@@ -187,6 +198,11 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
   const totalMinutes = task?.totalDuration || 0;
   const totalHours = Math.floor(totalMinutes / 60);
   const totalMins = totalMinutes % 60;
+
+  // Reset selected subtask when task changes
+  useEffect(() => {
+    setSelectedSubtask(null);
+  }, [taskId]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -291,14 +307,17 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-400 text-xs">Estado</span>
-                        <Select value={task.status} onValueChange={(v) => patchTask({ status: v })}>
+                        <Select value={task.status} onValueChange={handleStatusChange}>
                           <SelectTrigger className="h-7 w-36 text-xs border-none shadow-none">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {STATUS_OPTIONS.map((s) => (
+                            {STATUS_OPTIONS.filter((s) => s.value !== 'DONE').map((s) => (
                               <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                             ))}
+                            <div className="px-2 py-1.5 text-xs text-gray-400 cursor-not-allowed flex items-center gap-1.5">
+                              <Lock className="h-3 w-3" /> Completada — requiere aprobación
+                            </div>
                           </SelectContent>
                         </Select>
                       </div>
@@ -523,30 +542,43 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
                     )}
 
                     {/* Subtask list */}
-                    <div className="space-y-1.5">
-                      {(task.subTasks || []).map((sub: any) => (
-                        <div
-                          key={sub.id}
-                          className="flex items-center gap-2.5 rounded-xl border border-gray-100 p-2.5 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                        >
-                          <CheckCircle2
-                            className={`h-4 w-4 shrink-0 ${
-                              sub.status === 'DONE' ? 'text-green-500' : 'text-gray-300 dark:text-gray-600'
-                            }`}
-                          />
-                          <span
-                            className={`flex-1 text-sm ${
-                              sub.status === 'DONE' ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-white'
-                            }`}
-                          >
-                            {sub.title}
-                          </span>
+                    {!selectedSubtask ? (
+                      <>
+                        <div className="space-y-1.5">
+                          {(task.subTasks || []).map((sub: any) => (
+                            <button
+                              key={sub.id}
+                              onClick={() => setSelectedSubtask(sub)}
+                              className="flex w-full items-center gap-2.5 rounded-xl border border-gray-100 p-2.5 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-200 dark:hover:border-blue-800 transition-colors text-left"
+                            >
+                              <CheckCircle2
+                                className={`h-4 w-4 shrink-0 ${
+                                  sub.status === 'DONE' ? 'text-green-500' : 'text-gray-300 dark:text-gray-600'
+                                }`}
+                              />
+                              <span
+                                className={`flex-1 text-sm ${
+                                  sub.status === 'DONE' ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-white'
+                                }`}
+                              >
+                                {sub.title}
+                              </span>
+                              <ChevronRight className="h-3.5 w-3.5 text-gray-300 dark:text-gray-600" />
+                            </button>
+                          ))}
                         </div>
-                      ))}
-                    </div>
 
-                    {totalSubs === 0 && (
-                      <p className="text-xs text-gray-400 text-center py-6">No hay subtareas</p>
+                        {totalSubs === 0 && (
+                          <p className="text-xs text-gray-400 text-center py-6">No hay subtareas</p>
+                        )}
+                      </>
+                    ) : (
+                      <SubtaskDetail
+                        subtask={selectedSubtask}
+                        projectId={projectId}
+                        onBack={() => { setSelectedSubtask(null); loadTask(); }}
+                        onUpdated={loadTask}
+                      />
                     )}
 
                     {/* New subtask */}
@@ -645,5 +677,194 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ============================================
+// Subtask Detail — inline within the task sheet
+// ============================================
+
+function SubtaskDetail({
+  subtask,
+  projectId,
+  onBack,
+  onUpdated,
+}: {
+  subtask: any;
+  projectId: string;
+  onBack: () => void;
+  onUpdated: () => void;
+}) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [editTitle, setEditTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [editDesc, setEditDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/tasks/${subtask.id}`)
+      .then((res) => {
+        setData(res.data);
+        setTitleDraft(res.data.title || '');
+        setDescDraft(res.data.description || '');
+      })
+      .catch(() => toast.error('Error', 'No se pudo cargar la subtarea'))
+      .finally(() => setLoading(false));
+  }, [subtask.id]);
+
+  const patchSubtask = async (payload: Record<string, unknown>) => {
+    try {
+      const res = await api.patch(`/tasks/${subtask.id}`, payload);
+      setData(res.data);
+      onUpdated();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Error al actualizar';
+      toast.error('Error', msg);
+    }
+  };
+
+  if (loading || !data) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-6 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  const statusOpt = STATUS_OPTIONS.find((s) => s.value === data.status);
+  const priorityOpt = PRIORITY_OPTIONS.find((p) => p.value === data.priority);
+
+  return (
+    <div className="space-y-4">
+      {/* Back button */}
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+      >
+        <ChevronRight className="h-3 w-3 rotate-180" /> Volver a subtareas
+      </button>
+
+      {/* Title */}
+      <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-4">
+        {editTitle ? (
+          <Input
+            autoFocus
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => { if (titleDraft.trim() && titleDraft !== data.title) patchSubtask({ title: titleDraft }); setEditTitle(false); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { if (titleDraft.trim() && titleDraft !== data.title) patchSubtask({ title: titleDraft }); setEditTitle(false); }}}
+            className="text-base font-semibold border-none px-0 focus-visible:ring-0 shadow-none"
+          />
+        ) : (
+          <h3
+            onClick={() => setEditTitle(true)}
+            className="text-base font-semibold text-gray-800 dark:text-white cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-1 -mx-1 py-0.5 transition-colors"
+          >
+            {data.title}
+          </h3>
+        )}
+
+        {editDesc ? (
+          <Textarea
+            autoFocus
+            value={descDraft}
+            onChange={(e) => setDescDraft(e.target.value)}
+            onBlur={() => { if (descDraft !== (data.description || '')) patchSubtask({ description: descDraft }); setEditDesc(false); }}
+            rows={3}
+            className="border-none px-0 focus-visible:ring-0 resize-none shadow-none text-sm mt-2"
+            placeholder="Agregar descripción..."
+          />
+        ) : (
+          <p
+            onClick={() => setEditDesc(true)}
+            className="text-sm text-gray-500 dark:text-gray-400 mt-1 cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-1 -mx-1 py-0.5 transition-colors min-h-[1.5rem]"
+          >
+            {data.description || 'Haz clic para agregar descripción...'}
+          </p>
+        )}
+      </div>
+
+      {/* Status & Priority */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400 text-xs">Estado</span>
+          <Select value={data.status} onValueChange={(v) => {
+            if (v === 'DONE') { toast.error('Acción no permitida', 'La subtarea debe ser aprobada.'); return; }
+            patchSubtask({ status: v });
+          }}>
+            <SelectTrigger className="h-7 w-36 text-xs border-none shadow-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.filter((s) => s.value !== 'DONE').map((s) => (
+                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+              ))}
+              <div className="px-2 py-1.5 text-xs text-gray-400 cursor-not-allowed flex items-center gap-1.5">
+                <Lock className="h-3 w-3" /> Completada — requiere aprobación
+              </div>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400 text-xs">Prioridad</span>
+          <Select value={data.priority} onValueChange={(v) => patchSubtask({ priority: v })}>
+            <SelectTrigger className="h-7 w-36 text-xs border-none shadow-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIORITY_OPTIONS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+
+        {/* Assignees */}
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-gray-400 text-xs">
+            <User className="h-3 w-3" /> Asignados
+          </span>
+          <div className="flex -space-x-1">
+            {(data.assignments || []).map((a: any) => (
+              <Avatar key={a.user?.id} className="h-6 w-6 border-2 border-white dark:border-gray-900">
+                <AvatarImage src={a.user?.image} />
+                <AvatarFallback className="text-[8px] bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300">
+                  {getInitials(a.user?.name || '')}
+                </AvatarFallback>
+              </Avatar>
+            ))}
+            {(!data.assignments || data.assignments.length === 0) && (
+              <span className="text-xs text-gray-400">Ninguno</span>
+            )}
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Dates */}
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-gray-400 text-xs">
+            <Calendar className="h-3 w-3" /> Fecha límite
+          </span>
+          <span className="text-xs text-gray-800 dark:text-white">
+            {data.dueDate ? formatDate(data.dueDate) : '—'}
+          </span>
+        </div>
+      </div>
+
+      {/* Timer */}
+      <div className="pt-2">
+        <TimerWidget taskId={data.id} taskTitle={data.title} />
+      </div>
+    </div>
   );
 }
