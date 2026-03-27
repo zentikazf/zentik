@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FolderKanban, MessageSquarePlus, Bell, LogOut, X, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, MessageSquarePlus, Bell, LogOut, Sun, Moon } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useNotificationStore } from '@/stores/use-notification-store';
@@ -18,12 +18,7 @@ const navItems = [
   { name: 'Notificaciones', href: '/portal/notifications', icon: Bell },
 ];
 
-interface PortalSidebarProps {
-  isOpen?: boolean;
-  onClose?: () => void;
-}
-
-export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
+export function PortalSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { unreadCount, setUnreadCount } = useNotificationStore();
@@ -46,8 +41,8 @@ export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
     return pathname.startsWith(href);
   };
 
-  const sidebarContent = (
-    <aside className="flex h-full w-[260px] flex-col bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800">
+  return (
+    <aside className="hidden h-full w-[260px] flex-col bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800 lg:flex shrink-0">
       {/* Logo Header */}
       <div className="flex h-[72px] items-center justify-between px-6 border-b border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-3 cursor-pointer group">
@@ -59,14 +54,6 @@ export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
             <p className="text-[11px] font-medium text-blue-500">Portal de Cliente</p>
           </div>
         </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 lg:hidden dark:hover:bg-gray-800"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        )}
       </div>
 
       {/* Nav */}
@@ -82,7 +69,6 @@ export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
             <Link
               key={item.name}
               href={item.href}
-              onClick={onClose}
               className={cn(
                 'group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all duration-300',
                 active
@@ -138,26 +124,5 @@ export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
         </button>
       </div>
     </aside>
-  );
-
-  return (
-    <>
-      {/* Desktop */}
-      <div className="hidden lg:block">{sidebarContent}</div>
-      {/* Mobile overlay */}
-      <div className="lg:hidden">
-        {isOpen && (
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
-        )}
-        <div
-          className={cn(
-            'fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out',
-            isOpen ? 'translate-x-0' : '-translate-x-full',
-          )}
-        >
-          {sidebarContent}
-        </div>
-      </div>
-    </>
   );
 }
