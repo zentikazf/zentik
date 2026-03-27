@@ -61,6 +61,11 @@ const activityIcons: Record<string, typeof Activity> = {
   'task.completed': CheckCircle,
   'task.deleted': Trash2,
   'task.assigned': UserPlus,
+  'task.status.changed': ArrowUpRight,
+  'task.approval.requested': Clock,
+  'task.approval.approved': CheckCircle,
+  'task.approval.rejected': AlertTriangle,
+  'subtask.created': Zap,
   'project.created': FolderKanban,
   'project.updated': Edit3,
   'sprint.created': BarChart3,
@@ -68,6 +73,22 @@ const activityIcons: Record<string, typeof Activity> = {
   'sprint.completed': CheckCircle,
   'file.uploaded': FileText,
   'suggestion.created': MessageSquare,
+  'meeting.created': CalendarDays,
+  'meeting.updated': CalendarDays,
+  'meeting.deleted': Trash2,
+  'organization.member.joined': UserPlus,
+  'organization.member.removed': Trash2,
+  'task.label.added': Target,
+  'task.label.removed': Target,
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  BACKLOG: 'Backlog',
+  TODO: 'Por Hacer',
+  IN_PROGRESS: 'En Progreso',
+  IN_REVIEW: 'En Revisión',
+  DONE: 'Completada',
+  CANCELLED: 'Cancelada',
 };
 
 const activityLabels: Record<string, string> = {
@@ -77,10 +98,13 @@ const activityLabels: Record<string, string> = {
   'task.deleted': 'eliminó una tarea',
   'task.assigned': 'asignó una tarea',
   'task.unassigned': 'desasignó una tarea',
+  'task.status.changed': 'cambió el estado de una tarea',
   'task.label.added': 'agregó etiqueta',
   'task.label.removed': 'removió etiqueta',
+  'task.approval.requested': 'solicitó aprobación de tarea',
   'task.approval.approved': 'aprobó una tarea',
   'task.approval.rejected': 'rechazó una tarea',
+  'subtask.created': 'creó una subtarea',
   'project.created': 'creó un proyecto',
   'project.updated': 'actualizó un proyecto',
   'sprint.created': 'creó un sprint',
@@ -91,7 +115,11 @@ const activityLabels: Record<string, string> = {
   'suggestion.created': 'envió una sugerencia',
   'board.column.created': 'creó una columna',
   'board.column.updated': 'actualizó una columna',
-  'meeting.created': 'creó una reunión',
+  'meeting.created': 'programó una reunión',
+  'meeting.updated': 'actualizó una reunión',
+  'meeting.deleted': 'canceló una reunión',
+  'organization.member.joined': 'se unió a la organización',
+  'organization.member.removed': 'fue removido de la organización',
 };
 
 function timeAgo(dateStr: string): string {
@@ -500,6 +528,23 @@ export default function DashboardPage() {
                 const IconComp = activityIcons[entry.action] || Activity;
                 const label = activityLabels[entry.action] || entry.action;
                 const resourceName = entry.newData?.title || entry.newData?.name || entry.resourceId?.slice(0, 8);
+
+                // Build detail line for enriched events
+                let detail = '';
+                if (entry.action === 'task.status.changed' && entry.newData?.fromStatus && entry.newData?.toStatus) {
+                  detail = `${STATUS_LABELS[entry.newData.fromStatus] || entry.newData.fromStatus} → ${STATUS_LABELS[entry.newData.toStatus] || entry.newData.toStatus}`;
+                } else if ((entry.action === 'task.label.added' || entry.action === 'task.label.removed') && entry.newData?.labelName) {
+                  detail = entry.newData.labelName;
+                } else if (entry.action === 'organization.member.joined' && entry.newData?.userName) {
+                  detail = `${entry.newData.userName} como ${entry.newData.roleName || 'miembro'}`;
+                } else if (entry.action === 'organization.member.removed' && entry.newData?.userName) {
+                  detail = entry.newData.userName;
+                } else if (entry.action === 'meeting.created' && entry.newData?.title) {
+                  detail = entry.newData.title;
+                } else if (entry.action === 'subtask.created' && entry.newData?.title) {
+                  detail = entry.newData.title;
+                }
+
                 return (
                   <div
                     key={entry.id || i}
@@ -511,7 +556,7 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0 pt-1">
                       <p className="text-sm text-gray-700 dark:text-gray-300">
                         <span className="font-medium text-gray-800 dark:text-white">
-                          {entry.user?.name || 'Sistema'}
+                          {entry.user?.name || entry.newData?.userName || 'Sistema'}
                         </span>{' '}
                         {label}
                         {resourceName && (
@@ -523,6 +568,9 @@ export default function DashboardPage() {
                           </>
                         )}
                       </p>
+                      {detail && (
+                        <p className="mt-0.5 text-xs text-blue-600 dark:text-blue-400 font-medium">{detail}</p>
+                      )}
                       <p className="mt-0.5 text-xs text-gray-400">
                         {timeAgo(entry.createdAt)}
                       </p>
