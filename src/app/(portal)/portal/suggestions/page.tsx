@@ -70,7 +70,7 @@ export default function PortalSuggestionsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 pb-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Mis Sugerencias</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Historial de sugerencias y mejoras solicitadas para tus proyectos</p>

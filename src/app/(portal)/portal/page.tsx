@@ -123,7 +123,7 @@ export default function PortalDashboard() {
       </div>
 
       {/* 4 KPI CARDS (SIMILARES A LA IMAGEN) */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
         {/* Card 1: Tone Blue (como 'Views') */}
         <div className="group relative overflow-hidden rounded-[20px] bg-blue-500 p-5 shadow-lg shadow-blue-500/20 text-white transition-all hover:shadow-blue-500/40 hover:-translate-y-1">
           <div className="absolute top-0 right-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-blue-400/30 blur-2xl transition-transform duration-500 group-hover:scale-110"></div>
