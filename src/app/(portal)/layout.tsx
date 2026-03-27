@@ -42,7 +42,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     <div className="flex h-screen bg-gray-50 dark:bg-background overflow-hidden">
       <PortalSidebar />
       <div className="flex flex-1 flex-col overflow-hidden relative">
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 lg:pb-8">
           {children}
         </main>
         

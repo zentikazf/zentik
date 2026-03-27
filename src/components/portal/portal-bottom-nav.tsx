@@ -36,7 +36,7 @@ export function PortalBottomNav() {
   };
 
   return (
-    <nav className="flex h-[60px] shrink-0 items-center justify-between bg-black px-6 lg:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-[60px] items-center justify-between bg-black px-6 lg:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.2)]">
       <div className="flex w-full max-w-md mx-auto items-center justify-between">
         {navItems.map((item) => {
           const active = isActive(item.href);
