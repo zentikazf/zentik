@@ -69,7 +69,7 @@ export default function PortalSuggestionsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-8 pb-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Mis Sugerencias</h1>
@@ -92,7 +92,7 @@ export default function PortalSuggestionsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-5 md:gap-6">
           {suggestions.map((suggestion) => {
             const statusConf = STATUS_CONFIG[suggestion.status] || STATUS_CONFIG.PENDING;
             const prioConf = PRIORITY_CONFIG[suggestion.priority] || PRIORITY_CONFIG.MEDIUM;
@@ -100,7 +100,7 @@ export default function PortalSuggestionsPage() {
             return (
               <div
                 key={suggestion.id}
-                className="group relative flex flex-col sm:flex-row gap-4 sm:items-center justify-between rounded-[20px] bg-white p-5 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/20"
+                className="group relative flex flex-col sm:flex-row gap-5 sm:items-center justify-between rounded-[24px] bg-white p-6 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/20"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1.5">

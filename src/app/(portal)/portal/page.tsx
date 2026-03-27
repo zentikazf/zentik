@@ -109,7 +109,7 @@ export default function PortalDashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <div className="mx-auto max-w-6xl space-y-8 pb-4">
       {/* HEADER DE SALUDO */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -123,7 +123,7 @@ export default function PortalDashboard() {
       </div>
 
       {/* 4 KPI CARDS (SIMILARES A LA IMAGEN) */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
         {/* Card 1: Tone Blue (como 'Views') */}
         <div className="group relative overflow-hidden rounded-[20px] bg-blue-500 p-5 shadow-lg shadow-blue-500/20 text-white transition-all hover:shadow-blue-500/40 hover:-translate-y-1">
           <div className="absolute top-0 right-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-blue-400/30 blur-2xl transition-transform duration-500 group-hover:scale-110"></div>
@@ -192,7 +192,7 @@ export default function PortalDashboard() {
       </div>
 
       {/* SECCION CENTRAL (GRAFICO Y ACCIONES RAPIDAS) */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
         {/* Main Chart Area */}
         <div className="lg:col-span-2 rounded-[24px] bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
           <div className="mb-6 flex items-center justify-between">
@@ -241,8 +241,8 @@ export default function PortalDashboard() {
         </div>
 
         {/* Quick Actions (Right Sidebar) */}
-        <div className="flex flex-col gap-4">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white px-2">Acciones Rapidas</h2>
+        <div className="flex flex-col gap-5">
+          <h2 className="text-lg font-bold text-gray-800 dark:text-white px-2 mb-1">Acciones Rapidas</h2>
           
           <Link href="/portal/projects" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-xl hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
             <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-blue-50/50 transition-transform group-hover:scale-150 dark:bg-blue-900/10"></div>

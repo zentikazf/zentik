@@ -62,7 +62,7 @@ export default function PortalProjectsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-8 pb-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Mis Proyectos</h1>
@@ -85,7 +85,7 @@ export default function PortalProjectsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => {
             const config = STATUS_CONFIG[project.status] || STATUS_CONFIG.DEFINITION;
             return (

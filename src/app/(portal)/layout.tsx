@@ -42,7 +42,17 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     <div className="flex h-screen bg-gray-50 dark:bg-background overflow-hidden">
       <PortalSidebar />
       <div className="flex flex-1 flex-col overflow-hidden relative">
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 lg:pb-8">
+        {/* Mobile Header (Anti-Notch / Branding) */}
+        <header className="flex h-14 shrink-0 items-center justify-center border-b border-gray-100 bg-white/80 backdrop-blur-md px-4 lg:hidden dark:border-gray-800/50 dark:bg-gray-950/80 z-40">
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 text-white text-[10px] font-bold shadow-sm">
+              Z
+            </div>
+            <span className="text-sm font-bold text-gray-800 dark:text-white tracking-wide">ZENTIK</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-8 pb-32 lg:pb-8">
           {children}
         </main>
         
