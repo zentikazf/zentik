@@ -1,7 +1,7 @@
 'use client';
 
 import { PortalSidebar } from '@/components/portal/portal-sidebar';
-import { PortalTopNav } from '@/components/portal/portal-topnav';
+import { PortalBottomNav } from '@/components/portal/portal-bottom-nav';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -41,13 +41,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-background overflow-hidden">
       <PortalSidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Mobile Top Navigation */}
-        <PortalTopNav />
-        
+      <div className="flex flex-1 flex-col overflow-hidden relative">
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {children}
         </main>
+        
+        {/* Mobile Bottom Navigation */}
+        <PortalBottomNav />
       </div>
     </div>
   );

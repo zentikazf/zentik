@@ -16,12 +16,12 @@ import { useTheme } from 'next-themes';
 
 const navItems = [
   { name: 'Inicio', href: '/portal', icon: LayoutDashboard },
-  { name: 'Historial/Proyectos', href: '/portal/projects', icon: Clock },
+  { name: 'Proyectos', href: '/portal/projects', icon: FolderKanban },
   { name: 'Sugerencias', href: '/portal/suggestions', icon: MessageSquarePlus },
   { name: 'Notificaciones', href: '/portal/notifications', icon: Bell },
 ];
 
-export function PortalTopNav() {
+export function PortalBottomNav() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { unreadCount } = useNotificationStore();
@@ -36,7 +36,7 @@ export function PortalTopNav() {
   };
 
   return (
-    <header className="flex h-[60px] shrink-0 items-center justify-between bg-black px-6 lg:hidden shadow-md">
+    <nav className="flex h-[60px] shrink-0 items-center justify-between bg-black px-6 lg:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50">
       <div className="flex w-full max-w-md mx-auto items-center justify-between">
         {navItems.map((item) => {
           const active = isActive(item.href);
@@ -77,7 +77,7 @@ export function PortalTopNav() {
               </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64 rounded-[20px] border-gray-800 bg-gray-950 p-2 text-white shadow-2xl">
+          <DropdownMenuContent side="top" align="end" sideOffset={16} className="w-64 mb-1 rounded-[20px] border-gray-800 bg-gray-950 p-2 text-white shadow-2xl">
             <div className="flex items-center gap-3 p-3 mb-2 rounded-xl bg-gray-900 border border-gray-800">
               <Avatar className="h-10 w-10 border border-gray-700">
                 <AvatarImage src={user?.image || undefined} />
@@ -118,6 +118,6 @@ export function PortalTopNav() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </header>
+    </nav>
   );
 }
