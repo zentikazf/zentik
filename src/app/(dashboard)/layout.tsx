@@ -7,6 +7,7 @@ import { OrgProvider, useOrg } from '@/providers/org-provider';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { OnboardingFlow } from '@/components/onboarding/onboarding-flow';
+import { api } from '@/lib/api-client';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -17,20 +18,16 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready || !organization || !user) return;
 
-    // Show onboarding if org name is auto-generated ("{name}'s Organization")
-    const isAutoName = organization.name.endsWith("'s Organization");
-    const dismissed = typeof window !== 'undefined'
-      ? localStorage.getItem(`zentik:onboarding:${organization.id}`)
-      : null;
-
-    if (isAutoName && !dismissed) {
+    if (!user.onboardingCompleted) {
       setShowOnboarding(true);
     }
   }, [ready, organization, user]);
 
-  const handleOnboardingComplete = () => {
-    if (organization) {
-      localStorage.setItem(`zentik:onboarding:${organization.id}`, 'done');
+  const handleOnboardingComplete = async () => {
+    try {
+      await api.patch('/auth/onboarding-complete');
+    } catch {
+      // silently continue
     }
     setShowOnboarding(false);
     window.location.reload();

@@ -10,6 +10,7 @@ interface AuthUser {
   name: string;
   image?: string | null;
   emailVerified: boolean;
+  onboardingCompleted?: boolean;
   createdAt?: string;
 }
 

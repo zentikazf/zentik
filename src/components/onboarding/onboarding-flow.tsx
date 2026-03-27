@@ -10,6 +10,12 @@ interface OnboardingFlowProps {
   onComplete: () => void;
 }
 
+const STEPS = [
+  { label: 'Organización', icon: Building },
+  { label: 'Cliente', icon: Users },
+  { label: 'Listo', icon: Rocket },
+];
+
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [step, setStep] = useState(1);
   const { orgId } = useOrg();
@@ -21,29 +27,42 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Step indicator */}
-      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3">
-        {[1, 2, 3].map((s) => (
-          <div key={s} className="flex items-center gap-2">
-            <div
-              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all ${
-                s < step
-                  ? 'bg-green-500 text-white'
-                  : s === step
-                    ? 'bg-blue-600 text-white ring-4 ring-blue-600/20'
-                    : 'bg-gray-700 text-gray-400'
-              }`}
-            >
-              {s < step ? <Check className="h-4 w-4" /> : s}
+      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+        {STEPS.map((s, i) => {
+          const num = i + 1;
+          const Icon = s.icon;
+          return (
+            <div key={num} className="flex items-center gap-2">
+              <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                    num < step
+                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
+                      : num === step
+                        ? 'bg-blue-600 text-white ring-4 ring-blue-600/20 shadow-lg shadow-blue-600/30'
+                        : 'bg-white/10 text-white/40 backdrop-blur-sm'
+                  }`}
+                >
+                  {num < step ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                </div>
+                <span className={`text-xs font-medium ${
+                  num <= step ? 'text-white' : 'text-white/40'
+                }`}>
+                  {s.label}
+                </span>
+              </div>
+              {num < 3 && (
+                <div className={`mb-5 h-0.5 w-16 rounded-full transition-all ${
+                  num < step ? 'bg-blue-500' : 'bg-white/10'
+                }`} />
+              )}
             </div>
-            {s < 3 && (
-              <div className={`h-0.5 w-12 ${s < step ? 'bg-green-500' : 'bg-gray-700'}`} />
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Modal content */}
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-md px-4">
         {step === 1 && (
           <StepOrganization
             orgId={orgId!}
@@ -108,8 +127,8 @@ function StepOrganization({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-2xl dark:border-gray-800 dark:bg-gray-950">
-      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950">
+    <div className="rounded-2xl border border-blue-100 bg-white p-8 shadow-2xl shadow-blue-900/10 dark:border-blue-900/50 dark:bg-gray-950">
+      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50">
         <Building className="h-7 w-7 text-blue-600" />
       </div>
 
@@ -194,9 +213,9 @@ function StepClient({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-2xl dark:border-gray-800 dark:bg-gray-950">
-      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-950">
-        <Users className="h-7 w-7 text-violet-600" />
+    <div className="rounded-2xl border border-blue-100 bg-white p-8 shadow-2xl shadow-blue-900/10 dark:border-blue-900/50 dark:bg-gray-950">
+      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50">
+        <Users className="h-7 w-7 text-blue-600" />
       </div>
 
       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -215,7 +234,7 @@ function StepClient({
             setError('');
           }}
           placeholder="Nombre del cliente o empresa"
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
           autoFocus
         />
         <input
@@ -223,7 +242,7 @@ function StepClient({
           value={clientEmail}
           onChange={(e) => setClientEmail(e.target.value)}
           placeholder="Email del cliente (opcional)"
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
         />
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
       </div>
@@ -238,7 +257,7 @@ function StepClient({
         <button
           onClick={handleSubmit}
           disabled={saving || !clientName.trim()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -264,9 +283,9 @@ function StepWelcome({
   onFinish: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-2xl dark:border-gray-800 dark:bg-gray-950">
-      <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950">
-        <Rocket className="h-7 w-7 text-emerald-600" />
+    <div className="rounded-2xl border border-blue-100 bg-white p-8 text-center shadow-2xl shadow-blue-900/10 dark:border-blue-900/50 dark:bg-gray-950">
+      <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50">
+        <Rocket className="h-7 w-7 text-blue-600" />
       </div>
 
       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -278,17 +297,17 @@ function StepWelcome({
       </p>
 
       <div className="mt-6 space-y-3 text-left">
-        <div className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950">
+        <div className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-950/30">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50">
             <Building className="h-4 w-4 text-blue-600" />
           </div>
           <span className="text-sm text-gray-700 dark:text-gray-300">
             Crear tu primer <span className="font-medium">proyecto</span>
           </span>
         </div>
-        <div className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-950">
-            <Users className="h-4 w-4 text-violet-600" />
+        <div className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-950/30">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50">
+            <Users className="h-4 w-4 text-blue-600" />
           </div>
           <span className="text-sm text-gray-700 dark:text-gray-300">
             Invitar a tu <span className="font-medium">equipo</span>
@@ -298,7 +317,7 @@ function StepWelcome({
 
       <button
         onClick={onFinish}
-        className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+        className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
       >
         Ir al Dashboard
         <Rocket className="h-4 w-4" />

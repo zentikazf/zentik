@@ -277,9 +277,9 @@ export default function DashboardPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {[
             { title: 'Proyectos Activos', value: stats.totalProjects, icon: FolderKanban, subtitle: 'Total en la organización', gradient: 'from-blue-700 via-blue-600 to-blue-800' },
-            { title: 'Tareas Activas', value: stats.activeTasks, icon: Target, subtitle: 'En progreso o pendientes', gradient: 'from-violet-700 via-violet-600 to-purple-800' },
-            { title: 'Completadas', value: stats.completedTasks, icon: CheckCircle, subtitle: `${completionRate}% tasa de finalización`, gradient: 'from-emerald-700 via-emerald-600 to-green-800' },
-            { title: 'Equipo', value: stats.teamMembers, icon: Users, subtitle: 'Colaboradores activos', gradient: 'from-amber-600 via-orange-600 to-orange-700' },
+            { title: 'Tareas Activas', value: stats.activeTasks, icon: Target, subtitle: 'En progreso o pendientes', gradient: 'from-blue-600 via-blue-500 to-sky-600' },
+            { title: 'Completadas', value: stats.completedTasks, icon: CheckCircle, subtitle: `${completionRate}% tasa de finalización`, gradient: 'from-blue-800 via-blue-700 to-indigo-800' },
+            { title: 'Equipo', value: stats.teamMembers, icon: Users, subtitle: 'Colaboradores activos', gradient: 'from-sky-600 via-blue-500 to-blue-700' },
           ].map((kpi) => {
             const Icon = kpi.icon;
             return (
@@ -336,14 +336,14 @@ export default function DashboardPage() {
         <div className="rounded-[25px] bg-white p-6 dark:bg-gray-900">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              <TrendingUp className="h-5 w-5 text-blue-500" />
               <h2 className="text-sm font-semibold text-gray-800 dark:text-white">Progreso General</h2>
             </div>
-            <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{completionRate}%</span>
+            <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{completionRate}%</span>
           </div>
           <div className="h-3 w-full rounded-full bg-gray-100 dark:bg-gray-800">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-sky-400 transition-all duration-700"
               style={{ width: `${completionRate}%` }}
             />
           </div>
