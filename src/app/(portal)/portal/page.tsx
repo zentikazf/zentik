@@ -125,11 +125,11 @@ export default function PortalDashboard() {
       {/* 4 KPI CARDS (SIMILARES A LA IMAGEN) */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {/* Card 1: Tone Blue (como 'Views') */}
-        <div className="relative overflow-hidden rounded-[20px] bg-blue-500 p-5 shadow-lg shadow-blue-500/20 text-white">
-          <div className="absolute top-0 right-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-blue-400/30 blur-2xl"></div>
+        <div className="group relative overflow-hidden rounded-[20px] bg-blue-500 p-5 shadow-lg shadow-blue-500/20 text-white transition-all hover:shadow-blue-500/40 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-blue-400/30 blur-2xl transition-transform duration-500 group-hover:scale-110"></div>
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm font-medium text-blue-100">Proyectos Activos</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm transition-colors group-hover:bg-white/30">
               <FolderKanban className="h-4 w-4 text-white" />
             </div>
           </div>
@@ -142,27 +142,27 @@ export default function PortalDashboard() {
         </div>
 
         {/* Card 2: Dark Tone (como 'Visits') */}
-        <div className="relative overflow-hidden rounded-[20px] bg-gray-900 dark:bg-gray-950 p-5 shadow-xl text-white border border-gray-800">
+        <div className="group relative overflow-hidden rounded-[20px] bg-gray-900 dark:bg-gray-950 p-5 shadow-xl text-white border border-gray-800 transition-all hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1 hover:border-blue-500/30">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-gray-400">Progreso Gral.</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 border border-white/10">
-              <Activity className="h-4 w-4 text-gray-300" />
+            <span className="text-sm font-medium text-gray-400 transition-colors group-hover:text-gray-300">Progreso Gral.</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 border border-white/10 transition-colors group-hover:bg-blue-500/20 group-hover:border-blue-500/50">
+              <Activity className="h-4 w-4 text-gray-300 group-hover:text-blue-400 transition-colors" />
             </div>
           </div>
           <div>
             <h3 className="text-3xl font-bold">{overallProgress}%</h3>
             <p className="mt-1 text-xs font-medium text-gray-400 flex items-center gap-1">
-              <TrendingUp className="h-3 w-3 text-green-400" /> Tareas avanzadas
+              <TrendingUp className="h-3 w-3 text-cyan-400" /> Tareas avanzadas
             </p>
           </div>
         </div>
 
         {/* Card 3: Dark Tone (como 'New Users') */}
-        <div className="relative overflow-hidden rounded-[20px] bg-gray-900 dark:bg-gray-950 p-5 shadow-xl text-white border border-gray-800">
+        <div className="group relative overflow-hidden rounded-[20px] bg-gray-900 dark:bg-gray-950 p-5 shadow-xl text-white border border-gray-800 transition-all hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1 hover:border-blue-500/30">
            <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-gray-400">Total Tareas Listas</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 border border-white/10">
-              <CheckCircle2 className="h-4 w-4 text-gray-300" />
+            <span className="text-sm font-medium text-gray-400 transition-colors group-hover:text-gray-300">Total Tareas Listas</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 border border-white/10 transition-colors group-hover:bg-blue-500/20 group-hover:border-blue-500/50">
+              <CheckCircle2 className="h-4 w-4 text-gray-300 group-hover:text-blue-400 transition-colors" />
             </div>
           </div>
           <div>
@@ -174,11 +174,11 @@ export default function PortalDashboard() {
         </div>
 
         {/* Card 4: Light Blue (como 'Active Users') */}
-        <div className="relative overflow-hidden rounded-[20px] bg-blue-400 p-5 shadow-lg shadow-blue-400/20 text-white">
-          <div className="absolute bottom-0 right-0 h-24 w-24 translate-x-4 translate-y-4 rounded-full bg-white/20 blur-xl"></div>
+        <div className="group relative overflow-hidden rounded-[20px] bg-blue-400 p-5 shadow-lg shadow-blue-400/20 text-white transition-all hover:shadow-blue-400/40 hover:-translate-y-1">
+          <div className="absolute bottom-0 right-0 h-24 w-24 translate-x-4 translate-y-4 rounded-full bg-white/20 blur-xl transition-transform duration-500 group-hover:scale-125"></div>
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm font-medium text-blue-50">Sugerencias Totales</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm transition-colors group-hover:bg-white/30">
               <MessageSquarePlus className="h-4 w-4 text-white" />
             </div>
           </div>
@@ -244,7 +244,7 @@ export default function PortalDashboard() {
         <div className="flex flex-col gap-4">
           <h2 className="text-lg font-bold text-gray-800 dark:text-white px-2">Acciones Rapidas</h2>
           
-          <Link href="/portal/projects" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-lg dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
+          <Link href="/portal/projects" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-xl hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
             <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-blue-50/50 transition-transform group-hover:scale-150 dark:bg-blue-900/10"></div>
             <div className="relative flex w-full items-center justify-between">
               <div className="flex items-center gap-4">
@@ -260,7 +260,7 @@ export default function PortalDashboard() {
             </div>
           </Link>
 
-          <Link href="/portal/suggestions" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-lg dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
+          <Link href="/portal/suggestions" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-xl hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
             <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-blue-50/50 transition-transform group-hover:scale-150 dark:bg-blue-900/10"></div>
              <div className="relative flex w-full items-center justify-between">
               <div className="flex items-center gap-4">
@@ -276,7 +276,7 @@ export default function PortalDashboard() {
             </div>
           </Link>
 
-          <Link href="/portal/notifications" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-lg dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
+          <Link href="/portal/notifications" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-xl hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
             <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-blue-50/50 transition-transform group-hover:scale-150 dark:bg-blue-900/10"></div>
              <div className="relative flex w-full items-center justify-between">
               <div className="flex items-center gap-4">

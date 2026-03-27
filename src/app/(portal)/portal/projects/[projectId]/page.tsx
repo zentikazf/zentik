@@ -43,47 +43,47 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  DEFINITION: { label: 'Definición', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950' },
-  DEVELOPMENT: { label: 'Desarrollo', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950' },
-  PRODUCTION: { label: 'Producción', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
-  ON_HOLD: { label: 'En Pausa', color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950' },
+  DEFINITION: { label: 'Definición', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950' },
+  DEVELOPMENT: { label: 'Desarrollo', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
+  PRODUCTION: { label: 'Producción', color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950' },
+  ON_HOLD: { label: 'En Pausa', color: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
   COMPLETED: { label: 'Completado', color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
 };
 
 const TASK_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  BACKLOG: { label: 'Pendiente', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-800', icon: Circle },
-  TODO: { label: 'Por Hacer', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950', icon: Circle },
-  IN_PROGRESS: { label: 'En Progreso', color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950', icon: Loader2 },
-  IN_REVIEW: { label: 'En Revisión', color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950', icon: Clock },
-  DONE: { label: 'Completada', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950', icon: CheckCircle2 },
-  CANCELLED: { label: 'Cancelada', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950', icon: AlertCircle },
+  BACKLOG: { label: 'Pendiente', color: 'text-slate-500', bg: 'bg-slate-50 dark:bg-slate-800', icon: Circle },
+  TODO: { label: 'Por Hacer', color: 'text-sky-600', bg: 'bg-sky-50 dark:bg-sky-950', icon: Circle },
+  IN_PROGRESS: { label: 'En Progreso', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950', icon: Loader2 },
+  IN_REVIEW: { label: 'En Revisión', color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-950', icon: Clock },
+  DONE: { label: 'Completada', color: 'text-cyan-600', bg: 'bg-cyan-50 dark:bg-cyan-950', icon: CheckCircle2 },
+  CANCELLED: { label: 'Cancelada', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800', icon: AlertCircle },
 };
 
 const SUGGESTION_STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  PENDING: { label: 'Pendiente', color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
-  REVIEWING: { label: 'En Revisión', color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-950' },
-  ACCEPTED: { label: 'Aceptada', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950' },
-  REJECTED: { label: 'Rechazada', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950' },
+  PENDING: { label: 'Pendiente', color: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
+  REVIEWING: { label: 'En Revisión', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950' },
+  ACCEPTED: { label: 'Aceptada', color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950' },
+  REJECTED: { label: 'Rechazada', color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
   IMPLEMENTED: { label: 'Implementada', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
-  LOW: { label: 'Baja', color: 'text-gray-500 bg-gray-50 dark:bg-gray-800' },
-  MEDIUM: { label: 'Media', color: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-950' },
-  HIGH: { label: 'Alta', color: 'text-red-600 bg-red-50 dark:bg-red-950' },
+  LOW: { label: 'Baja', color: 'text-slate-500 bg-slate-50 dark:bg-slate-800' },
+  MEDIUM: { label: 'Media', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950' },
+  HIGH: { label: 'Alta', color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950' },
 };
 
 const ALCANCE_STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  DRAFT: { label: 'Borrador', color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
-  PENDING_APPROVAL: { label: 'Pendiente de Aprobación', color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950' },
-  APPROVED: { label: 'Aprobado', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950' },
-  REJECTED: { label: 'Rechazado', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950' },
+  DRAFT: { label: 'Borrador', color: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
+  PENDING_APPROVAL: { label: 'Pendiente de Aprobación', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950' },
+  APPROVED: { label: 'Aprobado', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
+  REJECTED: { label: 'Rechazado', color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
 };
 
 const SPRINT_STATUS: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  PLANNING: { label: 'Planificación', color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-gray-800', icon: Circle },
-  ACTIVE: { label: 'Activo', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-950', icon: Play },
-  COMPLETED: { label: 'Completado', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950', icon: CheckCircle2 },
+  PLANNING: { label: 'Planificación', color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-800', icon: Circle },
+  ACTIVE: { label: 'Activo', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950', icon: Play },
+  COMPLETED: { label: 'Completado', color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-950', icon: CheckCircle2 },
 };
 
 type TabKey = 'tasks' | 'suggestions';
@@ -281,8 +281,8 @@ export default function PortalProjectDetail() {
           </div>
         </div>
         <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 dark:bg-green-950">
-            <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-50 dark:bg-cyan-950">
+            <TrendingUp className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
           </div>
           <div>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">
@@ -292,8 +292,8 @@ export default function PortalProjectDetail() {
           </div>
         </div>
         <div className="flex items-center gap-4 rounded-[20px] bg-white p-5 dark:bg-gray-900">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-50 dark:bg-yellow-950">
-            <Loader2 className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950">
+            <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
             <p className="text-2xl font-bold text-gray-800 dark:text-white">{inProgressTasks}</p>
@@ -307,8 +307,8 @@ export default function PortalProjectDetail() {
         <div className="rounded-[20px] bg-white p-6 dark:bg-gray-900">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950">
-                <FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-950">
+                <FileText className="h-5 w-5 text-sky-600 dark:text-sky-400" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Alcance del Proyecto</h3>
@@ -359,8 +359,8 @@ export default function PortalProjectDetail() {
       {sprints.length > 0 && (
         <div className="rounded-[20px] bg-white p-6 dark:bg-gray-900">
           <div className="flex items-center gap-3 mb-5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950">
-              <BarChart3 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950">
+              <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Timeline de Sprints</h3>
@@ -387,14 +387,14 @@ export default function PortalProjectDetail() {
                   >
                     <div className={`relative z-10 flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full ${
                       isActive
-                        ? 'bg-green-100 ring-4 ring-green-50 dark:bg-green-900 dark:ring-green-950'
+                        ? 'bg-blue-100 ring-4 ring-blue-50 dark:bg-blue-900 dark:ring-blue-950'
                         : 'bg-gray-50 ring-4 ring-white dark:bg-gray-800 dark:ring-gray-900'
                     }`}>
                       <SprintIcon className={`h-4 w-4 ${sprintStatus.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-sm font-medium ${isActive ? 'text-green-700 dark:text-green-400' : 'text-gray-800 dark:text-white'}`}>
+                        <p className={`text-sm font-medium ${isActive ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-white'}`}>
                           {sprint.name}
                         </p>
                         <Badge className={`${sprintStatus.bg} ${sprintStatus.color} text-[10px]`}>
@@ -446,7 +446,7 @@ export default function PortalProjectDetail() {
           <MessageSquarePlus className="h-4 w-4" />
           Sugerencias
           {pendingSuggestions > 0 && (
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-purple-500 px-1.5 text-[10px] font-bold text-white">
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-500 px-1.5 text-[10px] font-bold text-white">
               {pendingSuggestions}
             </span>
           )}
@@ -488,7 +488,7 @@ export default function PortalProjectDetail() {
                       >
                         <CheckCircle2
                           className={`h-4 w-4 shrink-0 ${
-                            task.status === 'DONE' ? 'text-green-500' : 'text-gray-300 dark:text-gray-600'
+                            task.status === 'DONE' ? 'text-cyan-500' : 'text-gray-300 dark:text-gray-600'
                           }`}
                         />
                         <div className="flex-1 min-w-0">
@@ -525,10 +525,10 @@ export default function PortalProjectDetail() {
       {activeTab === 'suggestions' && (
         <div className="space-y-4">
           {/* New Suggestion CTA */}
-          <div className="flex items-center justify-between rounded-[20px] bg-gradient-to-r from-purple-50 to-blue-50 p-5 dark:from-purple-950/30 dark:to-blue-950/30">
+          <div className="flex items-center justify-between rounded-[20px] bg-gradient-to-r from-blue-50 to-indigo-50 p-5 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-100 dark:border-blue-900/50">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-900">
-                <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900">
+                <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-800 dark:text-white">
@@ -541,7 +541,7 @@ export default function PortalProjectDetail() {
             </div>
             <Button
               size="sm"
-              className="rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+              className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all hover:-translate-y-0.5"
               onClick={() => setDialogOpen(true)}
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -552,8 +552,8 @@ export default function PortalProjectDetail() {
 
           {suggestions.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-[20px] bg-white py-16 text-center dark:bg-gray-900">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-purple-50 dark:bg-purple-950">
-                <MessageSquarePlus className="h-7 w-7 text-purple-300 dark:text-purple-600" />
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
+                <MessageSquarePlus className="h-7 w-7 text-blue-300 dark:text-blue-600" />
               </div>
               <h3 className="text-base font-semibold text-gray-800 dark:text-white">Sin sugerencias</h3>
               <p className="mt-1.5 max-w-sm text-sm text-gray-400">
@@ -599,8 +599,8 @@ export default function PortalProjectDetail() {
                         </div>
                       </div>
                       {sug.status === 'ACCEPTED' && (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-50 dark:bg-green-950">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
+                          <CheckCircle2 className="h-4 w-4 text-blue-500" />
                         </div>
                       )}
                     </div>
@@ -625,7 +625,7 @@ export default function PortalProjectDetail() {
         <DialogContent className="max-w-md rounded-[20px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <MessageSquarePlus className="h-5 w-5 text-purple-600" />
+              <MessageSquarePlus className="h-5 w-5 text-blue-600" />
               Nueva Sugerencia
             </DialogTitle>
           </DialogHeader>
@@ -669,7 +669,7 @@ export default function PortalProjectDetail() {
               Cancelar
             </Button>
             <Button
-              className="rounded-xl bg-purple-600 hover:bg-purple-700"
+              className="rounded-xl bg-blue-600 hover:bg-blue-700"
               onClick={handleCreateSuggestion}
               disabled={saving || !title.trim()}
             >

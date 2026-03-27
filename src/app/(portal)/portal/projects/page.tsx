@@ -9,10 +9,10 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  DEFINITION: { label: 'Definicion', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950' },
-  DEVELOPMENT: { label: 'Desarrollo', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950' },
-  PRODUCTION: { label: 'Produccion', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
-  ON_HOLD: { label: 'En Pausa', color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950' },
+  DEFINITION: { label: 'Definicion', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950' },
+  DEVELOPMENT: { label: 'Desarrollo', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
+  PRODUCTION: { label: 'Produccion', color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950' },
+  ON_HOLD: { label: 'En Pausa', color: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
   COMPLETED: { label: 'Completado', color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
 };
 
@@ -92,7 +92,7 @@ export default function PortalProjectsPage() {
               <Link
                 key={project.id}
                 href={`/portal/projects/${project.id}`}
-                className="group flex flex-col justify-between relative rounded-[20px] bg-white p-6 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800"
+                className="group flex flex-col justify-between relative rounded-[20px] bg-white p-6 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1.5 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/20"
               >
                 <div>
                   <div className="mb-4 flex justify-between items-start gap-4">

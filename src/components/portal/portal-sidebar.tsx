@@ -50,12 +50,12 @@ export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
     <aside className="flex h-full w-[260px] flex-col bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-gray-800">
       {/* Logo Header */}
       <div className="flex h-[72px] items-center justify-between px-6 border-b border-gray-100 dark:border-gray-800">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 text-white text-sm font-bold shadow-sm">
+        <div className="flex items-center gap-3 cursor-pointer group">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white text-lg font-bold shadow-md shadow-blue-500/20 transition-transform duration-300 group-hover:scale-105">
             Z
           </div>
           <div>
-            <span className="text-base font-bold text-gray-800 dark:text-white">Zentik</span>
+            <span className="text-base font-bold text-gray-800 dark:text-white transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-400">Zentik</span>
             <p className="text-[11px] font-medium text-blue-500">Portal de Cliente</p>
           </div>
         </div>
@@ -84,13 +84,13 @@ export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
               href={item.href}
               onClick={onClose}
               className={cn(
-                'flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all',
+                'group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all duration-300',
                 active
-                  ? 'bg-blue-50 text-blue-600 font-semibold shadow-sm dark:bg-blue-950/40 dark:text-blue-400'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5',
+                  ? 'bg-gradient-to-r from-blue-50 to-indigo-50/50 text-blue-600 font-bold shadow-sm ring-1 ring-blue-100 dark:from-blue-950/40 dark:to-indigo-900/20 dark:text-blue-400 dark:ring-blue-900/30'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800 hover:shadow-sm dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-gray-200',
               )}
             >
-              <Icon className="h-[18px] w-[18px]" />
+              <Icon className={cn('h-[18px] w-[18px] transition-transform duration-300', !active && 'group-hover:scale-110 group-hover:text-blue-500')} />
               <span className="flex-1">{item.name}</span>
               {isNotif && unreadCount > 0 && (
                 <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
@@ -114,15 +114,15 @@ export function PortalSidebar({ isOpen, onClose }: PortalSidebarProps) {
         </button>
 
         {/* User info */}
-        <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
-          <Avatar className="h-10 w-10">
+        <div className="group flex items-center gap-3 rounded-xl bg-gray-50 p-3 transition-colors hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-800/80 cursor-pointer">
+          <Avatar className="h-10 w-10 transition-transform duration-300 group-hover:scale-105">
             <AvatarImage src={user?.image || undefined} />
             <AvatarFallback className="bg-blue-100 text-sm font-semibold text-blue-600 dark:bg-blue-900 dark:text-blue-300">
               {getInitials(user?.name || '')}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">
+            <p className="text-sm font-semibold text-gray-800 dark:text-white truncate transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-400">
               {user?.name || 'Cliente'}
             </p>
             <p className="text-[11px] text-gray-400 truncate">{user?.email}</p>

@@ -8,17 +8,17 @@ import { api } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  PENDING: { label: 'Pendiente', color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/50' },
-  REVIEWING: { label: 'En Revision', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/50' },
+  PENDING: { label: 'Pendiente', color: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800/50' },
+  REVIEWING: { label: 'En Revision', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950/50' },
   ACCEPTED: { label: 'Aceptada', color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/50' },
-  REJECTED: { label: 'Rechazada', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/50' },
-  IMPLEMENTED: { label: 'Implementada', color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950/50' },
+  REJECTED: { label: 'Rechazada', color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800/50' },
+  IMPLEMENTED: { label: 'Implementada', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/50' },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
-  LOW: { label: 'Baja', color: 'text-gray-500 dark:text-gray-400' },
+  LOW: { label: 'Baja', color: 'text-slate-400 dark:text-slate-500' },
   MEDIUM: { label: 'Media', color: 'text-blue-500 dark:text-blue-400' },
-  HIGH: { label: 'Alta', color: 'text-red-500 dark:text-red-400' },
+  HIGH: { label: 'Alta', color: 'text-indigo-500 dark:text-indigo-400' },
 };
 
 interface Suggestion {
@@ -100,7 +100,7 @@ export default function PortalSuggestionsPage() {
             return (
               <div
                 key={suggestion.id}
-                className="group relative flex flex-col sm:flex-row gap-4 sm:items-center justify-between rounded-[20px] bg-white p-5 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-0.5 dark:bg-gray-900 border border-gray-100 dark:border-gray-800"
+                className="group relative flex flex-col sm:flex-row gap-4 sm:items-center justify-between rounded-[20px] bg-white p-5 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/20"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1.5">
