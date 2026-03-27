@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trash2, Users } from 'lucide-react';
+import { Trash2, Users, UserPlus, X, Copy, Eye, EyeOff } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
@@ -21,15 +21,198 @@ const roleColorMap: Record<string, string> = {
   'Designer': 'bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-400',
   'DevOps': 'bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400',
   'Soporte': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  'Cliente': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 };
 
 const defaultBadgeColor = 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+
+function CreateMemberDialog({
+  open,
+  onClose,
+  orgId,
+  roles,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  orgId: string;
+  roles: any[];
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [roleId, setRoleId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ temporaryPassword?: string; member?: any } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const assignableRoles = roles.filter((r) => r.name !== 'Owner');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !roleId) return;
+
+    setSaving(true);
+    try {
+      const res = await api.post(`/organizations/${orgId}/members`, { name, email, roleId });
+      setResult(res.data);
+      toast.success('Miembro creado', `${name} ha sido agregado a la organización`);
+      onCreated();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Error al crear miembro';
+      toast.error('Error', message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    setName('');
+    setEmail('');
+    setRoleId('');
+    setResult(null);
+    setShowPassword(false);
+    onClose();
+  };
+
+  const copyPassword = () => {
+    if (result?.temporaryPassword) {
+      navigator.clipboard.writeText(result.temporaryPassword);
+      toast.success('Copiado', 'Contraseña temporal copiada al portapapeles');
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+            {result ? 'Miembro Creado' : 'Agregar Miembro'}
+          </h2>
+          <button onClick={handleClose} className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {result ? (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-green-50 p-4 dark:bg-green-950/30">
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                Usuario creado exitosamente
+              </p>
+              <p className="mt-1 text-xs text-green-600 dark:text-green-500">
+                El usuario deberá cambiar su contraseña en el primer inicio de sesión
+              </p>
+            </div>
+
+            {result.temporaryPassword && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Contraseña temporal</label>
+                <div className="flex items-center gap-2 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
+                  <code className="flex-1 text-sm font-mono text-gray-800 dark:text-gray-200">
+                    {showPassword ? result.temporaryPassword : '••••••••••'}
+                  </code>
+                  <button
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={copyPassword}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Guarda esta contraseña. No se mostrará de nuevo.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={handleClose}
+              className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">Nombre completo</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Juan Pérez"
+                required
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">Correo electrónico</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="juan@empresa.com"
+                required
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-500">Rol</label>
+              <Select value={roleId} onValueChange={setRoleId}>
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue placeholder="Seleccionar rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignableRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Se generará una contraseña temporal automáticamente. El usuario deberá cambiarla al iniciar sesión por primera vez.
+            </p>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving || !name || !email || !roleId}
+                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Creando...' : 'Crear Usuario'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function MembersSettingsPage() {
   const { orgId } = useOrg();
   const [members, setMembers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     if (orgId) {
@@ -97,7 +280,6 @@ export default function MembersSettingsPage() {
     );
   }
 
-  // Filter out Owner from assignable roles (cannot change someone TO owner)
   const assignableRoles = roles.filter((r) => r.name !== 'Owner');
 
   return (
@@ -107,10 +289,19 @@ export default function MembersSettingsPage() {
           <h1 className="text-[22px] font-semibold text-gray-800 dark:text-white">Miembros</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Gestiona los miembros de tu organización</p>
         </div>
-        <Badge className="bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
-          <Users className="mr-1.5 h-3.5 w-3.5" />
-          {members.length} miembros
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge className="bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+            <Users className="mr-1.5 h-3.5 w-3.5" />
+            {members.length} miembros
+          </Badge>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus className="h-4 w-4" />
+            Agregar Miembro
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -163,6 +354,14 @@ export default function MembersSettingsPage() {
           </div>
         )}
       </div>
+
+      <CreateMemberDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        orgId={orgId || ''}
+        roles={roles}
+        onCreated={loadMembers}
+      />
     </div>
   );
 }

@@ -91,7 +91,7 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
     const loadUnread = async () => {
       try {
         const res = await api.get<any>('/notifications/unread-count');
-        const count = typeof res.data === 'number' ? res.data : res.data?.count ?? 0;
+        const count = typeof res.data === 'number' ? res.data : res.data?.unreadCount ?? res.data?.count ?? 0;
         const prevCount = prevUnreadRef.current;
 
         if (count > prevCount && prevCount > 0) {
@@ -113,7 +113,7 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
       } catch {}
     };
     loadUnread();
-    const interval = setInterval(loadUnread, 30000);
+    const interval = setInterval(loadUnread, 15000);
     return () => clearInterval(interval);
   }, [setUnreadCount]);
 

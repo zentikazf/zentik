@@ -11,6 +11,7 @@ interface AuthUser {
   image?: string | null;
   emailVerified: boolean;
   onboardingCompleted?: boolean;
+  mustChangePassword?: boolean;
   createdAt?: string;
 }
 
