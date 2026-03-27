@@ -133,10 +133,22 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready || !organization || !user) return;
 
+    // Users created by admin have mustChangePassword=true — show welcome modal
     if (user.mustChangePassword) {
       setShowChangePassword(true);
-    } else if (!user.onboardingCompleted) {
-      setShowOnboarding(true);
+      return;
+    }
+
+    // Only show onboarding if user is the Owner (self-registered).
+    // Admin-created users (non-owners) skip onboarding entirely.
+    if (!user.onboardingCompleted) {
+      const isOwner = organization.roleName === 'Owner';
+      if (isOwner) {
+        setShowOnboarding(true);
+      } else {
+        // Auto-complete onboarding for non-owner users
+        api.patch('/auth/onboarding-complete').catch(() => {});
+      }
     }
   }, [ready, organization, user]);
 
