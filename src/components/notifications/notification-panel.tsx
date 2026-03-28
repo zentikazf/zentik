@@ -63,7 +63,6 @@ export function NotificationPanel({ open }: NotificationPanelProps) {
   const [loaded, setLoaded] = useState(false);
 
   const loadNotifications = useCallback(async () => {
-    if (loaded) return;
     setLoading(true);
     try {
       const res = await api.get<any>('/notifications?page=1&limit=30');
@@ -82,13 +81,15 @@ export function NotificationPanel({ open }: NotificationPanelProps) {
       setLoading(false);
       setLoaded(true);
     }
-  }, [loaded, setNotifications]);
+  }, [setNotifications]);
 
   useEffect(() => {
-    if (open && !loaded) {
+    if (open) {
       loadNotifications();
+    } else {
+      setLoaded(false);
     }
-  }, [open, loaded, loadNotifications]);
+  }, [open, loadNotifications]);
 
   const handleMarkAsRead = async (id: string) => {
     try {

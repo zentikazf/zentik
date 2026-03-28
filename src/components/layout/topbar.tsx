@@ -89,6 +89,7 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
 
   useEffect(() => {
     const loadUnread = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const res = await api.get<any>('/notifications/unread-count');
         const count = typeof res.data === 'number' ? res.data : res.data?.unreadCount ?? res.data?.count ?? 0;
@@ -113,8 +114,17 @@ export function Topbar({ onMenuToggle }: TopbarProps) {
       } catch {}
     };
     loadUnread();
-    const interval = setInterval(loadUnread, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadUnread, 60000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadUnread();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [setUnreadCount]);
 
   const handleCreateOrg = async () => {

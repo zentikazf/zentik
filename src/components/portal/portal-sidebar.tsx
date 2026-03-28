@@ -26,14 +26,24 @@ export function PortalSidebar() {
 
   useEffect(() => {
     const loadUnread = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const res = await api.get<any>('/notifications/unread-count');
         setUnreadCount(typeof res.data === 'number' ? res.data : res.data?.count ?? 0);
       } catch {}
     };
     loadUnread();
-    const interval = setInterval(loadUnread, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadUnread, 60000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadUnread();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [setUnreadCount]);
 
   const isActive = (href: string) => {
