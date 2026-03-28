@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { CheckCircle2, AlertTriangle, Clock, Pencil } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
@@ -35,12 +36,15 @@ export function TimeEntryDialog({
   const [tasks, setTasks] = useState<any[]>([]);
   const [taskId, setTaskId] = useState('');
   const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [endTime, setEndTime] = useState('');
-  const [billable, setBillable] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Task data (auto-filled)
+  const [taskData, setTaskData] = useState<any>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [hours, setHours] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const isEdit = !!entry;
 
@@ -48,7 +52,7 @@ export function TimeEntryDialog({
     if (!open) return;
     const loadTasks = async () => {
       try {
-        const res = await api.get(`/projects/${projectId}/tasks?limit=100`);
+        const res = await api.get(`/projects/${projectId}/tasks?limit=200`);
         const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
         setTasks(list);
       } catch {}
@@ -57,56 +61,89 @@ export function TimeEntryDialog({
   }, [projectId, open]);
 
   useEffect(() => {
+    if (!open) return;
     if (entry) {
       setTaskId(entry.taskId || '');
       setDescription(entry.description || '');
-      setBillable(entry.billable ?? false);
-      if (entry.startTime) {
-        const s = new Date(entry.startTime);
-        setStartDate(s.toISOString().split('T')[0]);
-        setStartTime(s.toTimeString().slice(0, 5));
-      }
-      if (entry.endTime) {
-        const e = new Date(entry.endTime);
-        setEndDate(e.toISOString().split('T')[0]);
-        setEndTime(e.toTimeString().slice(0, 5));
-      }
+      if (entry.startTime) setStartDate(new Date(entry.startTime).toISOString().split('T')[0]);
+      if (entry.endTime) setEndDate(new Date(entry.endTime).toISOString().split('T')[0]);
+      if (entry.duration) setHours(String((entry.duration / 3600).toFixed(1)));
+      setConfirmed(true);
+      setEditing(true);
     } else {
-      setTaskId('');
-      setDescription('');
-      setBillable(false);
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      setStartDate(today);
-      setStartTime(now.toTimeString().slice(0, 5));
-      setEndDate(today);
-      const later = new Date(now.getTime() + 3600000);
-      setEndTime(later.toTimeString().slice(0, 5));
+      resetForm();
     }
   }, [entry, open]);
 
+  const resetForm = () => {
+    setTaskId('');
+    setDescription('');
+    setTaskData(null);
+    setStartDate('');
+    setEndDate('');
+    setHours('');
+    setConfirmed(false);
+    setEditing(false);
+  };
+
+  // When task is selected, auto-fill from task data
+  const handleTaskSelect = async (id: string) => {
+    setTaskId(id);
+    setConfirmed(false);
+    setEditing(false);
+
+    if (!id) {
+      setTaskData(null);
+      return;
+    }
+
+    try {
+      const res = await api.get(`/tasks/${id}`);
+      const task = res.data;
+      setTaskData(task);
+
+      // Auto-fill from task
+      if (task.startDate) setStartDate(new Date(task.startDate).toISOString().split('T')[0]);
+      else setStartDate(new Date().toISOString().split('T')[0]);
+
+      if (task.dueDate) setEndDate(new Date(task.dueDate).toISOString().split('T')[0]);
+      else setEndDate(new Date().toISOString().split('T')[0]);
+
+      setHours(task.estimatedHours ? String(task.estimatedHours) : '0');
+    } catch {
+      toast.error('Error', 'No se pudo cargar los datos de la tarea');
+    }
+  };
+
+  const handleConfirm = () => setConfirmed(true);
+
+  const handleEdit = () => setEditing(true);
+
   const handleSave = async () => {
-    if (!taskId || !startDate || !startTime || !endDate || !endTime) {
+    if (!taskId || !startDate || !endDate || !hours) {
       toast.error('Error', 'Completa todos los campos requeridos');
       return;
     }
 
-    const startISO = new Date(`${startDate}T${startTime}:00`).toISOString();
-    const endISO = new Date(`${endDate}T${endTime}:00`).toISOString();
-
-    if (new Date(endISO) <= new Date(startISO)) {
-      toast.error('Error', 'La hora de fin debe ser posterior a la de inicio');
+    const h = parseFloat(hours) || 0;
+    if (h <= 0) {
+      toast.error('Error', 'Las horas deben ser mayores a 0');
       return;
     }
 
     setSaving(true);
     try {
+      const startISO = new Date(`${startDate}T09:00:00`).toISOString();
+      const durationSeconds = Math.round(h * 3600);
+      const endISO = new Date(new Date(startISO).getTime() + durationSeconds * 1000).toISOString();
+
       const payload = {
         taskId,
         description: description.trim() || undefined,
         startTime: startISO,
         endTime: endISO,
-        billable,
+        duration: durationSeconds,
+        billable: true,
       };
 
       if (isEdit) {
@@ -114,8 +151,26 @@ export function TimeEntryDialog({
         toast.success('Entrada actualizada');
       } else {
         await api.post('/time-entries', payload);
-        toast.success('Entrada creada', 'El registro de tiempo ha sido agregado');
+        toast.success('Entrada registrada', 'Las horas se han agregado a facturación');
       }
+
+      // If user edited the dates/hours, update the task too
+      if (editing && taskData) {
+        const taskUpdate: Record<string, unknown> = {};
+        if (startDate !== (taskData.startDate ? new Date(taskData.startDate).toISOString().split('T')[0] : '')) {
+          taskUpdate.startDate = new Date(`${startDate}T00:00:00`).toISOString();
+        }
+        if (endDate !== (taskData.dueDate ? new Date(taskData.dueDate).toISOString().split('T')[0] : '')) {
+          taskUpdate.dueDate = new Date(`${endDate}T23:59:59`).toISOString();
+        }
+        if (String(taskData.estimatedHours || 0) !== hours) {
+          taskUpdate.estimatedHours = parseFloat(hours);
+        }
+        if (Object.keys(taskUpdate).length > 0) {
+          await api.patch(`/tasks/${taskId}`, taskUpdate).catch(() => {});
+        }
+      }
+
       onSaved();
       onOpenChange(false);
     } catch (err) {
@@ -126,17 +181,20 @@ export function TimeEntryDialog({
     }
   };
 
+  const selectedTask = tasks.find((t) => t.id === taskId);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Editar Entrada de Tiempo' : 'Nueva Entrada de Tiempo'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
+          {/* Task selector */}
           <div className="space-y-2">
             <Label>Tarea</Label>
-            <Select value={taskId} onValueChange={setTaskId}>
+            <Select value={taskId} onValueChange={handleTaskSelect}>
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar tarea..." />
               </SelectTrigger>
@@ -150,53 +208,122 @@ export function TimeEntryDialog({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Descripción</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="¿Qué hiciste durante este tiempo?"
-              rows={3}
-            />
-          </div>
+          {/* Auto-filled data from task */}
+          {taskId && !isEdit && (
+            <>
+              <div className="rounded-xl border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Datos extraídos de la tarea
+                </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Fecha inicio</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Hora inicio</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </div>
-          </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Fecha inicio</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-white">{startDate || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Fecha fin</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-white">{endDate || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Horas estimadas</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-white">{hours || '0'}h</p>
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Fecha fin</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Hora fin</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-          </div>
+                {!confirmed ? (
+                  <div className="flex items-center gap-3 pt-1">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 flex-1">
+                      ¿Estos datos son correctos?
+                    </p>
+                    <Button size="sm" className="h-7 text-xs rounded-full bg-blue-600 hover:bg-blue-700" onClick={handleConfirm}>
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Sí, correctos
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs rounded-full" onClick={handleEdit}>
+                      <Pencil className="h-3 w-3 mr-1" /> Editar
+                    </Button>
+                  </div>
+                ) : !editing ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 text-[11px]">
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Datos confirmados
+                    </Badge>
+                    <button onClick={handleEdit} className="text-[11px] text-blue-600 hover:underline">
+                      Editar de todas formas
+                    </button>
+                  </div>
+                ) : null}
+              </div>
 
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div>
-              <Label className="text-sm font-medium">Facturable</Label>
-              <p className="text-xs text-muted-foreground">¿Este tiempo es facturable al cliente?</p>
+              {/* Editable fields when user clicks "Editar" */}
+              {editing && (
+                <div className="rounded-xl border border-yellow-200 bg-yellow-50/50 dark:border-yellow-800/50 dark:bg-yellow-950/20 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                    <AlertTriangle className="h-4 w-4" />
+                    Editando datos — se actualizará la tarea
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Fecha inicio</Label>
+                      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Fecha fin</Label>
+                      <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Horas</Label>
+                      <Input type="number" value={hours} onChange={(e) => setHours(e.target.value)} className="h-8 text-xs" min={0} step={0.5} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Edit mode - inline fields for existing entries */}
+          {isEdit && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-[11px]">Fecha inicio</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Fecha fin</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Horas</Label>
+                <Input type="number" value={hours} onChange={(e) => setHours(e.target.value)} className="h-8 text-xs" min={0} step={0.5} />
+              </div>
             </div>
-            <Switch checked={billable} onCheckedChange={setBillable} />
-          </div>
+          )}
+
+          {/* Description */}
+          {(confirmed || editing || isEdit) && (
+            <div className="space-y-2">
+              <Label>Nota (opcional)</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Breve nota sobre el trabajo realizado..."
+                rows={2}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving || !taskId}>
-            {saving ? 'Guardando...' : isEdit ? 'Guardar' : 'Registrar Tiempo'}
+          <Button
+            onClick={handleSave}
+            disabled={saving || !taskId || (!confirmed && !editing && !isEdit)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {saving ? 'Guardando...' : isEdit ? 'Guardar Cambios' : 'Registrar y Facturar'}
           </Button>
         </DialogFooter>
       </DialogContent>

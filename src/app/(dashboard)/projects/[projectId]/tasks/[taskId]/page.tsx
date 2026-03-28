@@ -185,9 +185,9 @@ export default function TaskDetailPage() {
   const priorityOpt = PRIORITY_OPTIONS.find((p) => p.value === task.priority);
   const completedSubs = (task.subTasks || []).filter((s: any) => s.status === 'DONE').length;
   const totalSubs = (task.subTasks || []).length;
-  const totalMinutes = task.totalDuration || 0;
-  const totalHours = Math.floor(totalMinutes / 60);
-  const totalMins = totalMinutes % 60;
+  const totalSeconds = task.totalDuration || 0;
+  const totalHours = Math.floor(totalSeconds / 3600);
+  const totalMins = Math.floor((totalSeconds % 3600) / 60);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -485,7 +485,7 @@ export default function TaskDetailPage() {
                       </Avatar>
                       <span>{entry.description || 'Sin descripción'}</span>
                     </div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{entry.duration ? `${Math.floor(entry.duration / 60)}h ${entry.duration % 60}m` : '—'}</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">{entry.duration ? `${Math.floor(entry.duration / 3600)}h ${Math.floor((entry.duration % 3600) / 60)}m` : '—'}</span>
                   </div>
                 ))}
               </div>

@@ -17,7 +17,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { TimerWidget } from '@/components/timer/timer-widget';
 import {
   Calendar, Tag, User, Clock, CheckCircle2, Paperclip,
   Download, File as FileIcon, Image, FileText, Plus, Send,
@@ -195,9 +194,9 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
   const priorityOpt = task ? PRIORITY_OPTIONS.find((p) => p.value === task.priority) : null;
   const completedSubs = (task?.subTasks || []).filter((s: any) => s.status === 'DONE').length;
   const totalSubs = (task?.subTasks || []).length;
-  const totalMinutes = task?.totalDuration || 0;
-  const totalHours = Math.floor(totalMinutes / 60);
-  const totalMins = totalMinutes % 60;
+  const totalSeconds = task?.totalDuration || 0;
+  const totalHours = Math.floor(totalSeconds / 3600);
+  const totalMins = Math.floor((totalSeconds % 3600) / 60);
 
   // Reset selected subtask when task changes
   useEffect(() => {
@@ -451,24 +450,24 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
                       </div>
                     </div>
 
-                    {/* Timer */}
-                    <div className="pt-2">
-                      <TimerWidget taskId={task.id} taskTitle={task.title} />
-                    </div>
-
                     {/* Time summary */}
-                    {(totalHours > 0 || totalMins > 0) && (
-                      <div className="rounded-xl bg-gray-50 dark:bg-gray-800/50 p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-400 flex items-center gap-1.5">
-                            <Clock className="h-3 w-3" /> Tiempo registrado
-                          </span>
-                          <span className="text-sm font-semibold text-gray-800 dark:text-white">
-                            {totalHours}h {totalMins}m
-                          </span>
+                    <div className="rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                          <Clock className="h-3 w-3" /> Tiempo
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400">Estimadas</p>
+                          <p className="text-sm font-bold text-gray-800 dark:text-white">{task.estimatedHours || 0}h</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400">Registradas</p>
+                          <p className="text-sm font-bold text-gray-800 dark:text-white">{totalHours}h {totalMins}m</p>
                         </div>
                       </div>
-                    )}
+                    </div>
 
                     {/* Files */}
                     <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-3">
@@ -863,10 +862,6 @@ function SubtaskDetail({
         </div>
       </div>
 
-      {/* Timer */}
-      <div className="pt-1 sm:pt-2">
-        <TimerWidget taskId={data.id} taskTitle={data.title} />
-      </div>
     </div>
   );
 }
