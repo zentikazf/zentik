@@ -2,18 +2,20 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { KanbanBoard } from '@/components/kanban/board';
-import { BoardSettingsDialog } from '@/components/board/board-settings-dialog';
-import { ColumnDialog } from '@/components/board/column-dialog';
+import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings, Plus, Layout } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
-import { CreateTaskDialog } from '@/components/task/create-task-dialog';
-import { TaskSheet } from '@/components/task/task-sheet';
 import { useBoardStore } from '@/stores/use-board-store';
+
+const KanbanBoard = dynamic(() => import('@/components/kanban/board').then(m => m.KanbanBoard), { ssr: false, loading: () => <Skeleton className="h-[600px] w-full" /> });
+const BoardSettingsDialog = dynamic(() => import('@/components/board/board-settings-dialog').then(m => m.BoardSettingsDialog), { ssr: false });
+const ColumnDialog = dynamic(() => import('@/components/board/column-dialog').then(m => m.ColumnDialog), { ssr: false });
+const CreateTaskDialog = dynamic(() => import('@/components/task/create-task-dialog').then(m => m.CreateTaskDialog), { ssr: false });
+const TaskSheet = dynamic(() => import('@/components/task/task-sheet').then(m => m.TaskSheet), { ssr: false });
 
 export default function BoardPage() {
   const { projectId } = useParams<{ projectId: string }>();

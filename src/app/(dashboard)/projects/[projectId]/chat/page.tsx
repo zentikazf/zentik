@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,8 +14,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ChatWindow } from '@/components/chat/chat-window';
 import { MessageSquare, Plus, Hash } from 'lucide-react';
+
+const ChatWindow = dynamic(() => import('@/components/chat/chat-window').then(m => m.ChatWindow), { ssr: false, loading: () => <Skeleton className="h-[500px] w-full" /> });
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
