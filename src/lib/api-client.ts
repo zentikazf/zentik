@@ -44,7 +44,13 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   const response = await fetch(url, config);
 
   if (!response.ok) {
-    const error = (await response.json()) as ApiErrorResponse;
+    // If session is invalid/expired, redirect to login immediately
+    if (response.status === 401 && typeof window !== 'undefined' && !endpoint.includes('/auth/')) {
+      window.location.href = '/login';
+      throw new ApiError(401, 'SESSION_EXPIRED', 'Sesión expirada');
+    }
+
+    const error = (await response.json().catch(() => ({ error: { code: 'UNKNOWN', message: 'Error desconocido' } }))) as ApiErrorResponse;
     throw new ApiError(
       response.status,
       error.error.code,

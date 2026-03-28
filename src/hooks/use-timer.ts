@@ -57,9 +57,12 @@ export function useTimer() {
   const stop = useCallback(async () => {
     setLoading(true);
     try {
-      await api.post('/time-entries/stop');
+      const res = await api.post('/time-entries/stop');
       setActiveTimer(null);
       if (intervalRef.current) clearInterval(intervalRef.current);
+      return res.data;
+    } catch {
+      return null;
     } finally {
       setLoading(false);
     }

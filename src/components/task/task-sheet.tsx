@@ -549,7 +549,7 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
                             <button
                               key={sub.id}
                               onClick={() => setSelectedSubtask(sub)}
-                              className="flex w-full items-center gap-2.5 rounded-xl border border-gray-100 p-2.5 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-200 dark:hover:border-blue-800 transition-colors text-left"
+                              className="flex w-full items-center gap-2 sm:gap-2.5 rounded-xl border border-gray-100 p-2 sm:p-2.5 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-200 dark:hover:border-blue-800 transition-colors text-left"
                             >
                               <CheckCircle2
                                 className={`h-4 w-4 shrink-0 ${
@@ -557,7 +557,7 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
                                 }`}
                               />
                               <span
-                                className={`flex-1 text-sm ${
+                                className={`flex-1 text-xs sm:text-sm truncate ${
                                   sub.status === 'DONE' ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-white'
                                 }`}
                               >
@@ -582,23 +582,25 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
                     )}
 
                     {/* New subtask */}
-                    <div className="flex gap-2 pt-1">
-                      <Input
-                        placeholder="Nueva subtarea..."
-                        value={newSubtask}
-                        onChange={(e) => setNewSubtask(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleCreateSubtask()}
-                        className="h-8 rounded-full text-xs"
-                      />
-                      <Button
-                        size="sm"
-                        className="rounded-full h-8 px-3"
-                        onClick={handleCreateSubtask}
-                        disabled={!newSubtask.trim()}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    {!selectedSubtask && (
+                      <div className="flex gap-2 pt-1">
+                        <Input
+                          placeholder="Nueva subtarea..."
+                          value={newSubtask}
+                          onChange={(e) => setNewSubtask(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleCreateSubtask()}
+                          className="h-8 rounded-full text-xs min-w-0 flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          className="rounded-full h-8 px-3 shrink-0"
+                          onClick={handleCreateSubtask}
+                          disabled={!newSubtask.trim()}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -749,7 +751,7 @@ function SubtaskDetail({
       </button>
 
       {/* Title */}
-      <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-4">
+      <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-3 sm:p-4">
         {editTitle ? (
           <Input
             autoFocus
@@ -757,12 +759,12 @@ function SubtaskDetail({
             onChange={(e) => setTitleDraft(e.target.value)}
             onBlur={() => { if (titleDraft.trim() && titleDraft !== data.title) patchSubtask({ title: titleDraft }); setEditTitle(false); }}
             onKeyDown={(e) => { if (e.key === 'Enter') { if (titleDraft.trim() && titleDraft !== data.title) patchSubtask({ title: titleDraft }); setEditTitle(false); }}}
-            className="text-base font-semibold border-none px-0 focus-visible:ring-0 shadow-none"
+            className="text-sm sm:text-base font-semibold border-none px-0 focus-visible:ring-0 shadow-none"
           />
         ) : (
           <h3
             onClick={() => setEditTitle(true)}
-            className="text-base font-semibold text-gray-800 dark:text-white cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-1 -mx-1 py-0.5 transition-colors"
+            className="text-sm sm:text-base font-semibold text-gray-800 dark:text-white cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-1 -mx-1 py-0.5 transition-colors break-words"
           >
             {data.title}
           </h3>
@@ -775,13 +777,13 @@ function SubtaskDetail({
             onChange={(e) => setDescDraft(e.target.value)}
             onBlur={() => { if (descDraft !== (data.description || '')) patchSubtask({ description: descDraft }); setEditDesc(false); }}
             rows={3}
-            className="border-none px-0 focus-visible:ring-0 resize-none shadow-none text-sm mt-2"
+            className="border-none px-0 focus-visible:ring-0 resize-none shadow-none text-xs sm:text-sm mt-2"
             placeholder="Agregar descripción..."
           />
         ) : (
           <p
             onClick={() => setEditDesc(true)}
-            className="text-sm text-gray-500 dark:text-gray-400 mt-1 cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-1 -mx-1 py-0.5 transition-colors min-h-[1.5rem]"
+            className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-1 -mx-1 py-0.5 transition-colors min-h-[1.5rem] break-words"
           >
             {data.description || 'Haz clic para agregar descripción...'}
           </p>
@@ -789,14 +791,14 @@ function SubtaskDetail({
       </div>
 
       {/* Status & Priority */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-xs">Estado</span>
+      <div className="space-y-2.5 sm:space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-gray-400 text-[11px] sm:text-xs shrink-0">Estado</span>
           <Select value={data.status} onValueChange={(v) => {
             if (v === 'DONE') { toast.error('Acción no permitida', 'La subtarea debe ser aprobada.'); return; }
             patchSubtask({ status: v });
           }}>
-            <SelectTrigger className="h-7 w-36 text-xs border-none shadow-none">
+            <SelectTrigger className="h-7 w-28 sm:w-36 text-[11px] sm:text-xs border-none shadow-none">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -812,10 +814,10 @@ function SubtaskDetail({
 
         <Separator />
 
-        <div className="flex items-center justify-between">
-          <span className="text-gray-400 text-xs">Prioridad</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-gray-400 text-[11px] sm:text-xs shrink-0">Prioridad</span>
           <Select value={data.priority} onValueChange={(v) => patchSubtask({ priority: v })}>
-            <SelectTrigger className="h-7 w-36 text-xs border-none shadow-none">
+            <SelectTrigger className="h-7 w-28 sm:w-36 text-[11px] sm:text-xs border-none shadow-none">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -829,21 +831,21 @@ function SubtaskDetail({
         <Separator />
 
         {/* Assignees */}
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-gray-400 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 sm:gap-1.5 text-gray-400 text-[11px] sm:text-xs shrink-0">
             <User className="h-3 w-3" /> Asignados
           </span>
-          <div className="flex -space-x-1">
+          <div className="flex -space-x-1 flex-wrap justify-end">
             {(data.assignments || []).map((a: any) => (
-              <Avatar key={a.user?.id} className="h-6 w-6 border-2 border-white dark:border-gray-900">
+              <Avatar key={a.user?.id} className="h-5 w-5 sm:h-6 sm:w-6 border-2 border-white dark:border-gray-900">
                 <AvatarImage src={a.user?.image} />
-                <AvatarFallback className="text-[8px] bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300">
+                <AvatarFallback className="text-[7px] sm:text-[8px] bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300">
                   {getInitials(a.user?.name || '')}
                 </AvatarFallback>
               </Avatar>
             ))}
             {(!data.assignments || data.assignments.length === 0) && (
-              <span className="text-xs text-gray-400">Ninguno</span>
+              <span className="text-[11px] sm:text-xs text-gray-400">Ninguno</span>
             )}
           </div>
         </div>
@@ -851,18 +853,18 @@ function SubtaskDetail({
         <Separator />
 
         {/* Dates */}
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-gray-400 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 sm:gap-1.5 text-gray-400 text-[11px] sm:text-xs shrink-0">
             <Calendar className="h-3 w-3" /> Fecha límite
           </span>
-          <span className="text-xs text-gray-800 dark:text-white">
+          <span className="text-[11px] sm:text-xs text-gray-800 dark:text-white">
             {data.dueDate ? formatDate(data.dueDate) : '—'}
           </span>
         </div>
       </div>
 
       {/* Timer */}
-      <div className="pt-2">
+      <div className="pt-1 sm:pt-2">
         <TimerWidget taskId={data.id} taskTitle={data.title} />
       </div>
     </div>

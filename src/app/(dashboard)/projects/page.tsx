@@ -26,7 +26,7 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', clientId: '' });
+  const [form, setForm] = useState({ name: '', description: '', clientId: '', hourlyRate: '', estimatedHours: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
 
@@ -78,10 +78,12 @@ export default function ProjectsPage() {
         name: result.data.name,
         description: result.data.description,
         ...(form.clientId && form.clientId !== 'none' && { clientId: form.clientId }),
+        ...(form.hourlyRate && { hourlyRate: Number(form.hourlyRate) }),
+        ...(form.estimatedHours && { estimatedHours: Number(form.estimatedHours) }),
       });
       toast.success('Proyecto creado', `El proyecto "${result.data.name}" se creó exitosamente`);
       setShowCreate(false);
-      setForm({ name: '', description: '', clientId: '' });
+      setForm({ name: '', description: '', clientId: '', hourlyRate: '', estimatedHours: '' });
       setFormErrors({});
       router.push(`/projects/${res.data.id}`);
     } catch (err) {
@@ -153,6 +155,16 @@ export default function ProjectsPage() {
                 <Label className="text-gray-500 dark:text-gray-400">Descripción</Label>
                 <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe brevemente el proyecto..." />
                 {formErrors.description && <p className="text-sm text-red-600 dark:text-red-400">{formErrors.description}</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-gray-500 dark:text-gray-400">Horas estimadas</Label>
+                  <Input type="number" value={form.estimatedHours} onChange={(e) => setForm({ ...form, estimatedHours: e.target.value })} placeholder="Ej: 120" min={0} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-gray-500 dark:text-gray-400">Precio/hora (₲)</Label>
+                  <Input type="number" value={form.hourlyRate} onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })} placeholder="Ej: 150000" min={0} />
+                </div>
               </div>
               {clients.length > 0 && (
                 <div className="space-y-2">

@@ -61,7 +61,6 @@ export function CreateTaskDialog({
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [estimatedHours, setEstimatedHours] = useState('');
-  const [hourlyRate, setHourlyRate] = useState('');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
   // Expandable fields
@@ -101,7 +100,6 @@ export function CreateTaskDialog({
       setDescription('');
       setPriority('MEDIUM');
       setEstimatedHours('');
-      setHourlyRate('');
       setAssigneeIds([]);
       setDueDate('');
       setStartDate('');
@@ -127,7 +125,6 @@ export function CreateTaskDialog({
       };
 
       if (estimatedHours) payload.estimatedHours = Number(estimatedHours);
-      if (hourlyRate) payload.hourlyRate = Number(hourlyRate);
       if (assigneeIds.length) payload.assigneeIds = assigneeIds;
       if (defaultBoardColumnId) payload.boardColumnId = defaultBoardColumnId;
       if (sprintId) payload.sprintId = sprintId;
@@ -213,28 +210,16 @@ export function CreateTaskDialog({
             </Select>
           </div>
 
-          {/* Hours + Rate row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Horas estimadas</Label>
-              <Input
-                type="number"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
-                placeholder="Ej: 8"
-                min={0}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tarifa/hora (₲)</Label>
-              <Input
-                type="number"
-                value={hourlyRate}
-                onChange={(e) => setHourlyRate(e.target.value)}
-                placeholder="Ej: 150000"
-                min={0}
-              />
-            </div>
+          {/* Estimated hours */}
+          <div className="space-y-2">
+            <Label>Horas estimadas</Label>
+            <Input
+              type="number"
+              value={estimatedHours}
+              onChange={(e) => setEstimatedHours(e.target.value)}
+              placeholder="Ej: 8"
+              min={0}
+            />
           </div>
 
           {/* Rol destino */}
