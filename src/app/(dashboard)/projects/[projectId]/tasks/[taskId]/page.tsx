@@ -462,6 +462,17 @@ export default function TaskDetailPage() {
               </div>
               <Separator />
 
+              {/* Review attempts */}
+              {task.reviewAttempts > 0 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-xs">Rechazos</span>
+                    <Badge variant="destructive" className="text-[10px]">{task.reviewAttempts}</Badge>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
               {/* Created */}
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-gray-400 text-xs"><Clock className="h-3 w-3" /> Creada</span>

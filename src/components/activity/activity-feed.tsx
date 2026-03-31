@@ -40,6 +40,13 @@ const actionLabels: Record<string, string> = {
   comment: 'comentó en',
   archive: 'archivó',
   archived: 'archivó',
+  'task.approval.approved': 'aprobó',
+  'task.approval.rejected': 'rechazó',
+  'task.created': 'creó',
+  'task.updated': 'actualizó',
+  'task.deleted': 'eliminó',
+  'task.assigned': 'asignó',
+  'task.status.changed': 'cambió el estado de',
 };
 
 const resourceLabels: Record<string, string> = {
@@ -56,7 +63,15 @@ const resourceLabels: Record<string, string> = {
 };
 
 function getActionText(action: string, resource: string): string {
-  const actionText = actionLabels[action.toLowerCase()] || action;
+  // Try exact match first (for compound actions like 'task.approval.rejected')
+  const exactMatch = actionLabels[action.toLowerCase()];
+  if (exactMatch) {
+    const resourceText = resourceLabels[resource.toLowerCase()] || resource;
+    return `${exactMatch} ${resourceText}`;
+  }
+  // Fallback: try last segment of dot-notation
+  const lastSegment = action.split('.').pop() || action;
+  const actionText = actionLabels[lastSegment.toLowerCase()] || action;
   const resourceText = resourceLabels[resource.toLowerCase()] || resource;
   return `${actionText} ${resourceText}`;
 }
@@ -194,6 +209,13 @@ export function ActivityFeed({
                     </span>
                   </p>
                 </div>
+
+                {/* Rejection reason */}
+                {entry.action === 'task.approval.rejected' && entry.newData?.reason && (
+                  <div className="mt-1.5 ml-7 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900 px-2.5 py-1.5">
+                    <p className="text-xs text-red-600 dark:text-red-400">{String(entry.newData.reason)}</p>
+                  </div>
+                )}
 
                 {/* Change details */}
                 {changes.length > 0 && (
