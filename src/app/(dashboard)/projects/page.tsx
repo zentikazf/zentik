@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FolderKanban } from 'lucide-react';
+import { Plus, Search, FolderKanban, LayoutGrid, LayoutList } from 'lucide-react';
+import { ProjectKanban } from '@/components/project/project-kanban';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
@@ -29,6 +30,7 @@ export default function ProjectsPage() {
   const [form, setForm] = useState({ name: '', description: '', clientId: '', hourlyRate: '', estimatedHours: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [view, setView] = useState<'list' | 'kanban'>('list');
 
   useEffect(() => {
     if (orgId) {
@@ -99,19 +101,25 @@ export default function ProjectsPage() {
   );
 
   const statusColors: Record<string, string> = {
-    DEFINITION: 'bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400',
-    DEVELOPMENT: 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400',
-    PRODUCTION: 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400',
-    ON_HOLD: 'bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400',
-    COMPLETED: 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+    DISCOVERY:   'bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400',
+    PLANNING:    'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400',
+    DEVELOPMENT: 'bg-yellow-50 text-yellow-600 dark:bg-yellow-950 dark:text-yellow-400',
+    TESTING:     'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400',
+    DEPLOY:      'bg-cyan-50 text-cyan-600 dark:bg-cyan-950 dark:text-cyan-400',
+    SUPPORT:     'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400',
+    ON_HOLD:     'bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400',
+    COMPLETED:   'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
   };
 
   const statusLabels: Record<string, string> = {
-    DEFINITION: 'Definición',
+    DISCOVERY:   'Descubrimiento',
+    PLANNING:    'Planificación',
     DEVELOPMENT: 'Desarrollo',
-    PRODUCTION: 'Producción',
-    ON_HOLD: 'En Pausa',
-    COMPLETED: 'Completado',
+    TESTING:     'Testing',
+    DEPLOY:      'Deploy',
+    SUPPORT:     'Soporte',
+    ON_HOLD:     'En Pausa',
+    COMPLETED:   'Completado',
   };
 
   if (loading || !orgId) {
@@ -139,7 +147,27 @@ export default function ProjectsPage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button className="rounded-full"><Plus className="mr-2 h-4 w-4" /> Nuevo Proyecto</Button>
+            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-full bg-gray-100 p-1 dark:bg-gray-800">
+            <button
+              onClick={() => setView('list')}
+              className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                view === 'list' ? 'bg-white shadow dark:bg-gray-700 text-gray-800 dark:text-white' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setView('kanban')}
+              className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+                view === 'kanban' ? 'bg-white shadow dark:bg-gray-700 text-gray-800 dark:text-white' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <Button className="rounded-full"><Plus className="mr-2 h-4 w-4" /> Nuevo Proyecto</Button>
+        </div>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -193,7 +221,9 @@ export default function ProjectsPage() {
         <Input placeholder="Buscar proyectos..." className="rounded-full bg-white pl-9 dark:bg-gray-900" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      {filtered.length === 0 ? (
+      {view === 'kanban' ? (
+        <ProjectKanban projects={filtered} onProjectMoved={loadProjects} />
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-[25px] bg-white py-16 dark:bg-gray-900">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
             <FolderKanban className="h-7 w-7 text-blue-600 dark:text-blue-400" />

@@ -1,9 +1,12 @@
 // ── Enums ──────────────────────────────────────────
 
 export enum ProjectStatus {
-  DEFINITION = 'DEFINITION',
+  DISCOVERY = 'DISCOVERY',
+  PLANNING = 'PLANNING',
   DEVELOPMENT = 'DEVELOPMENT',
-  PRODUCTION = 'PRODUCTION',
+  TESTING = 'TESTING',
+  DEPLOY = 'DEPLOY',
+  SUPPORT = 'SUPPORT',
   ON_HOLD = 'ON_HOLD',
   COMPLETED = 'COMPLETED',
 }
