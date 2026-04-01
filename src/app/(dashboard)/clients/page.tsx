@@ -14,7 +14,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Building, Plus, Search, Pencil, Trash2, FolderKanban, Mail, Phone, Globe, KeyRound } from 'lucide-react';
+import { Building, Plus, Search, Pencil, Trash2, FolderKanban, Mail, Phone, Globe, KeyRound, Clock } from 'lucide-react';
+import Link from 'next/link';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
@@ -208,12 +209,12 @@ export default function ClientsPage() {
               key={client.id}
               className="flex items-center gap-4 rounded-xl border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/5"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
+              <Link href={`/clients/${client.id}`} className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
                 <Building className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
+              </Link>
 
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-medium text-gray-800 dark:text-white">
+              <Link href={`/clients/${client.id}`} className="min-w-0 flex-1">
+                <p className="text-[15px] font-medium text-gray-800 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                   {client.name}
                 </p>
                 <div className="flex items-center gap-3 text-[13px] text-gray-400">
@@ -228,7 +229,7 @@ export default function ClientsPage() {
                     </span>
                   )}
                 </div>
-              </div>
+              </Link>
 
               {client.userId ? (
                 <Badge className="bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400">

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   FolderKanban,
-  MessageSquarePlus,
+  Ticket,
   ArrowRight,
   TrendingUp,
   Clock,
@@ -40,24 +40,27 @@ export default function PortalDashboard() {
   const { user } = useAuth();
   const [data, setData] = useState({
     projects: [] as any[],
-    suggestions: [] as any[],
+    tickets: [] as any[],
     notifications: [] as any[],
+    hours: null as any,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [projRes, sugRes, notifRes] = await Promise.all([
+        const [projRes, ticketRes, notifRes, hoursRes] = await Promise.all([
           api.get('/portal/projects'),
-          api.get('/portal/suggestions'),
+          api.get('/portal/tickets'),
           api.get('/notifications?limit=5').catch(() => ({ data: { data: [] } })),
+          api.get('/portal/hours').catch(() => ({ data: null })),
         ]);
-        
+
         setData({
           projects: Array.isArray(projRes.data) ? projRes.data : projRes.data?.data || [],
-          suggestions: Array.isArray(sugRes.data) ? sugRes.data : sugRes.data?.data || [],
+          tickets: Array.isArray(ticketRes.data) ? ticketRes.data : ticketRes.data?.data || [],
           notifications: notifRes.data?.data || [],
+          hours: hoursRes.data,
         });
       } catch (err) {
         toast.error('Error', 'No se pudieron cargar los datos del dashboard');
@@ -68,7 +71,7 @@ export default function PortalDashboard() {
     load();
   }, []);
 
-  const pendingSuggestions = data.suggestions.filter((s: any) => s.status === 'PENDING').length;
+  const openTickets = data.tickets.filter((t: any) => t.status === 'OPEN').length;
   const unreadNotifications = data.notifications.filter((n: any) => !n.readAt).length;
 
   const totalTasks = data.projects.reduce((sum, p) => sum + p.visibleTasks, 0);
@@ -173,19 +176,23 @@ export default function PortalDashboard() {
           </div>
         </div>
 
-        {/* Card 4: Light Blue (como 'Active Users') */}
-        <div className="group relative overflow-hidden rounded-[20px] bg-blue-400 p-5 shadow-lg shadow-blue-400/20 text-white transition-all hover:shadow-blue-400/40 hover:-translate-y-1">
+        {/* Card 4: Hours Remaining */}
+        <div className={`group relative overflow-hidden rounded-[20px] p-5 shadow-lg text-white transition-all hover:-translate-y-1 ${
+          data.hours && data.hours.availableHours > 0
+            ? 'bg-emerald-500 shadow-emerald-500/20 hover:shadow-emerald-500/40'
+            : 'bg-orange-500 shadow-orange-500/20 hover:shadow-orange-500/40'
+        }`}>
           <div className="absolute bottom-0 right-0 h-24 w-24 translate-x-4 translate-y-4 rounded-full bg-white/20 blur-xl transition-transform duration-500 group-hover:scale-125"></div>
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-blue-50">Sugerencias Totales</span>
+            <span className="text-sm font-medium text-white/80">Horas Disponibles</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm transition-colors group-hover:bg-white/30">
-              <MessageSquarePlus className="h-4 w-4 text-white" />
+              <Clock className="h-4 w-4 text-white" />
             </div>
           </div>
           <div>
-            <h3 className="text-3xl font-bold">{data.suggestions.length}</h3>
-            <p className="mt-1 text-xs font-medium text-blue-50 flex items-center gap-1">
-              <span className="font-bold">{pendingSuggestions}</span> pendientes
+            <h3 className="text-3xl font-bold">{data.hours ? data.hours.availableHours.toFixed(0) : 0}h</h3>
+            <p className="mt-1 text-xs font-medium text-white/80 flex items-center gap-1">
+              de <span className="font-bold">{data.hours?.contractedHours ?? 0}h</span> contratadas
             </p>
           </div>
         </div>
@@ -260,16 +267,16 @@ export default function PortalDashboard() {
             </div>
           </Link>
 
-          <Link href="/portal/suggestions" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-xl hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
+          <Link href="/portal/tickets" className="group relative flex overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all hover:shadow-xl hover:-translate-y-1 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 dark:hover:border-blue-500/30">
             <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-blue-50/50 transition-transform group-hover:scale-150 dark:bg-blue-900/10"></div>
              <div className="relative flex w-full items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-900/30">
-                  <MessageSquarePlus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <Ticket className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Sugerencias</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{pendingSuggestions} pendientes</p>
+                  <h3 className="font-bold text-gray-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Tickets</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{openTickets} abiertos</p>
                 </div>
               </div>
               <ArrowRight className="h-5 w-5 text-gray-300 transition-transform group-hover:translate-x-1 group-hover:text-blue-500 dark:text-gray-600" />
