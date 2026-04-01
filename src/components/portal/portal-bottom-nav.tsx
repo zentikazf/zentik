@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Clock, Bell, Settings, FolderKanban, MessageSquarePlus, LogOut, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Clock, Bell, Settings, FolderKanban, Ticket, LogOut, Moon, Sun } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useNotificationStore } from '@/stores/use-notification-store';
@@ -17,7 +17,7 @@ import { useTheme } from 'next-themes';
 const navItems = [
   { name: 'Inicio', href: '/portal', icon: LayoutDashboard },
   { name: 'Proyectos', href: '/portal/projects', icon: FolderKanban },
-  { name: 'Sugerencias', href: '/portal/suggestions', icon: MessageSquarePlus },
+  { name: 'Tickets', href: '/portal/tickets', icon: Ticket },
   { name: 'Notificaciones', href: '/portal/notifications', icon: Bell },
 ];
 
@@ -30,7 +30,7 @@ export function PortalBottomNav() {
   const isActive = (href: string) => {
     if (href === '/portal') return pathname === '/portal' || pathname === '/portal/';
     if (href === '/portal/projects') return pathname.startsWith('/portal/projects');
-    if (href === '/portal/suggestions') return pathname.startsWith('/portal/suggestions');
+    if (href === '/portal/tickets') return pathname.startsWith('/portal/tickets');
     if (href === '/portal/notifications') return pathname.startsWith('/portal/notifications');
     return false;
   };
