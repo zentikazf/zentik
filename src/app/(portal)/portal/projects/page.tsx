@@ -9,138 +9,138 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  DEFINITION: { label: 'Definicion', color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-950' },
-  DEVELOPMENT: { label: 'Desarrollo', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950' },
-  PRODUCTION: { label: 'Produccion', color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950' },
-  ON_HOLD: { label: 'En Pausa', color: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
-  COMPLETED: { label: 'Completado', color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
+ DEFINITION: { label: 'Definicion', color: 'text-info', bg: 'bg-info/10' },
+ DEVELOPMENT: { label: 'Desarrollo', color: 'text-primary', bg: 'bg-primary/10' },
+ PRODUCTION: { label: 'Produccion', color: 'text-info', bg: 'bg-info/10' },
+ ON_HOLD: { label: 'En Pausa', color: 'text-muted-foreground', bg: 'bg-muted ' },
+ COMPLETED: { label: 'Completado', color: 'text-muted-foreground', bg: 'bg-muted' },
 };
 
 interface PortalProject {
-  id: string;
-  name: string;
-  status: string;
-  startDate?: string;
-  endDate?: string;
-  createdAt: string;
-  suggestionsCount: number;
-  visibleTasks: number;
-  completedTasks: number;
-  progress: number;
+ id: string;
+ name: string;
+ status: string;
+ startDate?: string;
+ endDate?: string;
+ createdAt: string;
+ suggestionsCount: number;
+ visibleTasks: number;
+ completedTasks: number;
+ progress: number;
 }
 
 export default function PortalProjectsPage() {
-  const [projects, setProjects] = useState<PortalProject[]>([]);
-  const [loading, setLoading] = useState(true);
+ const [projects, setProjects] = useState<PortalProject[]>([]);
+ const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await api.get('/portal/projects');
-        const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
-        setProjects(data);
-      } catch (err) {
-        toast.error('Error', 'Error al cargar los proyectos');
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+ useEffect(() => {
+ async function load() {
+ try {
+ const res = await api.get('/portal/projects');
+ const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+ setProjects(data);
+ } catch (err) {
+ toast.error('Error', 'Error al cargar los proyectos');
+ } finally {
+ setLoading(false);
+ }
+ }
+ load();
+ }, []);
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-6">
-        <Skeleton className="h-10 w-48 rounded-xl" />
-        <div className="grid gap-4 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 rounded-[20px]" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+ if (loading) {
+ return (
+ <div className="mx-auto max-w-5xl space-y-6">
+ <Skeleton className="h-10 w-48 rounded-xl"/>
+ <div className="grid gap-4 md:grid-cols-2">
+ {Array.from({ length: 4 }).map((_, i) => (
+ <Skeleton key={i} className="h-48 rounded-xl"/>
+ ))}
+ </div>
+ </div>
+ );
+ }
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-8 pb-4">
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Mis Proyectos</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestiona y visualiza el progreso de tus proyectos activos</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-1.5 dark:bg-blue-950/50">
-          <FolderKanban className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{projects.length} Total</span>
-        </div>
-      </div>
+ return (
+ <div className="mx-auto max-w-5xl space-y-8 pb-4">
+ <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+ <div>
+ <h1 className="text-2xl font-bold text-foreground">Mis Proyectos</h1>
+ <p className="text-sm text-muted-foreground mt-1">Gestiona y visualiza el progreso de tus proyectos activos</p>
+ </div>
+ <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-1.5">
+ <FolderKanban className="h-4 w-4 text-primary"/>
+ <span className="text-sm font-semibold text-primary">{projects.length} Total</span>
+ </div>
+ </div>
 
-      {projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-[20px] bg-white py-20 text-center dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
-            <FolderKanban className="h-7 w-7 text-blue-500" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Sin proyectos</h3>
-          <p className="mt-2 max-w-sm text-sm text-gray-500 dark:text-gray-400">
-            Aun no tienes proyectos asignados. El equipo se pondra en contacto pronto.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {projects.map((project) => {
-            const config = STATUS_CONFIG[project.status] || STATUS_CONFIG.DEFINITION;
-            return (
-              <Link
-                key={project.id}
-                href={`/portal/projects/${project.id}`}
-                className="group flex flex-col justify-between relative rounded-[20px] bg-white p-6 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1.5 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500/20"
-              >
-                <div>
-                  <div className="mb-4 flex justify-between items-start gap-4">
-                    <h3 className="text-lg font-bold leading-tight text-gray-800 group-hover:text-blue-600 transition-colors dark:text-white dark:group-hover:text-blue-400">
-                      {project.name}
-                    </h3>
-                    <Badge className={`${config.bg} ${config.color} border-none text-[10px] uppercase tracking-wider font-bold shrink-0`}>
-                      {config.label}
-                    </Badge>
-                  </div>
+ {projects.length === 0 ? (
+ <div className="flex flex-col items-center justify-center rounded-xl bg-card py-20 text-center border border-border">
+ <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+ <FolderKanban className="h-7 w-7 text-primary"/>
+ </div>
+ <h3 className="text-lg font-semibold text-foreground">Sin proyectos</h3>
+ <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+ Aun no tienes proyectos asignados. El equipo se pondra en contacto pronto.
+ </p>
+ </div>
+ ) : (
+ <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+ {projects.map((project) => {
+ const config = STATUS_CONFIG[project.status] || STATUS_CONFIG.DEFINITION;
+ return (
+ <Link
+ key={project.id}
+ href={`/portal/projects/${project.id}`}
+ className="group flex flex-col justify-between relative rounded-xl bg-card p-6 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1.5 border border-border hover:border-primary/20"
+ >
+ <div>
+ <div className="mb-4 flex justify-between items-start gap-4">
+ <h3 className="text-lg font-bold leading-tight text-foreground group-hover:text-primary transition-colors">
+ {project.name}
+ </h3>
+ <Badge className={`${config.bg} ${config.color} border-none text-[10px] uppercase tracking-wider font-bold shrink-0`}>
+ {config.label}
+ </Badge>
+ </div>
 
-                  <div className="mb-6 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Progreso General</span>
-                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{project.progress}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-blue-500 transition-all duration-1000 ease-out"
-                        style={{ width: `${project.progress}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
+ <div className="mb-6 space-y-2">
+ <div className="flex items-center justify-between">
+ <span className="text-xs font-semibold text-muted-foreground">Progreso General</span>
+ <span className="text-sm font-bold text-primary">{project.progress}%</span>
+ </div>
+ <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+ <div
+ className="h-full rounded-full bg-primary transition-all duration-1000 ease-out"
+ style={{ width: `${project.progress}%` }}
+ />
+ </div>
+ </div>
+ </div>
 
-                <div className="flex items-center gap-4 text-xs mt-4 pt-4 border-t border-gray-50 dark:border-gray-800">
-                  <span className="flex items-center gap-1.5 text-gray-500">
-                    <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                    <span className="font-semibold text-gray-700 dark:text-gray-300">{project.completedTasks}</span>/{project.visibleTasks}
-                  </span>
-                  {project.suggestionsCount > 0 && (
-                    <span className="flex items-center gap-1.5 text-gray-500">
-                      <MessageSquarePlus className="h-4 w-4 text-blue-500" />
-                      <span className="font-semibold text-gray-700 dark:text-gray-300">{project.suggestionsCount}</span>
-                    </span>
-                  )}
-                  {project.endDate && (
-                    <span className="flex items-center gap-1.5 text-gray-500 ml-auto">
-                      <Clock className="h-4 w-4 text-gray-400" />
-                      {new Date(project.endDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+ <div className="flex items-center gap-4 text-xs mt-4 pt-4 border-t border-border">
+ <span className="flex items-center gap-1.5 text-muted-foreground">
+ <CheckCircle2 className="h-4 w-4 text-primary"/>
+ <span className="font-semibold text-foreground">{project.completedTasks}</span>/{project.visibleTasks}
+ </span>
+ {project.suggestionsCount > 0 && (
+ <span className="flex items-center gap-1.5 text-muted-foreground">
+ <MessageSquarePlus className="h-4 w-4 text-primary"/>
+ <span className="font-semibold text-foreground">{project.suggestionsCount}</span>
+ </span>
+ )}
+ {project.endDate && (
+ <span className="flex items-center gap-1.5 text-muted-foreground ml-auto">
+ <Clock className="h-4 w-4 text-muted-foreground"/>
+ {new Date(project.endDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+ </span>
+ )}
+ </div>
+ </Link>
+ );
+ })}
+ </div>
+ )}
+ </div>
+ );
 }
