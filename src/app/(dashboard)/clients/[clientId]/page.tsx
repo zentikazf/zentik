@@ -66,6 +66,7 @@ interface ClientDetail {
  phone?: string;
  notes?: string;
  userId?: string;
+ portalEnabled?: boolean;
  contractedHours: number;
  usedHours: number;
  loanedHours: number;
@@ -172,7 +173,7 @@ export default function ClientDetailPage() {
 
  if (loading) {
  return (
- <div className="space-y-6 max-w-7xl">
+ <div className="space-y-6">
  <Skeleton className="h-8 w-48 rounded-xl"/>
  <div className="grid gap-6 lg:grid-cols-3">
  <Skeleton className="h-64 rounded-xl"/>
@@ -210,7 +211,7 @@ export default function ClientDetailPage() {
  };
 
  return (
- <div className="space-y-6 max-w-7xl">
+ <div className="space-y-6">
  {/* Back + header */}
  <div>
  <Link href="/clients"className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors mb-3">
@@ -319,7 +320,8 @@ export default function ClientDetailPage() {
  </div>
 
  <div className="grid gap-6 lg:grid-cols-2">
- {/* Sub-users */}
+ {/* Sub-users — only if portal is enabled */}
+ {client.portalEnabled !== false && (
  <div className="rounded-xl border border-border bg-card p-6">
  <div className="flex items-center justify-between mb-4">
  <h2 className="text-[15px] font-semibold text-card-foreground flex items-center gap-2">
@@ -369,6 +371,7 @@ export default function ClientDetailPage() {
  <p className="text-sm text-muted-foreground text-center py-6">Sin usuarios de portal</p>
  ) : null}
  </div>
+ )}
 
  {/* Projects */}
  <div className="rounded-xl border border-border bg-card p-6">

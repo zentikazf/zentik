@@ -113,7 +113,7 @@ export default function ProjectsPage() {
 
  if (loading || !orgId) {
  return (
- <div className="space-y-4 max-w-7xl">
+ <div className="space-y-4">
  <Skeleton className="h-10 w-full max-w-sm rounded-xl"/>
  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-xl"/>)}
@@ -123,7 +123,7 @@ export default function ProjectsPage() {
  }
 
  return (
- <div className="space-y-4 max-w-7xl">
+ <div className="space-y-4">
  <div className="flex items-center justify-between">
  <div>
  <h1 className="text-[22px] font-semibold text-foreground">Proyectos</h1>

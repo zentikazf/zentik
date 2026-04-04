@@ -246,6 +246,9 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  {task.title}
  </SheetTitle>
  )}
+ {(task as any).type === 'SUPPORT' && (
+ <Badge className="bg-warning/15 text-warning text-[10px] w-fit">Soporte</Badge>
+ )}
 
  {/* Editable description */}
  {editDesc ? (

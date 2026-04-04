@@ -112,7 +112,7 @@ export default function TicketsPage() {
 
  if (loading) {
  return (
- <div className="space-y-4 max-w-7xl">
+ <div className="space-y-4">
  <Skeleton className="h-10 w-64"/>
  <Skeleton className="h-5 w-80"/>
  <div className="flex gap-2 mt-4">
@@ -130,7 +130,7 @@ export default function TicketsPage() {
  }
 
  return (
- <div className="space-y-4 max-w-7xl">
+ <div className="space-y-4">
  {/* Header */}
  <div className="flex items-center justify-between">
  <div>

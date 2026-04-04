@@ -54,9 +54,12 @@ const secondaryActions: TabItem[] = [
 ];
 
 const statusLabels: Record<string, string> = {
- DEFINITION: 'Definición',
+ DISCOVERY: 'Descubrimiento',
+ PLANNING: 'Planificación',
  DEVELOPMENT: 'Desarrollo',
- PRODUCTION: 'Producción',
+ TESTING: 'Testing',
+ DEPLOY: 'Deploy',
+ SUPPORT: 'Soporte',
  ON_HOLD: 'En Pausa',
  COMPLETED: 'Completado',
 };

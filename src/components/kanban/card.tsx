@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageCircle, Paperclip, CheckSquare, Eye } from 'lucide-react';
+import { MessageCircle, Paperclip, CheckSquare, Eye, Wrench } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -19,6 +19,7 @@ interface KanbanCardProps {
  title: string;
  description?: string | null;
  priority: string;
+ type?: string;
  clientVisible?: boolean;
  assignments?: { user: { id: string; name: string; image?: string | null } }[];
  taskLabels?: { label: { id: string; name: string; color: string } }[];
@@ -63,14 +64,22 @@ export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
  overlay && 'shadow-lg rotate-1',
  )}
  >
- {/* Priority Badge */}
+ {/* Priority + Type Badges */}
+ <div className="flex items-center gap-1.5 mb-2">
  <div
- className="inline-flex items-center rounded px-2 py-0.5 mb-2"
+ className="inline-flex items-center rounded px-2 py-0.5"
  style={{ backgroundColor: priority.bg }}
  >
  <span className="text-xs font-medium"style={{ color: priority.text }}>
  {priority.label}
  </span>
+ </div>
+ {task.type === 'SUPPORT' && (
+ <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 bg-warning/15 text-warning">
+ <Wrench className="h-3 w-3" />
+ <span className="text-xs font-medium">Soporte</span>
+ </div>
+ )}
  </div>
 
  {/* Labels */}

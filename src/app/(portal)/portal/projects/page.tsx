@@ -9,10 +9,13 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
- DEFINITION: { label: 'Definicion', color: 'text-info', bg: 'bg-info/10' },
+ DISCOVERY: { label: 'Descubrimiento', color: 'text-info', bg: 'bg-info/10' },
+ PLANNING: { label: 'Planificación', color: 'text-info', bg: 'bg-info/10' },
  DEVELOPMENT: { label: 'Desarrollo', color: 'text-primary', bg: 'bg-primary/10' },
- PRODUCTION: { label: 'Produccion', color: 'text-info', bg: 'bg-info/10' },
- ON_HOLD: { label: 'En Pausa', color: 'text-muted-foreground', bg: 'bg-muted ' },
+ TESTING: { label: 'Testing', color: 'text-warning', bg: 'bg-warning/10' },
+ DEPLOY: { label: 'Deploy', color: 'text-success', bg: 'bg-success/10' },
+ SUPPORT: { label: 'Soporte', color: 'text-info', bg: 'bg-info/10' },
+ ON_HOLD: { label: 'En Pausa', color: 'text-muted-foreground', bg: 'bg-muted' },
  COMPLETED: { label: 'Completado', color: 'text-muted-foreground', bg: 'bg-muted' },
 };
 

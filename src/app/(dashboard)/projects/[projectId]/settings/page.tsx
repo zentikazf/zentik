@@ -15,9 +15,12 @@ import { LabelManager } from '@/components/labels/label-manager';
 import { useProject } from '@/providers/project-provider';
 
 const PROJECT_STATUSES = [
- { value: 'DEFINITION', label: 'Definición' },
+ { value: 'DISCOVERY', label: 'Descubrimiento' },
+ { value: 'PLANNING', label: 'Planificación' },
  { value: 'DEVELOPMENT', label: 'Desarrollo' },
- { value: 'PRODUCTION', label: 'Producción' },
+ { value: 'TESTING', label: 'Testing' },
+ { value: 'DEPLOY', label: 'Deploy' },
+ { value: 'SUPPORT', label: 'Soporte' },
  { value: 'ON_HOLD', label: 'En Pausa' },
  { value: 'COMPLETED', label: 'Completado' },
 ];
@@ -36,7 +39,7 @@ export default function ProjectSettingsPage() {
  try {
  const res = await api.get(`/projects/${projectId}`);
  setProject(res.data);
- setForm({ name: res.data.name, description: res.data.description || '', status: res.data.status || 'DEFINITION' });
+ setForm({ name: res.data.name, description: res.data.description || '', status: res.data.status || 'DISCOVERY' });
  } catch (err) {
  const message = err instanceof ApiError ? err.message : 'Error al cargar proyecto';
  toast.error('Error', message);
