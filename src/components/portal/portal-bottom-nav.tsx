@@ -6,6 +6,7 @@ import { LayoutDashboard, Clock, Bell, Settings, FolderKanban, Ticket, LogOut, M
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { useNotificationStore } from '@/stores/use-notification-store';
+import { useSocket } from '@/hooks/use-socket';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
  DropdownMenu,
@@ -24,8 +25,15 @@ const navItems = [
 export function PortalBottomNav() {
  const pathname = usePathname();
  const { user, logout } = useAuth();
- const { unreadCount } = useNotificationStore();
+ const { unreadCount, setUnreadCount } = useNotificationStore();
  const { theme, setTheme } = useTheme();
+
+ // Listen for real-time notification push
+ useSocket({
+ 'notification:new': () => {
+ setUnreadCount(unreadCount + 1);
+ },
+ });
 
  const isActive = (href: string) => {
  if (href === '/portal') return pathname === '/portal' || pathname === '/portal/';

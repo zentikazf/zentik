@@ -4,13 +4,29 @@ const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 let socket: Socket | null = null;
 
+function getSessionToken(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const cookies = document.cookie.split('; ');
+  for (const cookie of cookies) {
+    if (
+      cookie.startsWith('zentik.session_token=') ||
+      cookie.startsWith('better-auth.session_token=') ||
+      cookie.startsWith('__Secure-better-auth.session_token=')
+    ) {
+      return cookie.split('=').slice(1).join('=');
+    }
+  }
+  return undefined;
+}
+
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io(SOCKET_URL, {
-      path: '/socket.io',
+    const token = getSessionToken();
+    socket = io(`${SOCKET_URL}/chat`, {
       transports: ['websocket', 'polling'],
       autoConnect: false,
       withCredentials: true,
+      auth: token ? { token } : undefined,
     });
   }
   return socket;

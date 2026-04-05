@@ -11,6 +11,7 @@ import { ChevronLeft, Send, Ticket, CheckCircle2, Clock, AlertCircle, MessageSqu
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
+import { useSocket } from '@/hooks/use-socket';
 import { getInitials } from '@/lib/utils';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -60,9 +61,29 @@ export default function PortalTicketDetailPage() {
  const [sending, setSending] = useState(false);
  const messagesEndRef = useRef<HTMLDivElement>(null);
 
+ const { joinRoom, leaveRoom } = useSocket({
+ 'message:new': (data: any) => {
+ const msg: ChatMessage = {
+ id: data.id,
+ content: data.content,
+ createdAt: data.createdAt,
+ user: data.user || { id: '', name: 'Equipo', image: null },
+ };
+ setMessages((prev) => [...prev, msg]);
+ },
+ });
+
  useEffect(() => {
  if (ticketId) loadTicket();
  }, [ticketId]);
+
+ useEffect(() => {
+ const channelId = ticket?.channel?.id;
+ if (channelId) {
+ joinRoom(channelId);
+ return () => leaveRoom(channelId);
+ }
+ }, [ticket?.channel?.id]);
 
  useEffect(() => {
  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -267,7 +288,7 @@ export default function PortalTicketDetailPage() {
  className={`rounded-2xl px-3 py-2 text-sm leading-relaxed ${
  isMe
  ? 'bg-primary text-white rounded-tr-sm'
- : 'bg-muted text-foreground/30 rounded-tl-sm'
+ : 'bg-secondary text-secondary-foreground rounded-tl-sm'
  }`}
  >
  {msg.content}

@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
@@ -13,49 +18,60 @@ import {
  Search,
  AlertCircle,
  TicketIcon,
- Calendar,
- User,
+ Clock,
+ MessageSquare,
+ Filter,
 } from 'lucide-react';
+import {
+ DropdownMenu,
+ DropdownMenuContent,
+ DropdownMenuLabel,
+ DropdownMenuSeparator,
+ DropdownMenuCheckboxItem,
+ DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
 interface Ticket {
  id: string;
  title: string;
  description?: string;
- status: 'abierto' | 'en_progreso' | 'resuelto';
- priority: 'alta' | 'media' | 'baja';
- client?: { id: string; name: string };
- assignee?: { id: string; name: string };
+ status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+ category: string;
+ priority: string;
+ client?: { id: string; name: string; email?: string };
+ project?: { id: string; name: string; slug?: string };
+ task?: { id: string; title: string; status: string } | null;
+ channel?: { id: string; name: string; _count?: { messages: number } } | null;
  createdAt: string;
 }
 
-type StatusFilter = 'all' | 'abierto' | 'en_progreso' | 'resuelto';
+type StatusFilter = 'all' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 
 const statusFilters: { value: StatusFilter; label: string }[] = [
  { value: 'all', label: 'Todos' },
- { value: 'abierto', label: 'Abierto' },
- { value: 'en_progreso', label: 'En progreso' },
- { value: 'resuelto', label: 'Resuelto' },
+ { value: 'OPEN', label: 'Abierto' },
+ { value: 'IN_PROGRESS', label: 'En progreso' },
+ { value: 'RESOLVED', label: 'Resuelto' },
+ { value: 'CLOSED', label: 'Cerrado' },
 ];
 
 const statusConfig: Record<string, { label: string; className: string }> = {
- abierto: {
- label: 'Abierto',
- className: 'bg-destructive/10 text-destructive border-transparent',
- },
- en_progreso: {
- label: 'En progreso',
- className: 'bg-warning/10 text-warning border-transparent',
- },
- resuelto: {
- label: 'Resuelto',
- className: 'bg-success/10 text-success border-transparent',
- },
+ OPEN: { label: 'Abierto', className: 'bg-destructive/10 text-destructive border-transparent' },
+ IN_PROGRESS: { label: 'En progreso', className: 'bg-warning/10 text-warning border-transparent' },
+ RESOLVED: { label: 'Resuelto', className: 'bg-success/10 text-success border-transparent' },
+ CLOSED: { label: 'Cerrado', className: 'bg-muted text-muted-foreground border-transparent' },
+};
+
+const categoryConfig: Record<string, { label: string; className: string }> = {
+ SUPPORT_REQUEST: { label: 'Soporte', className: 'bg-muted text-muted-foreground' },
+ NEW_DEVELOPMENT: { label: 'Desarrollo', className: 'bg-muted text-muted-foreground' },
 };
 
 const priorityConfig: Record<string, { label: string; className: string }> = {
- alta: { label: 'Alta', className: 'text-destructive' },
- media: { label: 'Media', className: 'text-warning' },
- baja: { label: 'Baja', className: 'text-muted-foreground' },
+ HIGH: { label: 'Alta', className: 'text-destructive' },
+ MEDIUM: { label: 'Media', className: 'text-warning' },
+ LOW: { label: 'Baja', className: 'text-muted-foreground' },
 };
 
 export default function TicketsPage() {
@@ -64,10 +80,42 @@ export default function TicketsPage() {
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+ const [filterPriority, setFilterPriority] = useState<string | null>(null);
+ const [filterCategory, setFilterCategory] = useState<string | null>(null);
+ const [showCreate, setShowCreate] = useState(false);
+ const [creating, setCreating] = useState(false);
+ const [clients, setClients] = useState<{ id: string; name: string; portalEnabled?: boolean }[]>([]);
+ const [clientProjects, setClientProjects] = useState<{ id: string; name: string }[]>([]);
+ const [form, setForm] = useState({
+ clientId: '',
+ projectId: '',
+ title: '',
+ description: '',
+ category: '',
+ priority: 'MEDIUM',
+ });
 
  useEffect(() => {
- if (orgId) loadTickets();
+ if (orgId) {
+ loadTickets();
+ api.get(`/organizations/${orgId}/clients?limit=200`).then((res) => {
+ const list = res.data?.data || (Array.isArray(res.data) ? res.data : []);
+ setClients(list);
+ }).catch(() => {});
+ }
  }, [orgId]);
+
+ // Load projects when client changes
+ useEffect(() => {
+ if (form.clientId && form.clientId !== 'none') {
+ api.get(`/organizations/${orgId}/projects?clientId=${form.clientId}`).then((res) => {
+ const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+ setClientProjects(list);
+ }).catch(() => setClientProjects([]));
+ } else {
+ setClientProjects([]);
+ }
+ }, [form.clientId, orgId]);
 
  const loadTickets = async () => {
  if (!orgId) return;
@@ -77,11 +125,9 @@ export default function TicketsPage() {
  setTickets(list);
  } catch (err) {
  if (err instanceof ApiError && err.statusCode === 404) {
- // Endpoint may not exist yet, show empty state
  setTickets([]);
  } else {
- const message =
- err instanceof ApiError ? err.message : 'Error al cargar tickets';
+ const message = err instanceof ApiError ? err.message : 'Error al cargar tickets';
  toast.error('Error', message);
  }
  } finally {
@@ -89,22 +135,57 @@ export default function TicketsPage() {
  }
  };
 
+ const handleCreate = async (e: React.FormEvent) => {
+ e.preventDefault();
+ if (!form.clientId || !form.projectId || !form.title.trim() || !form.category) {
+ toast.error('Error', 'Completa todos los campos requeridos');
+ return;
+ }
+
+ setCreating(true);
+ try {
+ await api.post(`/organizations/${orgId}/tickets`, {
+ clientId: form.clientId,
+ projectId: form.projectId,
+ title: form.title.trim(),
+ description: form.description.trim() || undefined,
+ category: form.category,
+ priority: form.priority,
+ });
+ toast.success('Ticket creado', 'El ticket fue creado exitosamente');
+ setShowCreate(false);
+ setForm({ clientId: '', projectId: '', title: '', description: '', category: '', priority: 'MEDIUM' });
+ await loadTickets();
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear el ticket');
+ } finally {
+ setCreating(false);
+ }
+ };
+
  const filtered = tickets.filter((t) => {
  const matchesSearch =
  t.title.toLowerCase().includes(search.toLowerCase()) ||
  (t.client?.name || '').toLowerCase().includes(search.toLowerCase());
- const matchesStatus =
- statusFilter === 'all' || t.status === statusFilter;
- return matchesSearch && matchesStatus;
+ const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
+ const matchesPriority = !filterPriority || t.priority === filterPriority;
+ const matchesCategory = !filterCategory || t.category === filterCategory;
+ return matchesSearch && matchesStatus && matchesPriority && matchesCategory;
  });
+
+ const counts = {
+ all: tickets.length,
+ OPEN: tickets.filter((t) => t.status === 'OPEN').length,
+ IN_PROGRESS: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
+ RESOLVED: tickets.filter((t) => t.status === 'RESOLVED').length,
+ CLOSED: tickets.filter((t) => t.status === 'CLOSED').length,
+ };
+
+ const hasActiveFilters = filterPriority !== null || filterCategory !== null;
 
  const formatDate = (dateStr: string) => {
  try {
- return new Date(dateStr).toLocaleDateString('es-PY', {
- day: '2-digit',
- month: 'short',
- year: 'numeric',
- });
+ return new Date(dateStr).toLocaleDateString('es-PY', { day: '2-digit', month: 'short' });
  } catch {
  return dateStr;
  }
@@ -116,7 +197,7 @@ export default function TicketsPage() {
  <Skeleton className="h-10 w-64"/>
  <Skeleton className="h-5 w-80"/>
  <div className="flex gap-2 mt-4">
- {Array.from({ length: 4 }).map((_, i) => (
+ {Array.from({ length: 5 }).map((_, i) => (
  <Skeleton key={i} className="h-9 w-24 rounded-full"/>
  ))}
  </div>
@@ -130,115 +211,179 @@ export default function TicketsPage() {
  }
 
  return (
- <div className="space-y-4">
+ <div className="space-y-6">
  {/* Header */}
- <div className="flex items-center justify-between">
+ <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
  <div>
- <h1 className="text-[22px] font-semibold text-foreground">
- Tickets de soporte
- </h1>
- <p className="mt-1 text-sm text-muted-foreground">
- Gestion de solicitudes y soporte
- </p>
+ <h1 className="text-xl sm:text-[22px] font-semibold text-foreground">Tickets de soporte</h1>
+ <p className="mt-1 text-sm text-muted-foreground">Gestion de solicitudes y soporte</p>
  </div>
- <Button>
- <Plus className="mr-2 h-4 w-4"/> Nuevo ticket
+ <Dialog open={showCreate} onOpenChange={setShowCreate}>
+ <DialogTrigger asChild>
+ <Button><Plus className="mr-2 h-4 w-4"/> Nuevo ticket</Button>
+ </DialogTrigger>
+ <DialogContent className="sm:max-w-lg">
+ <DialogHeader>
+ <DialogTitle>Nuevo ticket</DialogTitle>
+ </DialogHeader>
+ <form onSubmit={handleCreate} className="space-y-4">
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Titulo</Label>
+ <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Describe brevemente la solicitud" required/>
+ </div>
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Descripcion</Label>
+ <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Detalla el problema o funcionalidad..." rows={3}/>
+ </div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Cliente</Label>
+ <Select value={form.clientId || 'none'} onValueChange={(v) => setForm({ ...form, clientId: v === 'none' ? '' : v, projectId: '' })}>
+ <SelectTrigger><SelectValue placeholder="Seleccionar cliente"/></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="none">Seleccionar...</SelectItem>
+ {clients.map((c) => (
+ <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ </div>
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Proyecto</Label>
+ <Select value={form.projectId || 'none'} onValueChange={(v) => setForm({ ...form, projectId: v === 'none' ? '' : v })} disabled={!form.clientId}>
+ <SelectTrigger><SelectValue placeholder="Seleccionar proyecto"/></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="none">Seleccionar...</SelectItem>
+ {clientProjects.map((p) => (
+ <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ </div>
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Tipo</Label>
+ <Select value={form.category || 'none'} onValueChange={(v) => setForm({ ...form, category: v === 'none' ? '' : v })}>
+ <SelectTrigger><SelectValue placeholder="Seleccionar tipo"/></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="none">Seleccionar...</SelectItem>
+ <SelectItem value="SUPPORT_REQUEST">Soporte / Error</SelectItem>
+ <SelectItem value="NEW_DEVELOPMENT">Nueva Funcionalidad</SelectItem>
+ </SelectContent>
+ </Select>
+ </div>
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Prioridad</Label>
+ <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
+ <SelectTrigger><SelectValue/></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="LOW">Baja</SelectItem>
+ <SelectItem value="MEDIUM">Media</SelectItem>
+ <SelectItem value="HIGH">Alta</SelectItem>
+ </SelectContent>
+ </Select>
+ </div>
+ </div>
+ <Button type="submit" className="w-full" disabled={creating}>
+ {creating ? 'Creando...' : 'Crear ticket'}
  </Button>
+ </form>
+ </DialogContent>
+ </Dialog>
  </div>
 
- {/* Status filter pills */}
- <div className="flex flex-wrap items-center gap-2">
+ {/* Search + Filters */}
+ <div className="flex flex-col sm:flex-row gap-3">
+ <div className="relative max-w-sm flex-1">
+ <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
+ <Input placeholder="Buscar tickets..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
+ </div>
+ <div className="flex items-center gap-1.5 flex-wrap">
  {statusFilters.map((sf) => (
  <button
  key={sf.value}
  onClick={() => setStatusFilter(sf.value)}
- className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+ className={cn(
+ 'px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
  statusFilter === sf.value
  ? 'bg-primary text-primary-foreground border-primary'
- : 'bg-card text-muted-foreground border-border hover:bg-muted'
- }`}
- >
- {sf.label}
- {sf.value !== 'all' && (
- <span className="ml-1.5 text-xs opacity-70">
- {tickets.filter((t) => t.status === sf.value).length}
- </span>
+ : 'bg-card text-muted-foreground border-border hover:bg-muted',
  )}
+ >
+ {sf.label} ({counts[sf.value]})
  </button>
  ))}
- </div>
 
- {/* Search */}
- <div className="relative max-w-sm">
- <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
- <Input
- placeholder="Buscar tickets..."
- className="pl-9"
- value={search}
- onChange={(e) => setSearch(e.target.value)}
- />
+ <DropdownMenu>
+ <DropdownMenuTrigger asChild>
+ <Button variant="outline" size="sm" className={cn('gap-1', hasActiveFilters && 'border-primary text-primary')}>
+ <Filter className="h-3.5 w-3.5"/>
+ Filtros
+ {hasActiveFilters && <span className="ml-1 rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">{(filterPriority ? 1 : 0) + (filterCategory ? 1 : 0)}</span>}
+ </Button>
+ </DropdownMenuTrigger>
+ <DropdownMenuContent align="end" className="w-56">
+ <DropdownMenuLabel>Prioridad</DropdownMenuLabel>
+ {(['HIGH', 'MEDIUM', 'LOW'] as const).map((p) => (
+ <DropdownMenuCheckboxItem key={p} checked={filterPriority === p} onCheckedChange={(checked) => setFilterPriority(checked ? p : null)}>
+ {priorityConfig[p]?.label || p}
+ </DropdownMenuCheckboxItem>
+ ))}
+ <DropdownMenuSeparator/>
+ <DropdownMenuLabel>Tipo</DropdownMenuLabel>
+ {(['SUPPORT_REQUEST', 'NEW_DEVELOPMENT'] as const).map((t) => (
+ <DropdownMenuCheckboxItem key={t} checked={filterCategory === t} onCheckedChange={(checked) => setFilterCategory(checked ? t : null)}>
+ {categoryConfig[t]?.label || t}
+ </DropdownMenuCheckboxItem>
+ ))}
+ {hasActiveFilters && (
+ <>
+ <DropdownMenuSeparator/>
+ <DropdownMenuCheckboxItem checked={false} onCheckedChange={() => { setFilterPriority(null); setFilterCategory(null); }}>
+ Limpiar filtros
+ </DropdownMenuCheckboxItem>
+ </>
+ )}
+ </DropdownMenuContent>
+ </DropdownMenu>
+ </div>
  </div>
 
  {/* Ticket list */}
- <div className="space-y-3">
+ <div className="space-y-2">
  {filtered.map((ticket) => {
- const status = statusConfig[ticket.status] || statusConfig.abierto;
- const priority =
- priorityConfig[ticket.priority] || priorityConfig.media;
+ const status = statusConfig[ticket.status] || statusConfig.OPEN;
+ const priority = priorityConfig[ticket.priority] || priorityConfig.MEDIUM;
+ const category = categoryConfig[ticket.category] || categoryConfig.SUPPORT_REQUEST;
 
  return (
- <div
- key={ticket.id}
- className="rounded-xl border border-border bg-card p-4 hover:shadow-sm transition-shadow cursor-pointer"
- >
- <div className="flex items-start justify-between gap-4">
- <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2 flex-wrap">
- <h3 className="text-[15px] font-semibold text-foreground truncate">
- {ticket.title}
- </h3>
- <Badge
- className={status.className}
- >
- {status.label}
- </Badge>
+ <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
+ <div className="rounded-xl border border-border bg-card p-4 hover:shadow-sm transition-shadow cursor-pointer flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+ <AlertCircle className={cn('h-5 w-5 shrink-0 hidden sm:block mt-0.5', priority.className)}/>
+ <div className="flex-1 min-w-0">
+ <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
+ <div>
+ <h3 className="text-sm font-medium text-foreground">{ticket.title}</h3>
+ <div className="flex items-center gap-2 mt-1 flex-wrap">
+ <span className="text-xs text-muted-foreground">{ticket.client?.name || 'Sin cliente'}</span>
+ <Badge className={status.className}>{status.label}</Badge>
+ <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs', category.className)}>
+ {category.label}
+ </span>
  </div>
-
- {ticket.description && (
- <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
- {ticket.description}
- </p>
+ </div>
+ <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+ {ticket.channel?._count?.messages !== undefined && (
+ <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3"/> {ticket.channel._count.messages}</span>
  )}
-
- <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
- {ticket.client && (
- <span className="flex items-center gap-1">
- <User className="h-3 w-3"/>
- {ticket.client.name}
- </span>
- )}
- <span className="flex items-center gap-1">
- <AlertCircle className={`h-3 w-3 ${priority.className}`} />
- <span className={priority.className}>
- {priority.label}
- </span>
- </span>
- {ticket.createdAt && (
- <span className="flex items-center gap-1">
- <Calendar className="h-3 w-3"/>
- {formatDate(ticket.createdAt)}
- </span>
- )}
- {ticket.assignee && (
- <span className="flex items-center gap-1">
- <User className="h-3 w-3"/>
- {ticket.assignee.name}
- </span>
+ <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> {formatDate(ticket.createdAt)}</span>
+ </div>
+ </div>
+ {ticket.project && (
+ <p className="text-xs text-primary mt-1">{ticket.project.name}</p>
  )}
  </div>
  </div>
- </div>
- </div>
+ </Link>
  );
  })}
  </div>
@@ -248,7 +393,7 @@ export default function TicketsPage() {
  <div className="flex flex-col items-center py-16 text-center">
  <TicketIcon className="mb-3 h-10 w-10 text-muted-foreground/50"/>
  <p className="text-muted-foreground">
- {search || statusFilter !== 'all'
+ {search || statusFilter !== 'all' || hasActiveFilters
  ? 'No se encontraron tickets con esos filtros'
  : 'No hay tickets de soporte aun'}
  </p>

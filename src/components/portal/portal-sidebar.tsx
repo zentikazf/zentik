@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useNotificationStore } from '@/stores/use-notification-store';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { api } from '@/lib/api-client';
+import { useSocket } from '@/hooks/use-socket';
 import { useTheme } from 'next-themes';
 
 const navItems = [
@@ -23,6 +24,13 @@ export function PortalSidebar() {
  const { user, logout } = useAuth();
  const { unreadCount, setUnreadCount } = useNotificationStore();
  const { theme, setTheme } = useTheme();
+
+ // Listen for real-time notification push
+ useSocket({
+ 'notification:new': () => {
+ setUnreadCount(unreadCount + 1);
+ },
+ });
 
  useEffect(() => {
  const loadUnread = async () => {

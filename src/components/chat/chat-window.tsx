@@ -62,17 +62,23 @@ export function ChatWindow({ channelId }: ChatWindowProps) {
 
  useEffect(() => {
  if (!socket) return;
- emit('joinChannel', { channelId });
+ emit('channel:join', { channelId });
 
- const handleNewMessage = (message: Message) => {
- setMessages((prev) => [...prev, message]);
+ const handleNewMessage = (data: any) => {
+ const msg: Message = data.sender ? data : {
+ ...data,
+ sender: data.user
+ ? { id: data.user.id, name: data.user.name, avatarUrl: data.user.image }
+ : { id: '', name: 'Sistema', avatarUrl: undefined },
+ };
+ setMessages((prev) => [...prev, msg]);
  };
 
- socket.on('newMessage', handleNewMessage);
+ socket.on('message:new', handleNewMessage);
 
  return () => {
- socket.off('newMessage', handleNewMessage);
- emit('leaveChannel', { channelId });
+ socket.off('message:new', handleNewMessage);
+ emit('channel:leave', { channelId });
  };
  }, [socket, channelId, emit]);
 
@@ -86,7 +92,7 @@ export function ChatWindow({ channelId }: ChatWindowProps) {
  if (!input.trim()) return;
  const content = input.trim();
  setInput('');
- emit('sendMessage', { channelId, content, type: 'TEXT' });
+ emit('message:send', { channelId, content });
  }, [input, channelId, emit]);
 
  const handleEdit = async (messageId: string) => {
