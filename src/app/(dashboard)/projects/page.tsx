@@ -30,7 +30,7 @@ export default function ProjectsPage() {
  const [form, setForm] = useState({ name: '', description: '', clientId: '', hourlyRate: '', estimatedHours: '' });
  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
- const [view, setView] = useState<'list' | 'kanban'>('list');
+ const [view, setView] = useState<'list' | 'kanban'>('kanban');
 
  useEffect(() => {
  if (orgId) {

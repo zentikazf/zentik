@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
  DndContext,
  DragOverlay,
@@ -9,6 +9,7 @@ import {
  PointerSensor,
  useSensor,
  useSensors,
+ useDroppable,
  type DragStartEvent,
  type DragEndEvent,
 } from '@dnd-kit/core';
@@ -19,6 +20,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatRelative } from '@/lib/utils';
 import { Pause, CheckCircle2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 const PROJECT_COLUMNS = [
  { status: 'DISCOVERY', name: 'Descubrimiento', color: '#8B5CF6' },
@@ -29,7 +31,7 @@ const PROJECT_COLUMNS = [
  { status: 'SUPPORT', name: 'Soporte', color: '#EF4444' },
 ];
 
-function ProjectCard({ project, overlay }: { project: any; overlay?: boolean }) {
+function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: boolean; onClick?: () => void }) {
  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
  useSortable({ id: project.id });
 
@@ -45,6 +47,7 @@ function ProjectCard({ project, overlay }: { project: any; overlay?: boolean }) 
  style={style}
  {...attributes}
  {...listeners}
+ onClick={() => { if (!isDragging && onClick) onClick(); }}
  className={`rounded-xl bg-card p-4 cursor-grab active:cursor-grabbing
  border border-transparent hover:border-border transition-all
  ${overlay ? 'shadow-xl rotate-1' : 'shadow-sm'}`}
@@ -61,7 +64,9 @@ function ProjectCard({ project, overlay }: { project: any; overlay?: boolean }) 
  );
 }
 
-function ProjectColumn({ col, projects }: { col: typeof PROJECT_COLUMNS[0]; projects: any[] }) {
+function ProjectColumn({ col, projects, onCardClick }: { col: typeof PROJECT_COLUMNS[0]; projects: any[]; onCardClick: (id: string) => void }) {
+ const { setNodeRef, isOver } = useDroppable({ id: col.status });
+
  return (
  <div className="flex w-64 flex-shrink-0 flex-col gap-2">
  <div className="flex items-center gap-2 px-1">
@@ -73,10 +78,19 @@ function ProjectColumn({ col, projects }: { col: typeof PROJECT_COLUMNS[0]; proj
  </div>
  <SortableContext items={projects.map((p) => p.id)} strategy={horizontalListSortingStrategy}>
  <div
- id={col.status}
- className="min-h-[120px] space-y-2 rounded-xl bg-muted p-2"
+ ref={setNodeRef}
+ className={`min-h-[120px] space-y-2 rounded-xl p-2 transition-colors ${
+ isOver ? 'bg-muted/80 ring-2 ring-primary/30' : 'bg-muted'
+ }`}
  >
- {projects.map((p) => <ProjectCard key={p.id} project={p} />)}
+ {projects.map((p) => (
+ <ProjectCard key={p.id} project={p} onClick={() => onCardClick(p.id)} />
+ ))}
+ {projects.length === 0 && (
+ <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
+ Arrastra proyectos aquí
+ </div>
+ )}
  </div>
  </SortableContext>
  </div>
@@ -89,8 +103,13 @@ interface ProjectKanbanProps {
 }
 
 export function ProjectKanban({ projects, onProjectMoved }: ProjectKanbanProps) {
+ const router = useRouter();
  const [localProjects, setLocalProjects] = useState(projects);
  const [activeProject, setActiveProject] = useState<any>(null);
+
+ useEffect(() => {
+ setLocalProjects(projects);
+ }, [projects]);
 
  const sensors = useSensors(
  useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -116,12 +135,11 @@ export function ProjectKanban({ projects, onProjectMoved }: ProjectKanbanProps) 
  const projectId = active.id as string;
  const overId = over.id as string;
 
- // Determine target status: over can be a column status or another project id
- const targetCol = PROJECT_COLUMNS.find((c) => c.status === overId);
- const targetStatus = targetCol?.status
- ?? PROJECT_COLUMNS.find((c) =>
- c.status === localProjects.find((p) => p.id === overId)?.status
- )?.status;
+ // overId puede ser un status de columna (useDroppable) o un ID de proyecto (useSortable)
+ const isColumn = PROJECT_COLUMNS.some((c) => c.status === overId);
+ const targetStatus = isColumn
+ ? overId
+ : localProjects.find((p) => p.id === overId)?.status;
 
  if (!targetStatus) return;
  const project = localProjects.find((p) => p.id === projectId);
@@ -144,6 +162,10 @@ export function ProjectKanban({ projects, onProjectMoved }: ProjectKanbanProps) 
  toast.error('Error', msg);
  }
  }, [localProjects, onProjectMoved]);
+
+ const handleCardClick = useCallback((projectId: string) => {
+ router.push(`/projects/${projectId}`);
+ }, [router]);
 
  return (
  <div className="space-y-4">
@@ -176,6 +198,7 @@ export function ProjectKanban({ projects, onProjectMoved }: ProjectKanbanProps) 
  key={col.status}
  col={col}
  projects={kanbanProjects.filter((p) => p.status === col.status)}
+ onCardClick={handleCardClick}
  />
  ))}
  </div>
