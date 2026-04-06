@@ -72,6 +72,9 @@ export default function TaskDetailPage() {
  const [showRejections, setShowRejections] = useState(false);
  const [confirmDelete, setConfirmDelete] = useState(false);
 
+ // Project members for assignee picker
+ const [projectMembers, setProjectMembers] = useState<any[]>([]);
+
  // ── Load task ─────────────────────────────────────────────────
  const loadTask = useCallback(async () => {
  try {
@@ -102,6 +105,15 @@ export default function TaskDetailPage() {
  }, [taskId]);
 
  useEffect(() => { loadTask(); loadComments(); }, [loadTask, loadComments]);
+
+ useEffect(() => {
+  if (projectId) {
+   api.get(`/projects/${projectId}/members`).then((res) => {
+    const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+    setProjectMembers(list);
+   }).catch(() => {});
+  }
+ }, [projectId]);
 
  // ── Patch helper ──────────────────────────────────────────────
  const patchTask = async (data: Record<string, unknown>) => {
@@ -373,40 +385,55 @@ export default function TaskDetailPage() {
  <Separator />
 
  {/* Assignees */}
- <div className="flex items-center justify-between">
- <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><User className="h-3 w-3"/> Asignados</span>
- <div className="flex -space-x-1">
+ <div>
+ <span className="flex items-center gap-1.5 text-muted-foreground text-xs mb-2"><User className="h-3 w-3"/> Asignados</span>
+ <div className="flex flex-wrap gap-1.5 mb-2">
  {(task.assignments || []).map((a: any) => (
- <Avatar key={a.user?.id} className="h-6 w-6 border-2 border-white">
+ <div key={a.user?.id} className="flex items-center gap-1.5 rounded-full bg-muted px-2 py-1">
+ <Avatar className="h-5 w-5">
  <AvatarImage src={a.user?.image} />
  <AvatarFallback className="text-[8px] bg-primary/15 text-primary">{getInitials(a.user?.name || '')}</AvatarFallback>
  </Avatar>
- ))}
- {(!task.assignments || task.assignments.length === 0) && <span className="text-xs text-muted-foreground">Ninguno</span>}
+ <span className="text-[11px] text-foreground">{a.user?.name}</span>
+ <button onClick={() => patchTask({ assigneeIds: (task.assignments || []).filter((x: any) => x.user?.id !== a.user?.id).map((x: any) => x.user?.id) })} className="text-muted-foreground hover:text-destructive text-xs ml-0.5">×</button>
  </div>
+ ))}
+ {(!task.assignments || task.assignments.length === 0) && <span className="text-xs text-muted-foreground">Sin asignar</span>}
+ </div>
+ {projectMembers.length > 0 && (
+ <Select value="" onValueChange={(userId) => {
+ const currentIds = (task.assignments || []).map((a: any) => a.user?.id).filter(Boolean);
+ if (!currentIds.includes(userId)) patchTask({ assigneeIds: [...currentIds, userId] });
+ }}>
+ <SelectTrigger className="h-7 text-xs">
+ <SelectValue placeholder="Agregar miembro..."/>
+ </SelectTrigger>
+ <SelectContent>
+ {projectMembers.filter((m: any) => !(task.assignments || []).some((a: any) => a.user?.id === m.userId)).map((m: any) => (
+ <SelectItem key={m.userId} value={m.userId}>{m.user?.name || m.userId}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ )}
  </div>
  <Separator />
 
  {/* Dates */}
  <div className="flex items-center justify-between">
- <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Calendar className="h-3 w-3"/> Fecha límite</span>
- <span className="text-xs text-foreground">{task.dueDate ? formatDate(task.dueDate) : '—'}</span>
+ <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Calendar className="h-3 w-3"/> Fecha inicio</span>
+ <input type="date" value={task.startDate ? task.startDate.split('T')[0] : ''} onChange={(e) => patchTask({ startDate: e.target.value ? new Date(e.target.value).toISOString() : null })} className="h-7 w-32 rounded border border-border bg-background px-2 text-xs text-foreground"/>
  </div>
- {task.startDate && (
- <>
  <Separator />
  <div className="flex items-center justify-between">
- <span className="text-muted-foreground text-xs">Fecha inicio</span>
- <span className="text-xs text-foreground">{formatDate(task.startDate)}</span>
+ <span className="flex items-center gap-1.5 text-muted-foreground text-xs"><Calendar className="h-3 w-3"/> Fecha límite</span>
+ <input type="date" value={task.dueDate ? task.dueDate.split('T')[0] : ''} onChange={(e) => patchTask({ dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })} className="h-7 w-32 rounded border border-border bg-background px-2 text-xs text-foreground"/>
  </div>
- </>
- )}
  <Separator />
 
  {/* Estimated hours */}
  <div className="flex items-center justify-between">
  <span className="text-muted-foreground text-xs">Horas estimadas</span>
- <span className="text-xs text-foreground">{task.estimatedHours ? `${task.estimatedHours}h` : '—'}</span>
+ <input type="number" min="0" step="0.5" value={task.estimatedHours ?? ''} onChange={(e) => { const v = e.target.value; patchTask({ estimatedHours: v ? Number(v) : 0 }); }} placeholder="—" className="h-7 w-20 rounded border border-border bg-background px-2 text-xs text-foreground text-right"/>
  </div>
  <Separator />
 
@@ -422,12 +449,6 @@ export default function TaskDetailPage() {
  </div>
  <Separator />
 
- {/* Sprint */}
- <div className="flex items-center justify-between">
- <span className="text-muted-foreground text-xs">Sprint</span>
- <span className="text-xs text-foreground">{task.sprint?.name || '—'}</span>
- </div>
- <Separator />
 
  {/* Board Column */}
  <div className="flex items-center justify-between">
