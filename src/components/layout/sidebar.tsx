@@ -100,13 +100,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  )}
  >
  {/* Logo */}
- <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
- <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-8 w-8 shrink-0" />
- {!collapsed && (
- <span className="text-lg font-bold text-sidebar-foreground animate-fade-in">
- Onnix
- </span>
- )}
+ <div className="flex h-14 items-center border-b border-sidebar-border px-4">
+ <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-8 w-auto shrink-0" />
  </div>
 
  {/* Navigation */}
@@ -225,10 +220,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  >
  <Menu className="h-5 w-5"/>
  </button>
- <div className="flex items-center gap-2">
- <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-7 w-7" />
- <span className="text-lg font-bold text-sidebar-foreground">Onnix</span>
- </div>
+ <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-7 w-auto" />
  </div>
  </div>
 
@@ -249,10 +241,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  >
  {/* Drawer header */}
  <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
- <div className="flex items-center gap-2">
- <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-8 w-8" />
- <span className="text-lg font-bold text-sidebar-foreground">Onnix</span>
- </div>
+ <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-8 w-auto" />
  <button
  onClick={onClose}
  className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent"
