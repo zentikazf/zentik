@@ -170,7 +170,7 @@ function getActivityDetail(entry: any): string {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { orgId } = useOrg();
+  const { orgId, organization } = useOrg();
   const { hasPermission, isOwner, roleName } = usePermissions();
 
   // Shared state
@@ -550,55 +550,75 @@ export default function DashboardPage() {
             <h2 className="text-base font-semibold text-card-foreground">Mis Tareas</h2>
             <Badge variant="info" className="gap-1">
               <CircleDot className="h-3 w-3" />
-              {myTasks.length} activas
+              {myTasks.filter((t: any) => ['TODO', 'IN_PROGRESS', 'IN_REVIEW'].includes(t.status)).length} activas
             </Badge>
           </div>
           <div className="space-y-1.5">
-            {myTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="rounded-xl bg-muted p-4 mb-3">
-                  <CheckCircle className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <p className="text-sm font-medium text-muted-foreground">Sin tareas asignadas</p>
-                <p className="mt-1 text-xs text-muted-foreground">Cuando te asignen tareas, aparecerán aquí</p>
-              </div>
-            ) : (
-              myTasks.slice(0, 7).map((task: any) => {
-                const pConfig = priorityConfig[task.priority] || priorityConfig.MEDIUM;
+            {(() => {
+              const activeTasks = myTasks.filter((t: any) => ['TODO', 'IN_PROGRESS', 'IN_REVIEW'].includes(t.status));
+              if (activeTasks.length === 0) {
                 return (
-                  <Link key={task.id} href={`/projects/${task.projectId}/board`} className="block">
-                    <div className="group flex items-center gap-3 rounded-lg border border-transparent p-3 transition-all hover:border-border hover:bg-muted/50">
-                      <div className={`h-2 w-2 shrink-0 rounded-full ${task.status === 'DONE' ? 'bg-success' : task.status === 'IN_PROGRESS' ? 'bg-primary' : 'bg-muted-foreground/40'}`} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-card-foreground group-hover:text-foreground">
-                          {task.title}
-                        </p>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                          <span className="truncate">{task.project?.name}</span>
-                          {task.dueDate && (
-                            <>
-                              <span className="text-muted-foreground/30">·</span>
-                              <span className="flex items-center gap-0.5 whitespace-nowrap">
-                                <CalendarDays className="h-3 w-3" />
-                                {new Date(task.dueDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <Badge className={`shrink-0 border-transparent text-[10px] ${pConfig.color}`}>
-                        {pConfig.label}
-                      </Badge>
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="rounded-xl bg-muted p-4 mb-3">
+                      <CheckCircle className="h-8 w-8 text-muted-foreground" />
                     </div>
-                  </Link>
+                    <p className="text-sm font-medium text-muted-foreground">Sin tareas activas</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Cuando te asignen tareas, aparecerán aquí</p>
+                  </div>
                 );
-              })
-            )}
-            {myTasks.length > 7 && (
-              <p className="pt-2 text-center text-xs text-muted-foreground">
-                +{myTasks.length - 7} tareas más
-              </p>
-            )}
+              }
+              const grouped: Record<string, any[]> = {};
+              for (const task of activeTasks) {
+                const projName = task.project?.name || 'Sin proyecto';
+                if (!grouped[projName]) grouped[projName] = [];
+                grouped[projName].push(task);
+              }
+              const userRoleId = organization?.roleId;
+              return Object.entries(grouped).map(([projName, tasks]) => (
+                <div key={projName}>
+                  <p className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 first:mt-0">{projName}</p>
+                  {tasks.slice(0, 5).map((task: any) => {
+                    const pConfig = priorityConfig[task.priority] || priorityConfig.MEDIUM;
+                    const isCrossRole = task.role && userRoleId && task.role.id !== userRoleId;
+                    return (
+                      <Link key={task.id} href={`/projects/${task.projectId}/board`} className="block">
+                        <div className="group flex items-center gap-3 rounded-lg border border-transparent p-3 transition-all hover:border-border hover:bg-muted/50">
+                          <div className={`h-2 w-2 shrink-0 rounded-full ${task.status === 'IN_PROGRESS' ? 'bg-primary' : task.status === 'IN_REVIEW' ? 'bg-warning' : 'bg-muted-foreground/40'}`} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="truncate text-sm font-medium text-card-foreground group-hover:text-foreground">
+                                {task.title}
+                              </p>
+                              <span className={`shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${isCrossRole ? 'bg-warning/15 text-warning' : 'bg-primary/10 text-primary'}`}>
+                                {isCrossRole ? 'Cross-rol' : 'Tú'}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="text-[10px]">{STATUS_LABELS[task.status] || task.status}</span>
+                              {task.dueDate && (
+                                <>
+                                  <span className="text-muted-foreground/30">·</span>
+                                  <span className="flex items-center gap-0.5 whitespace-nowrap">
+                                    <CalendarDays className="h-3 w-3" />
+                                    {new Date(task.dueDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <Badge className={`shrink-0 border-transparent text-[10px] ${pConfig.color}`}>
+                            {pConfig.label}
+                          </Badge>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  {tasks.length > 5 && (
+                    <p className="pl-3 text-[11px] text-muted-foreground">+{tasks.length - 5} más en {projName}</p>
+                  )}
+                </div>
+              ));
+            })()}
           </div>
         </div>
 

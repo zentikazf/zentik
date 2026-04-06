@@ -16,13 +16,15 @@ import { cn } from '@/lib/utils';
 
 interface KanbanColumnProps {
  column: BoardColumn;
+ currentUserId?: string;
+ currentUserRoleId?: string;
  onAddTask?: () => void;
  onEditColumn?: () => void;
  onDeleteColumn?: () => void;
  onTaskClick?: (taskId: string) => void;
 }
 
-export function KanbanColumn({ column, onAddTask, onEditColumn, onDeleteColumn, onTaskClick }: KanbanColumnProps) {
+export function KanbanColumn({ column, currentUserId, currentUserRoleId, onAddTask, onEditColumn, onDeleteColumn, onTaskClick }: KanbanColumnProps) {
  const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
  const hasMenu = onEditColumn || onDeleteColumn;
@@ -96,6 +98,8 @@ export function KanbanColumn({ column, onAddTask, onEditColumn, onDeleteColumn, 
  <KanbanCard
  key={task.id}
  task={task}
+ currentUserId={currentUserId}
+ currentUserRoleId={currentUserRoleId}
  onClick={onTaskClick ? () => onTaskClick(task.id) : undefined}
  />
  ))}

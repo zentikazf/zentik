@@ -28,6 +28,9 @@ import { toast } from '@/hooks/use-toast';
 interface KanbanBoardProps {
  boardId: string;
  columns: BoardColumn[];
+ currentUserId?: string;
+ currentUserRoleId?: string;
+ showOnlyMyTasks?: boolean;
  onAddColumn?: () => void;
  onEditColumn?: (column: any) => void;
  onDeleteColumn?: (columnId: string) => void;
@@ -38,6 +41,9 @@ interface KanbanBoardProps {
 export function KanbanBoard({
  boardId,
  columns: initialColumns,
+ currentUserId,
+ currentUserRoleId,
+ showOnlyMyTasks,
  onAddColumn,
  onEditColumn,
  onDeleteColumn,
@@ -141,16 +147,23 @@ export function KanbanBoard({
  items={columns.map((c) => c.id)}
  strategy={horizontalListSortingStrategy}
  >
- {columns.map((column) => (
+ {columns.map((column) => {
+ const filteredColumn = showOnlyMyTasks && currentUserId
+ ? { ...column, tasks: (column.tasks || []).filter((t) => (t as any).assignments?.some((a: any) => a.user.id === currentUserId) || t.assignees?.some((a: any) => a.id === currentUserId)) }
+ : column;
+ return (
  <KanbanColumn
  key={column.id}
- column={column}
+ column={filteredColumn}
+ currentUserId={currentUserId}
+ currentUserRoleId={currentUserRoleId}
  onAddTask={onAddTask ? () => onAddTask(column.id) : undefined}
  onEditColumn={onEditColumn ? () => onEditColumn(column) : undefined}
  onDeleteColumn={onDeleteColumn ? () => onDeleteColumn(column.id) : undefined}
  onTaskClick={onTaskClick}
  />
- ))}
+ );
+ })}
  </SortableContext>
 
  {/* Add column placeholder */}

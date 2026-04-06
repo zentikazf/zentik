@@ -6,10 +6,12 @@ import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Plus, Layout } from 'lucide-react';
+import { Settings, Plus, Layout, User } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useBoardStore } from '@/stores/use-board-store';
+import { useAuth } from '@/hooks/use-auth';
+import { useOrg } from '@/providers/org-provider';
 
 const KanbanBoard = dynamic(() => import('@/components/kanban/board').then(m => m.KanbanBoard), { ssr: false, loading: () => <Skeleton className="h-[600px] w-full"/> });
 const BoardSettingsDialog = dynamic(() => import('@/components/board/board-settings-dialog').then(m => m.BoardSettingsDialog), { ssr: false });
@@ -19,10 +21,13 @@ const TaskSheet = dynamic(() => import('@/components/task/task-sheet').then(m =>
 
 export default function BoardPage() {
  const { projectId } = useParams<{ projectId: string }>();
+ const { user } = useAuth();
+ const { organization } = useOrg();
  const [boards, setBoards] = useState<any[]>([]);
  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
  const [board, setBoard] = useState<any>(null);
  const [loading, setLoading] = useState(true);
+ const [showOnlyMyTasks, setShowOnlyMyTasks] = useState(false);
 
  const [settingsOpen, setSettingsOpen] = useState(false);
  const [settingsBoard, setSettingsBoard] = useState<any>(null);
@@ -199,6 +204,15 @@ export default function BoardPage() {
  </div>
 
  <div className="flex items-center gap-2">
+ <Button
+ variant={showOnlyMyTasks ? 'default' : 'outline'}
+ size="sm"
+ className="rounded-full"
+ onClick={() => setShowOnlyMyTasks(!showOnlyMyTasks)}
+ >
+ <User className="mr-2 h-4 w-4"/>
+ Mis tareas
+ </Button>
  <Button variant="outline"size="sm"className="rounded-full"onClick={() => { setSettingsBoard(null); setSettingsOpen(true); }}>
  <Plus className="mr-2 h-4 w-4"/>
  Nuevo Tablero
@@ -220,6 +234,9 @@ export default function BoardPage() {
  <KanbanBoard
  boardId={board.id}
  columns={board.columns || []}
+ currentUserId={user?.id}
+ currentUserRoleId={organization?.roleId}
+ showOnlyMyTasks={showOnlyMyTasks}
  onAddColumn={handleAddColumn}
  onEditColumn={handleEditColumn}
  onDeleteColumn={handleDeleteColumn}

@@ -25,12 +25,15 @@ interface KanbanCardProps {
  taskLabels?: { label: { id: string; name: string; color: string } }[];
  _count?: { subTasks?: number };
  subTasks?: { status: string }[];
+ role?: { id: string; name: string } | null;
  };
+ currentUserId?: string;
+ currentUserRoleId?: string;
  onClick?: () => void;
  overlay?: boolean;
 }
 
-export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
+export function KanbanCard({ task, currentUserId, currentUserRoleId, onClick, overlay }: KanbanCardProps) {
  const {
  attributes,
  listeners,
@@ -50,6 +53,8 @@ export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
  const totalSubtasks = task._count?.subTasks || task.subTasks?.length || 0;
  const completedSubtasks = task.subTasks?.filter((s) => s.status === 'DONE').length || 0;
  const labels = task.taskLabels || [];
+ const isAssignedToMe = currentUserId ? assignees.some((a) => a.user.id === currentUserId) : false;
+ const isCrossRole = isAssignedToMe && task.role && currentUserRoleId && task.role.id !== currentUserRoleId;
 
  return (
  <div
@@ -62,9 +67,10 @@ export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
  'group relative bg-card rounded-2xl p-4 cursor-grab active:cursor-grabbing transition-all hover:shadow-md',
  isDragging && 'opacity-50',
  overlay && 'shadow-lg rotate-1',
+ isAssignedToMe && 'border-l-[3px] border-l-primary',
  )}
  >
- {/* Priority + Type Badges */}
+ {/* Priority + Type Badges + "Tú" */}
  <div className="flex items-center gap-1.5 mb-2">
  <div
  className="inline-flex items-center rounded px-2 py-0.5"
@@ -79,6 +85,14 @@ export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
  <Wrench className="h-3 w-3" />
  <span className="text-xs font-medium">Soporte</span>
  </div>
+ )}
+ {isAssignedToMe && (
+ <span className={cn(
+ 'ml-auto inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+ isCrossRole ? 'bg-warning/15 text-warning' : 'bg-primary/10 text-primary',
+ )}>
+ {isCrossRole ? 'Cross-rol' : 'Tú'}
+ </span>
  )}
  </div>
 

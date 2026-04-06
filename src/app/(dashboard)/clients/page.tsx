@@ -36,6 +36,7 @@ interface Client {
   phone?: string;
   notes?: string;
   userId?: string;
+  status?: 'ACTIVE' | 'DISABLED' | 'ARCHIVED';
   portalEnabled?: boolean;
   user?: { email: string };
   contractedHours?: number;
@@ -44,12 +45,19 @@ interface Client {
   _count?: { projects: number };
 }
 
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  ACTIVE: { label: 'Activo', color: 'bg-success/15 text-success' },
+  DISABLED: { label: 'Deshabilitado', color: 'bg-warning/15 text-warning' },
+  ARCHIVED: { label: 'Archivado', color: 'bg-muted text-muted-foreground' },
+};
+
 export default function ClientsPage() {
   const { orgId } = useOrg();
   const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [saving, setSaving] = useState(false);
@@ -137,23 +145,28 @@ export default function ClientsPage() {
     }
   };
 
-  const confirmDelete = (client: Client) => {
+  const [statusAction, setStatusAction] = useState<'DISABLED' | 'ARCHIVED' | 'ACTIVE' | null>(null);
+
+  const confirmStatusChange = (client: Client, action: 'DISABLED' | 'ARCHIVED' | 'ACTIVE') => {
     setClientToDelete(client);
+    setStatusAction(action);
     setDeleteDialogOpen(true);
   };
 
-  const handleDelete = async () => {
-    if (!orgId || !clientToDelete) return;
+  const handleChangeStatus = async () => {
+    if (!orgId || !clientToDelete || !statusAction) return;
     try {
-      await api.delete(`/organizations/${orgId}/clients/${clientToDelete.id}`);
-      toast.success('Cliente eliminado');
-      setClients(clients.filter((c) => c.id !== clientToDelete.id));
+      await api.patch(`/organizations/${orgId}/clients/${clientToDelete.id}/status`, { status: statusAction });
+      const labels = { DISABLED: 'deshabilitado', ARCHIVED: 'archivado', ACTIVE: 'reactivado' };
+      toast.success(`Cliente ${labels[statusAction]}`);
+      loadClients();
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Error al eliminar el cliente';
+      const message = err instanceof ApiError ? err.message : 'Error al cambiar estado del cliente';
       toast.error('Error', message);
     } finally {
       setDeleteDialogOpen(false);
       setClientToDelete(null);
+      setStatusAction(null);
     }
   };
 
@@ -197,11 +210,16 @@ export default function ClientsPage() {
     }
   };
 
-  const filtered = clients.filter(
-    (c) =>
+  const filtered = clients.filter((c) => {
+    const matchesSearch =
       c.name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.email || '').toLowerCase().includes(search.toLowerCase()),
-  );
+      (c.email || '').toLowerCase().includes(search.toLowerCase());
+    const matchesTab =
+      activeTab === 'archived'
+        ? c.status === 'ARCHIVED'
+        : c.status !== 'ARCHIVED';
+    return matchesSearch && matchesTab;
+  });
 
   if (loading) {
     return (
@@ -230,15 +248,35 @@ export default function ClientsPage() {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Buscar clientes..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Tabs + Search */}
+      <div className="flex items-center gap-4">
+        <div className="flex rounded-lg border border-border p-0.5 bg-muted/50">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'active' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Activos
+          </button>
+          <button
+            onClick={() => setActiveTab('archived')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'archived' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Archivados
+          </button>
+        </div>
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar clientes..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Client Grid */}
@@ -295,13 +333,36 @@ export default function ClientsPage() {
                       Editar
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={(e) => { e.stopPropagation(); confirmDelete(client); }}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Eliminar
-                    </DropdownMenuItem>
+                    {(client.status === 'ACTIVE' || !client.status) && (
+                      <>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmStatusChange(client, 'DISABLED'); }}>
+                          <Globe className="mr-2 h-4 w-4" />
+                          Deshabilitar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmStatusChange(client, 'ARCHIVED'); }}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Archivar
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {client.status === 'DISABLED' && (
+                      <>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmStatusChange(client, 'ACTIVE'); }}>
+                          <Globe className="mr-2 h-4 w-4" />
+                          Reactivar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmStatusChange(client, 'ARCHIVED'); }}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Archivar
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {client.status === 'ARCHIVED' && (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmStatusChange(client, 'ACTIVE'); }}>
+                        <Globe className="mr-2 h-4 w-4" />
+                        Reactivar
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -341,21 +402,16 @@ export default function ClientsPage() {
                 )}
               </div>
 
-              {/* Badges + Portal toggle */}
+              {/* Badges + Status */}
               <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <div
-                  className="flex items-center gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Switch
-                    checked={client.portalEnabled ?? false}
-                    onCheckedChange={(checked) => handleTogglePortal(client.id, checked)}
-                  />
-                  <span className="text-[11px] text-muted-foreground">
-                    {client.portalEnabled ? 'Portal activo' : 'Portal inactivo'}
-                  </span>
-                </div>
-
+                {(() => {
+                  const sc = STATUS_CONFIG[client.status || 'ACTIVE'] || STATUS_CONFIG.ACTIVE;
+                  return (
+                    <Badge className={`${sc.color} border-transparent text-[10px]`}>
+                      {sc.label}
+                    </Badge>
+                  );
+                })()}
                 <Badge variant="info" className="text-[10px]">
                   <FolderKanban className="mr-1 h-3 w-3" />
                   {client._count?.projects ?? 0} proyectos
@@ -375,21 +431,38 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Status Change Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Eliminar cliente?</DialogTitle>
+            <DialogTitle>
+              {statusAction === 'DISABLED' && 'Deshabilitar cliente'}
+              {statusAction === 'ARCHIVED' && 'Archivar cliente'}
+              {statusAction === 'ACTIVE' && 'Reactivar cliente'}
+            </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Se eliminara permanentemente a <strong>{clientToDelete?.name}</strong> y todos sus datos asociados. Esta accion no se puede deshacer.
+            {statusAction === 'DISABLED' && (
+              <>Se invalidaran las sesiones activas de <strong>{clientToDelete?.name}</strong>, se congelaran sus proyectos y se cerraran los tickets abiertos.</>
+            )}
+            {statusAction === 'ARCHIVED' && (
+              <>Se archivara a <strong>{clientToDelete?.name}</strong>. Los datos se preservan pero el cliente no aparecera en el listado principal.</>
+            )}
+            {statusAction === 'ACTIVE' && (
+              <>Se reactivara a <strong>{clientToDelete?.name}</strong>. Sus proyectos se descongelaran y el portal quedara habilitado.</>
+            )}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Eliminar
+            <Button
+              variant={statusAction === 'ACTIVE' ? 'default' : 'destructive'}
+              onClick={handleChangeStatus}
+            >
+              {statusAction === 'DISABLED' && 'Deshabilitar'}
+              {statusAction === 'ARCHIVED' && 'Archivar'}
+              {statusAction === 'ACTIVE' && 'Reactivar'}
             </Button>
           </DialogFooter>
         </DialogContent>

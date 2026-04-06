@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FolderKanban, Columns3, List } from 'lucide-react';
+import { Plus, Search, FolderKanban, Columns3, List, Lock } from 'lucide-react';
 import { PhaseBadge } from '@/components/ui/phase-badge';
 import { ProjectKanban } from '@/components/project/project-kanban';
 import { api, ApiError } from '@/lib/api-client';
@@ -222,16 +222,24 @@ export default function ProjectsPage() {
  </div>
  ) : (
  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
- {filtered.map((project) => (
- <Link key={project.id} href={`/projects/${project.id}`}>
- <div className="rounded-xl border border-border bg-card p-5 hover:bg-muted/30 transition-colors cursor-pointer">
+ {filtered.map((project) => {
+ const isFrozen = project.client && project.client.status !== 'ACTIVE';
+ const cardContent = (
+ <div className={`rounded-xl border border-border bg-card p-5 transition-colors ${isFrozen ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-muted/30 cursor-pointer'}`}>
  <div className="mb-3 flex items-center justify-between">
  <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">{project.slug}</span>
+ <div className="flex items-center gap-1.5">
+ {isFrozen && (
+ <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+ <Lock className="h-3 w-3" /> Congelado
+ </span>
+ )}
  <PhaseBadge phase={project.status} label={statusLabels[project.status] || project.status} />
+ </div>
  </div>
  <h3 className="text-[15px] font-semibold text-foreground">{project.name}</h3>
  {project.client?.name && (
- <p className="text-[12px] text-primary">{project.client.name}</p>
+ <p className={`text-[12px] ${isFrozen ? 'text-muted-foreground' : 'text-primary'}`}>{project.client.name}</p>
  )}
  <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">
  {project.description || 'Sin descripcion'}
@@ -241,8 +249,13 @@ export default function ProjectsPage() {
  <span>{formatRelative(project.updatedAt)}</span>
  </div>
  </div>
- </Link>
- ))}
+ );
+ return isFrozen ? (
+ <div key={project.id}>{cardContent}</div>
+ ) : (
+ <Link key={project.id} href={`/projects/${project.id}`}>{cardContent}</Link>
+ );
+ })}
  </div>
  )}
  </div>

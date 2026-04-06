@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatRelative } from '@/lib/utils';
-import { Pause, CheckCircle2 } from 'lucide-react';
+import { Pause, CheckCircle2, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const PROJECT_COLUMNS = [
@@ -35,10 +35,12 @@ function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: bo
  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
  useSortable({ id: project.id });
 
+ const isFrozen = project.client && project.client.status !== 'ACTIVE';
+
  const style = {
  transform: CSS.Transform.toString(transform),
  transition,
- opacity: isDragging ? 0.4 : 1,
+ opacity: isDragging ? 0.4 : isFrozen ? 0.5 : 1,
  };
 
  return (
@@ -47,14 +49,20 @@ function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: bo
  style={style}
  {...attributes}
  {...listeners}
- onClick={() => { if (!isDragging && onClick) onClick(); }}
- className={`rounded-xl bg-card p-4 cursor-grab active:cursor-grabbing
- border border-transparent hover:border-border transition-all
+ onClick={() => { if (!isDragging && !isFrozen && onClick) onClick(); }}
+ className={`rounded-xl bg-card p-4 transition-all
+ border border-transparent hover:border-border
+ ${isFrozen ? 'cursor-not-allowed grayscale' : 'cursor-grab active:cursor-grabbing'}
  ${overlay ? 'shadow-xl rotate-1' : 'shadow-sm'}`}
  >
+ {isFrozen && (
+ <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+ <Lock className="h-2.5 w-2.5" /> Congelado
+ </span>
+ )}
  <p className="text-[13px] font-semibold text-foreground line-clamp-2">{project.name}</p>
  {project.client?.name && (
- <p className="mt-0.5 text-[11px] text-primary">{project.client.name}</p>
+ <p className={`mt-0.5 text-[11px] ${isFrozen ? 'text-muted-foreground' : 'text-primary'}`}>{project.client.name}</p>
  )}
  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
  <span>{project._count?.tasks || 0} tareas</span>
