@@ -24,6 +24,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
  SUPPORT_REQUEST: { label: 'Soporte', color: 'bg-warning/10 text-warning ' },
  NEW_DEVELOPMENT: { label: 'Desarrollo', color: 'bg-info/10 text-info ' },
+ NEW_PROJECT: { label: 'Nuevo Proyecto', color: 'bg-primary/10 text-primary ' },
 };
 
 interface TicketItem {
@@ -55,6 +56,8 @@ export default function PortalTicketsPage() {
  description: '',
  category: '',
  priority: 'MEDIUM',
+ projectName: '',
+ projectDescription: '',
  });
 
  useEffect(() => {
@@ -78,6 +81,30 @@ export default function PortalTicketsPage() {
 
  const handleCreate = async (e: React.FormEvent) => {
  e.preventDefault();
+
+ if (form.category === 'NEW_PROJECT') {
+ if (!form.projectName.trim()) {
+ toast.error('Error', 'El nombre del proyecto es requerido');
+ return;
+ }
+ setCreating(true);
+ try {
+ await api.post<any>('/portal/project-requests', {
+ name: form.projectName.trim(),
+ description: form.projectDescription.trim() || undefined,
+ });
+ toast.success('Solicitud enviada', 'Tu solicitud de nuevo proyecto fue enviada al equipo');
+ setShowCreate(false);
+ setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', projectName: '', projectDescription: '' });
+ await loadData();
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al enviar la solicitud');
+ } finally {
+ setCreating(false);
+ }
+ return;
+ }
+
  if (!form.projectId || !form.title.trim() || !form.category) {
  toast.error('Error', 'Completa todos los campos requeridos');
  return;
@@ -93,7 +120,7 @@ export default function PortalTicketsPage() {
  });
  toast.success('Ticket creado', 'Tu ticket fue enviado al equipo');
  setShowCreate(false);
- setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM' });
+ setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', projectName: '', projectDescription: '' });
  await loadData();
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear el ticket');
@@ -132,7 +159,6 @@ export default function PortalTicketsPage() {
  {tickets.length} Total
  </span>
  </div>
- {projects.length > 0 && (
  <Dialog open={showCreate} onOpenChange={setShowCreate}>
  <DialogTrigger asChild>
  <Button className="rounded-full">
@@ -145,6 +171,42 @@ export default function PortalTicketsPage() {
  </DialogHeader>
  <form onSubmit={handleCreate} className="space-y-4 pt-2">
  <div className="space-y-2">
+ <Label className="text-muted-foreground">Tipo de solicitud</Label>
+ <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+ <SelectTrigger>
+ <SelectValue placeholder="Selecciona el tipo"/>
+ </SelectTrigger>
+ <SelectContent>
+ <SelectItem value="SUPPORT_REQUEST">Soporte / Error</SelectItem>
+ <SelectItem value="NEW_PROJECT">Nuevo Proyecto</SelectItem>
+ </SelectContent>
+ </Select>
+ </div>
+
+ {form.category === 'NEW_PROJECT' ? (
+ <>
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Nombre del proyecto</Label>
+ <Input
+ value={form.projectName}
+ onChange={(e) => setForm({ ...form, projectName: e.target.value })}
+ placeholder="Nombre del nuevo proyecto"
+ required
+ />
+ </div>
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Descripción del proyecto</Label>
+ <Textarea
+ value={form.projectDescription}
+ onChange={(e) => setForm({ ...form, projectDescription: e.target.value })}
+ placeholder="Describe qué necesitas en este proyecto..."
+ rows={4}
+ />
+ </div>
+ </>
+ ) : form.category ? (
+ <>
+ <div className="space-y-2">
  <Label className="text-muted-foreground">Proyecto</Label>
  <Select value={form.projectId} onValueChange={(v) => setForm({ ...form, projectId: v })}>
  <SelectTrigger>
@@ -154,18 +216,6 @@ export default function PortalTicketsPage() {
  {projects.map((p) => (
  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
  ))}
- </SelectContent>
- </Select>
- </div>
- <div className="space-y-2">
- <Label className="text-muted-foreground">Tipo de solicitud</Label>
- <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
- <SelectTrigger>
- <SelectValue placeholder="Selecciona el tipo"/>
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="SUPPORT_REQUEST">Soporte / Error</SelectItem>
- <SelectItem value="NEW_DEVELOPMENT">Nueva Funcionalidad</SelectItem>
  </SelectContent>
  </Select>
  </div>
@@ -200,13 +250,17 @@ export default function PortalTicketsPage() {
  </SelectContent>
  </Select>
  </div>
- <Button type="submit"className="w-full rounded-full"disabled={creating}>
- {creating ? 'Enviando...' : 'Enviar Ticket'}
+ </>
+ ) : null}
+
+ {form.category && (
+ <Button type="submit" className="w-full rounded-full" disabled={creating}>
+ {creating ? 'Enviando...' : form.category === 'NEW_PROJECT' ? 'Solicitar Proyecto' : 'Enviar Ticket'}
  </Button>
+ )}
  </form>
  </DialogContent>
  </Dialog>
- )}
  </div>
  </div>
 

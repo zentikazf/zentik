@@ -101,12 +101,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  >
  {/* Logo */}
  <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
- <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
- <FolderKanban className="h-4 w-4 text-primary-foreground"/>
- </div>
+ <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-8 w-8 shrink-0" />
  {!collapsed && (
  <span className="text-lg font-bold text-sidebar-foreground animate-fade-in">
- Zentik
+ Onnix
  </span>
  )}
  </div>
@@ -228,10 +226,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  <Menu className="h-5 w-5"/>
  </button>
  <div className="flex items-center gap-2">
- <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
- <FolderKanban className="h-4 w-4 text-primary-foreground"/>
- </div>
- <span className="text-lg font-bold text-sidebar-foreground">Zentik</span>
+ <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-7 w-7" />
+ <span className="text-lg font-bold text-sidebar-foreground">Onnix</span>
  </div>
  </div>
  </div>
@@ -254,10 +250,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  {/* Drawer header */}
  <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
  <div className="flex items-center gap-2">
- <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
- <FolderKanban className="h-4 w-4 text-primary-foreground"/>
- </div>
- <span className="text-lg font-bold text-sidebar-foreground">Zentik</span>
+ <img src="https://onnix.com.py/assets/img/logo.svg" alt="Onnix" className="h-8 w-8" />
+ <span className="text-lg font-bold text-sidebar-foreground">Onnix</span>
  </div>
  <button
  onClick={onClose}

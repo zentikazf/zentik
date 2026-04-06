@@ -126,12 +126,12 @@ export default function ClientDetailPage() {
  email: userForm.email.trim(),
  password: userForm.password.trim(),
  });
- toast.success('Usuario creado', 'El sub-usuario fue creado exitosamente');
+ toast.success('Usuario creado', 'El usuario fue creado exitosamente');
  setShowAddUser(false);
  setUserForm({ name: '', email: '', password: '' });
  loadData();
  } catch (err) {
- toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear sub-usuario');
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear usuario');
  } finally {
  setSavingUser(false);
  }
@@ -146,7 +146,7 @@ export default function ClientDetailPage() {
  setDeleteConfirm(null);
  loadData();
  } catch (err) {
- toast.error('Error', err instanceof ApiError ? err.message : 'Error al eliminar sub-usuario');
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al eliminar usuario');
  } finally {
  setDeleting(false);
  }
@@ -399,10 +399,10 @@ export default function ClientDetailPage() {
  <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
  <DialogContent className="max-w-md">
  <DialogHeader>
- <DialogTitle>Agregar Sub-usuario</DialogTitle>
+ <DialogTitle>Agregar usuario</DialogTitle>
  </DialogHeader>
  <p className="text-sm text-muted-foreground">
- Crea un usuario adicional para <strong>{client.name}</strong> con acceso al portal.
+ Crea un nuevo usuario para <strong>{client.name}</strong> con acceso al portal.
  </p>
  <div className="space-y-4 py-2">
  <div className="space-y-2">

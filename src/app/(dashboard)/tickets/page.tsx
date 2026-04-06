@@ -82,6 +82,7 @@ export default function TicketsPage() {
  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
  const [filterPriority, setFilterPriority] = useState<string | null>(null);
  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+ const [filterClient, setFilterClient] = useState<string | null>(null);
  const [showCreate, setShowCreate] = useState(false);
  const [creating, setCreating] = useState(false);
  const [clients, setClients] = useState<{ id: string; name: string; portalEnabled?: boolean }[]>([]);
@@ -170,7 +171,8 @@ export default function TicketsPage() {
  const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
  const matchesPriority = !filterPriority || t.priority === filterPriority;
  const matchesCategory = !filterCategory || t.category === filterCategory;
- return matchesSearch && matchesStatus && matchesPriority && matchesCategory;
+ const matchesClient = !filterClient || t.client?.id === filterClient;
+ return matchesSearch && matchesStatus && matchesPriority && matchesCategory && matchesClient;
  });
 
  const counts = {
@@ -181,7 +183,7 @@ export default function TicketsPage() {
  CLOSED: tickets.filter((t) => t.status === 'CLOSED').length,
  };
 
- const hasActiveFilters = filterPriority !== null || filterCategory !== null;
+ const hasActiveFilters = filterPriority !== null || filterCategory !== null || filterClient !== null;
 
  const formatDate = (dateStr: string) => {
  try {
@@ -318,7 +320,7 @@ export default function TicketsPage() {
  <Button variant="outline" size="sm" className={cn('gap-1', hasActiveFilters && 'border-primary text-primary')}>
  <Filter className="h-3.5 w-3.5"/>
  Filtros
- {hasActiveFilters && <span className="ml-1 rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">{(filterPriority ? 1 : 0) + (filterCategory ? 1 : 0)}</span>}
+ {hasActiveFilters && <span className="ml-1 rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">{(filterPriority ? 1 : 0) + (filterCategory ? 1 : 0) + (filterClient ? 1 : 0)}</span>}
  </Button>
  </DropdownMenuTrigger>
  <DropdownMenuContent align="end" className="w-56">
@@ -335,10 +337,21 @@ export default function TicketsPage() {
  {categoryConfig[t]?.label || t}
  </DropdownMenuCheckboxItem>
  ))}
+ {clients.length > 0 && (
+ <>
+ <DropdownMenuSeparator/>
+ <DropdownMenuLabel>Cliente</DropdownMenuLabel>
+ {clients.map((c) => (
+ <DropdownMenuCheckboxItem key={c.id} checked={filterClient === c.id} onCheckedChange={(checked) => setFilterClient(checked ? c.id : null)}>
+ {c.name}
+ </DropdownMenuCheckboxItem>
+ ))}
+ </>
+ )}
  {hasActiveFilters && (
  <>
  <DropdownMenuSeparator/>
- <DropdownMenuCheckboxItem checked={false} onCheckedChange={() => { setFilterPriority(null); setFilterCategory(null); }}>
+ <DropdownMenuCheckboxItem checked={false} onCheckedChange={() => { setFilterPriority(null); setFilterCategory(null); setFilterClient(null); }}>
  Limpiar filtros
  </DropdownMenuCheckboxItem>
  </>

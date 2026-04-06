@@ -95,7 +95,7 @@ export default function PortalProjectsPage() {
  <Link
  key={project.id}
  href={`/portal/projects/${project.id}`}
- className="group flex flex-col justify-between relative rounded-xl bg-card p-6 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1.5 border border-border hover:border-primary/20"
+ className="group flex flex-col justify-between relative rounded-xl bg-card p-6 transition-colors border border-border hover:bg-muted/30 hover:border-primary/30"
  >
  <div>
  <div className="mb-4 flex justify-between items-start gap-4">

@@ -50,7 +50,6 @@ export function CreateTaskDialog({
  const [saving, setSaving] = useState(false);
  const [showMore, setShowMore] = useState(false);
  const [members, setMembers] = useState<any[]>([]);
- const [sprints, setSprints] = useState<any[]>([]);
  const [labels, setLabels] = useState<any[]>([]);
  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
  const [roleId, setRoleId] = useState('none');
@@ -66,8 +65,6 @@ export function CreateTaskDialog({
  // Expandable fields
  const [dueDate, setDueDate] = useState('');
  const [startDate, setStartDate] = useState('');
- const [sprintId, setSprintId] = useState('');
- const [storyPoints, setStoryPoints] = useState('');
  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
 
  // Load project members, sprints, labels, and org roles
@@ -75,14 +72,12 @@ export function CreateTaskDialog({
  if (!open) return;
  const load = async () => {
  try {
- const [membersRes, sprintsRes, labelsRes, rolesRes] = await Promise.all([
+ const [membersRes, labelsRes, rolesRes] = await Promise.all([
  api.get(`/projects/${projectId}/members`).catch(() => ({ data: [] })),
- api.get(`/projects/${projectId}/sprints`).catch(() => ({ data: [] })),
  api.get(`/projects/${projectId}/labels`).catch(() => ({ data: [] })),
  orgId ? api.get(`/organizations/${orgId}/roles`).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
  ]);
  setMembers(Array.isArray(membersRes.data) ? membersRes.data : membersRes.data?.data || []);
- setSprints(Array.isArray(sprintsRes.data) ? sprintsRes.data : sprintsRes.data?.data || []);
  setLabels(Array.isArray(labelsRes.data) ? labelsRes.data : labelsRes.data?.data || []);
  const rolesList = Array.isArray(rolesRes.data) ? rolesRes.data : rolesRes.data?.data || [];
  setRoles(rolesList.filter((r: any) => r.name !== 'Owner'));
@@ -103,8 +98,6 @@ export function CreateTaskDialog({
  setAssigneeIds([]);
  setDueDate('');
  setStartDate('');
- setSprintId(defaultSprintId || '');
- setStoryPoints('');
  setSelectedLabelIds([]);
  setRoleId('none');
  setShowAllMembers(false);
@@ -127,10 +120,8 @@ export function CreateTaskDialog({
  if (estimatedHours) payload.estimatedHours = Number(estimatedHours);
  if (assigneeIds.length) payload.assigneeIds = assigneeIds;
  if (defaultBoardColumnId) payload.boardColumnId = defaultBoardColumnId;
- if (sprintId) payload.sprintId = sprintId;
  if (dueDate) payload.dueDate = new Date(dueDate).toISOString();
  if (startDate) payload.startDate = new Date(startDate).toISOString();
- if (storyPoints) payload.storyPoints = Number(storyPoints);
  if (selectedLabelIds.length) payload.labelIds = selectedLabelIds;
  if (roleId && roleId !== 'none') payload.roleId = roleId;
 
@@ -334,38 +325,6 @@ export function CreateTaskDialog({
  onChange={(e) => setDueDate(e.target.value)}
  />
  </div>
- </div>
-
- {/* Sprint */}
- {sprints.length > 0 && (
- <div className="space-y-2">
- <Label>Sprint</Label>
- <Select value={sprintId} onValueChange={setSprintId}>
- <SelectTrigger>
- <SelectValue placeholder="Sin sprint"/>
- </SelectTrigger>
- <SelectContent>
- {sprints.map((s) => (
- <SelectItem key={s.id} value={s.id}>
- {s.name}
- </SelectItem>
- ))}
- </SelectContent>
- </Select>
- </div>
- )}
-
- {/* Story Points */}
- <div className="space-y-2">
- <Label>Story Points</Label>
- <Input
- type="number"
- value={storyPoints}
- onChange={(e) => setStoryPoints(e.target.value)}
- placeholder="Ej: 5"
- min={0}
- max={100}
- />
  </div>
 
  {/* Labels */}

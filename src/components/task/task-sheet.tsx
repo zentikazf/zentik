@@ -77,6 +77,7 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
 
  // Tab
  const [tab, setTab] = useState<'details' | 'comments' | 'subtasks' | 'activity'>('details');
+ const [showRejections, setShowRejections] = useState(false);
 
  const loadTask = useCallback(async () => {
  if (!taskId) return;
@@ -452,6 +453,38 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  </button>
  </div>
  </div>
+
+ {/* Review attempts with rejection reasons */}
+ {task.reviewAttempts > 0 && (
+ <div className="rounded-xl bg-destructive/5 border border-destructive/10 p-3 space-y-2">
+ <div className="flex items-center justify-between">
+ <span className="text-xs font-medium text-destructive">Rechazos</span>
+ <div className="flex items-center gap-2">
+ <Badge variant="destructive" className="text-[10px]">{task.reviewAttempts}</Badge>
+ <button
+ onClick={() => setShowRejections(!showRejections)}
+ className="text-[10px] text-primary hover:underline"
+ >
+ {showRejections ? 'Ocultar' : 'Ver motivos'}
+ </button>
+ </div>
+ </div>
+ {showRejections && (
+ <div className="space-y-1.5">
+ {comments.filter((c: any) => c.isSystem && c.content?.startsWith('Tarea rechazada')).length > 0 ? (
+ comments.filter((c: any) => c.isSystem && c.content?.startsWith('Tarea rechazada')).map((c: any) => (
+ <div key={c.id} className="rounded-lg bg-background p-2">
+ <p className="text-[11px] text-foreground">{c.content.replace('Tarea rechazada: ', '').replace('Tarea rechazada (sin motivo)', 'Sin motivo especificado')}</p>
+ <p className="text-[10px] text-muted-foreground mt-0.5">{formatRelative(c.createdAt)}</p>
+ </div>
+ ))
+ ) : (
+ <p className="text-[11px] text-muted-foreground italic">Sin motivos registrados</p>
+ )}
+ </div>
+ )}
+ </div>
+ )}
 
  {/* Time summary */}
  <div className="rounded-xl bg-primary/10 border border-primary/20 p-3 space-y-2">

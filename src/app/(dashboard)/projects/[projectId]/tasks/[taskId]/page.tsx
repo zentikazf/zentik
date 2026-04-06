@@ -69,6 +69,8 @@ export default function TaskDetailPage() {
 
  // Tab: 'comments' | 'activity'
  const [tab, setTab] = useState<'comments' | 'activity'>('comments');
+ const [showRejections, setShowRejections] = useState(false);
+ const [confirmDelete, setConfirmDelete] = useState(false);
 
  // ── Load task ─────────────────────────────────────────────────
  const loadTask = useCallback(async () => {
@@ -462,13 +464,35 @@ export default function TaskDetailPage() {
  </div>
  <Separator />
 
- {/* Review attempts */}
+ {/* Review attempts with rejection reasons */}
  {task.reviewAttempts > 0 && (
  <>
  <div className="flex items-center justify-between">
  <span className="text-muted-foreground text-xs">Rechazos</span>
- <Badge variant="destructive"className="text-[10px]">{task.reviewAttempts}</Badge>
+ <div className="flex items-center gap-2">
+ <Badge variant="destructive" className="text-[10px]">{task.reviewAttempts}</Badge>
+ <button
+ onClick={() => setShowRejections(!showRejections)}
+ className="text-[10px] text-primary hover:underline"
+ >
+ {showRejections ? 'Ocultar' : 'Ver motivos'}
+ </button>
  </div>
+ </div>
+ {showRejections && (
+ <div className="mt-2 space-y-2">
+ {comments.filter((c: any) => c.isSystem && c.content?.startsWith('Tarea rechazada')).length > 0 ? (
+ comments.filter((c: any) => c.isSystem && c.content?.startsWith('Tarea rechazada')).map((c: any) => (
+ <div key={c.id} className="rounded-lg bg-destructive/5 border border-destructive/10 p-2.5">
+ <p className="text-xs text-foreground">{c.content.replace('Tarea rechazada: ', '').replace('Tarea rechazada (sin motivo)', 'Sin motivo especificado')}</p>
+ <p className="text-[10px] text-muted-foreground mt-1">{formatRelative(c.createdAt)} — {c.user?.name || 'Sistema'}</p>
+ </div>
+ ))
+ ) : (
+ <p className="text-xs text-muted-foreground italic">Sin motivos registrados</p>
+ )}
+ </div>
+ )}
  <Separator />
  </>
  )}
@@ -541,6 +565,50 @@ export default function TaskDetailPage() {
  </div>
  ) : (
  <p className="text-xs text-muted-foreground text-center py-4">Sin archivos adjuntos</p>
+ )}
+ </div>
+
+ {/* Delete Task */}
+ <div className="rounded-xl border border-destructive/20 bg-card p-5">
+ {!confirmDelete ? (
+ <Button
+ variant="outline"
+ size="sm"
+ className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+ onClick={() => setConfirmDelete(true)}
+ >
+ Eliminar tarea
+ </Button>
+ ) : (
+ <div className="space-y-3">
+ <p className="text-xs text-destructive font-medium">Esta accion es irreversible. Se eliminaran todos los datos asociados.</p>
+ <div className="flex gap-2">
+ <Button
+ variant="outline"
+ size="sm"
+ className="flex-1"
+ onClick={() => setConfirmDelete(false)}
+ >
+ Cancelar
+ </Button>
+ <Button
+ variant="destructive"
+ size="sm"
+ className="flex-1"
+ onClick={async () => {
+ try {
+ await api.delete(`/tasks/${taskId}`);
+ toast.success('Tarea eliminada');
+ router.push(`/projects/${projectId}/board`);
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo eliminar');
+ }
+ }}
+ >
+ Confirmar
+ </Button>
+ </div>
+ </div>
  )}
  </div>
  </div>

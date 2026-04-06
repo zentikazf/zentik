@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { PhaseBadge } from '@/components/ui/phase-badge';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
@@ -14,7 +15,7 @@ import {
  Clock,
  User,
  FolderKanban,
- AlertCircle,
+ AlertTriangle,
 } from 'lucide-react';
 
 interface ApprovalTask {
@@ -26,6 +27,7 @@ interface ApprovalTask {
  project?: { id: string; name: string };
  assignee?: { id: string; name: string };
  estimatedHours?: number;
+ reviewAttempts?: number;
  createdAt: string;
 }
 
@@ -40,6 +42,8 @@ export default function ApprovalsPage() {
  const [tasks, setTasks] = useState<ApprovalTask[]>([]);
  const [loading, setLoading] = useState(true);
  const [actioningId, setActioningId] = useState<string | null>(null);
+ const [rejectingId, setRejectingId] = useState<string | null>(null);
+ const [rejectReason, setRejectReason] = useState('');
 
  useEffect(() => {
  if (orgId) loadApprovals();
@@ -64,8 +68,8 @@ export default function ApprovalsPage() {
  if (!orgId) return;
  setActioningId(taskId);
  try {
- await api.post(`/organizations/${orgId}/approvals/${taskId}/approve`);
- toast.success('Tarea aprobada', 'La tarea ha sido aprobada exitosamente');
+ await api.post(`/tasks/${taskId}/approve`);
+ toast.success('Aprobada', 'La tarea fue aprobada exitosamente');
  setTasks((prev) => prev.filter((t) => t.id !== taskId));
  } catch (err) {
  const message =
@@ -80,8 +84,10 @@ export default function ApprovalsPage() {
  if (!orgId) return;
  setActioningId(taskId);
  try {
- await api.post(`/organizations/${orgId}/approvals/${taskId}/reject`);
- toast.success('Tarea rechazada', 'La tarea ha sido rechazada');
+ await api.post(`/tasks/${taskId}/reject`, { reason: rejectReason || undefined });
+ toast.success('Rechazada', 'La tarea fue devuelta a Desarrollo');
+ setRejectingId(null);
+ setRejectReason('');
  setTasks((prev) => prev.filter((t) => t.id !== taskId));
  } catch (err) {
  const message =
@@ -169,6 +175,12 @@ export default function ApprovalsPage() {
  {priority.label}
  </Badge>
  )}
+ {(task.reviewAttempts ?? 0) > 0 && (
+ <Badge className="bg-orange-100 text-orange-700">
+ <AlertTriangle className="mr-1 h-3 w-3"/>
+ Intento #{(task.reviewAttempts ?? 0) + 1}
+ </Badge>
+ )}
  </div>
 
  {/* Description */}
@@ -208,26 +220,58 @@ export default function ApprovalsPage() {
  </div>
 
  {/* Action buttons */}
- <div className="flex items-center gap-2 shrink-0">
+ <div className="flex shrink-0 items-center gap-2">
+ {rejectingId === task.id ? (
+ <div className="flex flex-col gap-2">
+ <Textarea
+ placeholder="Motivo del rechazo (opcional)"
+ value={rejectReason}
+ onChange={(e) => setRejectReason(e.target.value)}
+ className="w-64 text-sm"
+ rows={2}
+ />
+ <div className="flex gap-2">
+ <Button
+ size="sm"
+ variant="outline"
+ className="flex-1 rounded-full"
+ onClick={() => { setRejectingId(null); setRejectReason(''); }}
+ >
+ Cancelar
+ </Button>
+ <Button
+ size="sm"
+ className="flex-1 rounded-full bg-destructive hover:bg-destructive/90"
+ onClick={() => handleReject(task.id)}
+ disabled={isActioning}
+ >
+ Confirmar
+ </Button>
+ </div>
+ </div>
+ ) : (
+ <>
+ <Button
+ size="sm"
+ className="bg-phase-produccion text-white hover:bg-phase-produccion/90"
+ onClick={() => handleApprove(task.id)}
+ disabled={isActioning}
+ >
+ <CheckCircle2 className="mr-1.5 h-4 w-4"/>
+ Aprobar
+ </Button>
  <Button
  variant="outline"
  size="sm"
  className="text-destructive border-destructive/30 hover:bg-destructive/10"
  disabled={isActioning}
- onClick={() => handleReject(task.id)}
+ onClick={() => setRejectingId(task.id)}
  >
  <XCircle className="mr-1.5 h-4 w-4"/>
  Rechazar
  </Button>
- <Button
- size="sm"
- className="bg-phase-produccion text-white hover:bg-phase-produccion/90"
- disabled={isActioning}
- onClick={() => handleApprove(task.id)}
- >
- <CheckCircle2 className="mr-1.5 h-4 w-4"/>
- Aprobar
- </Button>
+ </>
+ )}
  </div>
  </div>
  </div>

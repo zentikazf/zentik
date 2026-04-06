@@ -13,7 +13,6 @@ import {
  FileText,
  BarChart2,
  Timer,
- BarChart3,
  ClipboardCheck,
  CalendarDays,
 } from 'lucide-react';
@@ -43,10 +42,7 @@ const primaryTabs: TabItem[] = [
 ];
 
 const secondaryActions: TabItem[] = [
- { label: 'Sprints', href: '/sprints', icon: BarChart3, permission: 'read:sprints' },
  { label: 'Tiempo', href: '/time', icon: Timer, permission: 'read:time-entries' },
- // Sugerencias desactivado — reemplazado por sistema de Tickets
- // { label: 'Sugerencias', href: '/suggestions', icon: MessageSquare, badgeKey: 'suggestions', permission: 'manage:projects' },
  { label: 'Archivos', href: '/files', icon: FolderOpen },
  { label: 'Aprobaciones', href: '/approvals', icon: ClipboardCheck, badgeKey: 'approvals', permission: 'manage:projects' },
  { label: 'Calendario', href: '/calendar', icon: CalendarDays },
