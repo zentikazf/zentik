@@ -83,7 +83,7 @@ function ProjectLayoutInner({ children }: { children: React.ReactNode }) {
 
  useEffect(() => {
   if (!orgId) return;
-  api.get<any>(`/organizations/${orgId}/projects?limit=200`)
+  api.get<any>(`/organizations/${orgId}/projects?limit=100`)
    .then((res) => {
     const raw = res.data;
     const list = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
