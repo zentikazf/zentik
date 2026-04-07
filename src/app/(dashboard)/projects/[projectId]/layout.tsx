@@ -71,7 +71,7 @@ function ProjectLayoutInner({ children }: { children: React.ReactNode }) {
  const router = useRouter();
  const { project, loading } = useProject();
  const { hasPermission } = usePermissions();
- const { organization } = useOrg();
+ const { orgId } = useOrg();
 
  const [allProjects, setAllProjects] = useState<any[]>([]);
  const [selectorOpen, setSelectorOpen] = useState(false);
@@ -82,14 +82,14 @@ function ProjectLayoutInner({ children }: { children: React.ReactNode }) {
  );
 
  useEffect(() => {
-  if (!organization?.id) return;
-  api.get(`/organizations/${organization.id}/projects?limit=200`)
+  if (!orgId) return;
+  api.get(`/organizations/${orgId}/projects?limit=200`)
    .then((res) => {
     const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
     setAllProjects(list);
    })
    .catch(() => {});
- }, [organization?.id]);
+ }, [orgId]);
 
  const base = `/projects/${projectId}`;
 
