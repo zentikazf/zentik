@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FolderKanban, Columns3, List, Lock, UserCheck, Check } from 'lucide-react';
+import { Plus, Search, FolderKanban, Columns3, List, Lock, UserCheck, Check, Archive, FolderOpen } from 'lucide-react';
 import { PhaseBadge } from '@/components/ui/phase-badge';
 import { ProjectKanban } from '@/components/project/project-kanban';
 import { api, ApiError } from '@/lib/api-client';
@@ -31,21 +31,23 @@ export default function ProjectsPage() {
  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
  const [view, setView] = useState<'list' | 'kanban'>('kanban');
+ const [lifecycleFilter, setLifecycleFilter] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
 
  useEffect(() => {
  if (orgId) {
- loadProjects();
+ loadProjects(lifecycleFilter);
  api.get(`/organizations/${orgId}/clients?limit=200`).then((res) => {
  const list = res.data?.data || (Array.isArray(res.data) ? res.data : []);
  setClients(list);
  }).catch(() => {});
  }
- }, [orgId]);
+ }, [orgId, lifecycleFilter]);
 
- const loadProjects = async () => {
+ const loadProjects = async (lifecycle?: string) => {
  if (!orgId) return;
+ const status = lifecycle || lifecycleFilter;
  try {
- const res = await api.get<any>(`/organizations/${orgId}/projects`);
+ const res = await api.get<any>(`/organizations/${orgId}/projects?lifecycleStatus=${status}&limit=100`);
  setProjects(Array.isArray(res.data) ? res.data : res.data?.data || []);
  } catch (err) {
  const message = err instanceof ApiError ? err.message : 'Error al cargar proyectos';
@@ -149,17 +151,37 @@ export default function ProjectsPage() {
  <div className="flex items-center gap-2">
  <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
  <button
- onClick={() => setView('list')}
+ onClick={(e) => { e.stopPropagation(); setLifecycleFilter("ACTIVE"); }}
+ className={`flex h-7 items-center gap-1 rounded-md px-2 transition-colors text-xs font-medium ${
+ lifecycleFilter === "ACTIVE" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+ }`}
+ >
+ <FolderOpen className="h-3.5 w-3.5"/>
+ <span className="hidden sm:inline">Activos</span>
+ </button>
+ <button
+ onClick={(e) => { e.stopPropagation(); setLifecycleFilter("ARCHIVED"); }}
+ className={`flex h-7 items-center gap-1 rounded-md px-2 transition-colors text-xs font-medium ${
+ lifecycleFilter === "ARCHIVED" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+ }`}
+ >
+ <Archive className="h-3.5 w-3.5"/>
+ <span className="hidden sm:inline">Archivados</span>
+ </button>
+ </div>
+ <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
+ <button
+ onClick={(e) => { e.stopPropagation(); setView("list"); }}
  className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
- view === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+ view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
  }`}
  >
  <List className="h-3.5 w-3.5"/>
  </button>
  <button
- onClick={() => setView('kanban')}
+ onClick={(e) => { e.stopPropagation(); setView("kanban"); }}
  className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
- view === 'kanban' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+ view === "kanban" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
  }`}
  >
  <Columns3 className="h-3.5 w-3.5"/>
@@ -233,7 +255,7 @@ export default function ProjectsPage() {
  ) : (
  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
  {filtered.map((project) => {
- const isFrozen = project.client && project.client.status !== 'ACTIVE';
+ const isFrozen = (project.client && project.client.status !== 'ACTIVE') || (project.lifecycleStatus && project.lifecycleStatus !== 'ACTIVE');
  const cardContent = (
  <div className={`rounded-xl border border-border bg-card p-5 transition-colors ${isFrozen ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-muted/30 cursor-pointer'}`}>
  <div className="mb-3 flex items-center justify-between">
@@ -244,7 +266,17 @@ export default function ProjectsPage() {
  <UserCheck className="h-3 w-3" /> Revisión — creado por cliente
  </span>
  )}
- {isFrozen && (
+ {project.lifecycleStatus === 'DISABLED' && (
+ <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+ <Lock className="h-3 w-3" /> Deshabilitado
+ </span>
+ )}
+ {project.lifecycleStatus === 'ARCHIVED' && (
+ <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+ <Archive className="h-3 w-3" /> Archivado
+ </span>
+ )}
+ {isFrozen && project.lifecycleStatus === 'ACTIVE' && (
  <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
  <Lock className="h-3 w-3" /> Congelado
  </span>

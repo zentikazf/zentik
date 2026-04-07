@@ -17,6 +17,9 @@ import {
  ChevronsUpDown,
  Check,
  Search,
+ Lock,
+ Archive,
+ RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,6 +27,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PhaseBadge } from '@/components/ui/phase-badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/hooks/use-toast';
 import { ProjectProvider, useProject } from '@/providers/project-provider';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useOrg } from '@/providers/org-provider';
@@ -127,8 +132,81 @@ function ProjectLayoutInner({ children }: { children: React.ReactNode }) {
  );
  }
 
+ const isProjectDisabled = project.lifecycleStatus && project.lifecycleStatus !== 'ACTIVE';
+ const isOnSettings = pathname.endsWith('/settings');
+
+ // Si el proyecto está deshabilitado/archivado y no estamos en settings, bloquear
+ if (isProjectDisabled && !isOnSettings) {
+ const isArchived = project.lifecycleStatus === 'ARCHIVED';
  return (
  <div className="space-y-6">
+ <div className="flex items-center gap-3">
+ <h1 className="text-xl md:text-2xl font-semibold text-foreground">{project.name}</h1>
+ <PhaseBadge
+ phase={project.status}
+ label={statusLabels[project.status] || project.status}
+ />
+ </div>
+ <div className={cn(
+ 'flex flex-col items-center justify-center rounded-xl border py-16 gap-4',
+ isArchived ? 'border-border bg-muted/30' : 'border-warning/30 bg-warning/5',
+ )}>
+ <div className={cn(
+ 'flex h-14 w-14 items-center justify-center rounded-full',
+ isArchived ? 'bg-muted' : 'bg-warning/10',
+ )}>
+ {isArchived ? <Archive className="h-7 w-7 text-muted-foreground" /> : <Lock className="h-7 w-7 text-warning" />}
+ </div>
+ <div className="text-center">
+ <p className="text-[15px] font-medium text-foreground">
+ Proyecto {isArchived ? 'archivado' : 'deshabilitado'}
+ </p>
+ <p className="mt-1 text-sm text-muted-foreground">
+ {isArchived
+ ? 'Este proyecto fue archivado. Los datos se preservan pero no se puede acceder al contenido.'
+ : 'Este proyecto fue deshabilitado temporalmente. No se puede acceder al contenido.'}
+ </p>
+ </div>
+ {hasPermission('manage:projects') && (
+ <Button
+ variant="outline"
+ onClick={async () => {
+ try {
+ await api.patch(`/projects/${projectId}/lifecycle-status`, { status: 'ACTIVE' });
+ toast.success('Proyecto reactivado');
+ window.location.reload();
+ } catch {
+ toast.error('Error', 'No se pudo reactivar el proyecto');
+ }
+ }}
+ >
+ <RotateCcw className="mr-2 h-4 w-4" /> Reactivar Proyecto
+ </Button>
+ )}
+ <Link href={base + '/settings'}>
+ <Button variant="ghost" size="sm">
+ <Settings className="mr-2 h-4 w-4" /> Ir a Configuración
+ </Button>
+ </Link>
+ </div>
+ </div>
+ );
+ }
+
+ return (
+ <div className="space-y-6">
+ {/* Banner de proyecto deshabilitado/archivado */}
+ {isProjectDisabled && (
+ <div className={cn(
+ 'flex items-center gap-3 rounded-lg border px-4 py-3',
+ project.lifecycleStatus === 'ARCHIVED' ? 'border-border bg-muted/50' : 'border-warning/30 bg-warning/5',
+ )}>
+ {project.lifecycleStatus === 'ARCHIVED' ? <Archive className="h-4 w-4 text-muted-foreground shrink-0" /> : <Lock className="h-4 w-4 text-warning shrink-0" />}
+ <span className="text-sm text-muted-foreground">
+ Este proyecto está {project.lifecycleStatus === 'ARCHIVED' ? 'archivado' : 'deshabilitado'}. Solo puedes acceder a la configuración.
+ </span>
+ </div>
+ )}
  {/* Title Row */}
  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
  <div className="flex items-center gap-3">

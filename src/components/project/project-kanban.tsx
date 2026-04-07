@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatRelative } from '@/lib/utils';
-import { Pause, CheckCircle2, Lock } from 'lucide-react';
+import { Pause, CheckCircle2, Lock, Archive } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const PROJECT_COLUMNS = [
@@ -35,7 +35,7 @@ function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: bo
  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
  useSortable({ id: project.id });
 
- const isFrozen = project.client && project.client.status !== 'ACTIVE';
+ const isFrozen = (project.client && project.client.status !== 'ACTIVE') || (project.lifecycleStatus && project.lifecycleStatus !== 'ACTIVE');
 
  const style = {
  transform: CSS.Transform.toString(transform),
@@ -55,7 +55,17 @@ function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: bo
  ${isFrozen ? 'cursor-not-allowed grayscale' : 'cursor-grab active:cursor-grabbing'}
  ${overlay ? 'shadow-xl rotate-1' : 'shadow-sm'}`}
  >
- {isFrozen && (
+ {project.lifecycleStatus === 'DISABLED' && (
+ <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+ <Lock className="h-2.5 w-2.5" /> Deshabilitado
+ </span>
+ )}
+ {project.lifecycleStatus === 'ARCHIVED' && (
+ <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+ <Archive className="h-2.5 w-2.5" /> Archivado
+ </span>
+ )}
+ {isFrozen && project.lifecycleStatus === 'ACTIVE' && (
  <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
  <Lock className="h-2.5 w-2.5" /> Congelado
  </span>

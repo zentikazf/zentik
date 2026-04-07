@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Trash2 } from 'lucide-react';
+import { Settings, Trash2, Lock, Archive, RotateCcw } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { LabelManager } from '@/components/labels/label-manager';
@@ -33,6 +34,7 @@ export default function ProjectSettingsPage() {
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [form, setForm] = useState({ name: '', description: '', status: '' });
+ const [lifecycleAction, setLifecycleAction] = useState<'ACTIVE' | 'DISABLED' | 'ARCHIVED' | null>(null);
 
  useEffect(() => {
  const load = async () => {
@@ -73,6 +75,25 @@ export default function ProjectSettingsPage() {
  router.push('/projects');
  } catch (err) {
  const message = err instanceof ApiError ? err.message : 'Error al eliminar proyecto';
+ toast.error('Error', message);
+ }
+ };
+
+ const handleLifecycleChange = async () => {
+ if (!lifecycleAction) return;
+ try {
+ await api.patch(`/projects/${projectId}/lifecycle-status`, { status: lifecycleAction });
+ const labels: Record<string, string> = { ACTIVE: 'reactivado', DISABLED: 'deshabilitado', ARCHIVED: 'archivado' };
+ toast.success(`Proyecto ${labels[lifecycleAction]}`);
+ setLifecycleAction(null);
+ if (lifecycleAction === 'ACTIVE') {
+ refetch();
+ window.location.reload();
+ } else {
+ router.push('/projects');
+ }
+ } catch (err) {
+ const message = err instanceof ApiError ? err.message : 'Error al cambiar estado';
  toast.error('Error', message);
  }
  };
@@ -133,11 +154,103 @@ export default function ProjectSettingsPage() {
 
  <div className="rounded-xl border border-destructive/30 bg-card p-6">
  <h2 className="mb-2 text-lg font-semibold text-destructive">Zona de Peligro</h2>
- <p className="mb-4 text-sm text-muted-foreground">Una vez eliminado el proyecto, no hay vuelta atrás.</p>
- <Button variant="destructive"className="rounded-full"onClick={handleDelete}>
- <Trash2 className="mr-2 h-4 w-4"/> Eliminar Proyecto
+ <p className="mb-4 text-sm text-muted-foreground">Acciones que afectan la disponibilidad del proyecto.</p>
+ <div className="space-y-3">
+ {(!project?.lifecycleStatus || project.lifecycleStatus === 'ACTIVE') && (
+ <>
+ <div className="flex items-center justify-between rounded-lg border border-border p-4">
+ <div>
+ <p className="text-sm font-medium">Deshabilitar proyecto</p>
+ <p className="text-xs text-muted-foreground">El proyecto queda inaccesible temporalmente. Se puede reactivar.</p>
+ </div>
+ <Button variant="outline" size="sm" onClick={() => setLifecycleAction('DISABLED')}>
+ <Lock className="mr-2 h-3.5 w-3.5" /> Deshabilitar
  </Button>
  </div>
+ <div className="flex items-center justify-between rounded-lg border border-border p-4">
+ <div>
+ <p className="text-sm font-medium">Archivar proyecto</p>
+ <p className="text-xs text-muted-foreground">Los datos se preservan pero el proyecto no aparecerá en el listado principal.</p>
+ </div>
+ <Button variant="outline" size="sm" onClick={() => setLifecycleAction('ARCHIVED')}>
+ <Archive className="mr-2 h-3.5 w-3.5" /> Archivar
+ </Button>
+ </div>
+ </>
+ )}
+ {project?.lifecycleStatus === 'DISABLED' && (
+ <>
+ <div className="flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-4">
+ <div>
+ <p className="text-sm font-medium">Reactivar proyecto</p>
+ <p className="text-xs text-muted-foreground">El proyecto volverá a estar disponible para todos.</p>
+ </div>
+ <Button variant="outline" size="sm" onClick={() => setLifecycleAction('ACTIVE')}>
+ <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reactivar
+ </Button>
+ </div>
+ <div className="flex items-center justify-between rounded-lg border border-border p-4">
+ <div>
+ <p className="text-sm font-medium">Archivar proyecto</p>
+ <p className="text-xs text-muted-foreground">Los datos se preservan pero el proyecto no aparecerá en el listado principal.</p>
+ </div>
+ <Button variant="outline" size="sm" onClick={() => setLifecycleAction('ARCHIVED')}>
+ <Archive className="mr-2 h-3.5 w-3.5" /> Archivar
+ </Button>
+ </div>
+ </>
+ )}
+ {project?.lifecycleStatus === 'ARCHIVED' && (
+ <div className="flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-4">
+ <div>
+ <p className="text-sm font-medium">Reactivar proyecto</p>
+ <p className="text-xs text-muted-foreground">El proyecto volverá a estar disponible para todos.</p>
+ </div>
+ <Button variant="outline" size="sm" onClick={() => setLifecycleAction('ACTIVE')}>
+ <RotateCcw className="mr-2 h-3.5 w-3.5" /> Reactivar
+ </Button>
+ </div>
+ )}
+ <div className="flex items-center justify-between rounded-lg border border-destructive/30 p-4">
+ <div>
+ <p className="text-sm font-medium text-destructive">Eliminar proyecto</p>
+ <p className="text-xs text-muted-foreground">Una vez eliminado, no hay vuelta atrás.</p>
+ </div>
+ <Button variant="destructive" size="sm" onClick={handleDelete}>
+ <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
+ </Button>
+ </div>
+ </div>
+ </div>
+
+ {/* Dialog de confirmación de lifecycle */}
+ <Dialog open={!!lifecycleAction} onOpenChange={(open) => !open && setLifecycleAction(null)}>
+ <DialogContent>
+ <DialogHeader>
+ <DialogTitle>
+ {lifecycleAction === 'DISABLED' && 'Deshabilitar proyecto'}
+ {lifecycleAction === 'ARCHIVED' && 'Archivar proyecto'}
+ {lifecycleAction === 'ACTIVE' && 'Reactivar proyecto'}
+ </DialogTitle>
+ </DialogHeader>
+ <p className="text-sm text-muted-foreground">
+ {lifecycleAction === 'DISABLED' && `Se deshabilitará "${project?.name}". El proyecto quedará inaccesible pero se podrá reactivar en cualquier momento.`}
+ {lifecycleAction === 'ARCHIVED' && `Se archivará "${project?.name}". Los datos se preservan pero el proyecto no aparecerá en el listado principal.`}
+ {lifecycleAction === 'ACTIVE' && `Se reactivará "${project?.name}". El proyecto volverá a estar disponible para todos los miembros.`}
+ </p>
+ <div className="flex justify-end gap-2">
+ <Button variant="outline" onClick={() => setLifecycleAction(null)}>Cancelar</Button>
+ <Button
+ variant={lifecycleAction === 'ACTIVE' ? 'default' : 'destructive'}
+ onClick={handleLifecycleChange}
+ >
+ {lifecycleAction === 'DISABLED' && 'Deshabilitar'}
+ {lifecycleAction === 'ARCHIVED' && 'Archivar'}
+ {lifecycleAction === 'ACTIVE' && 'Reactivar'}
+ </Button>
+ </div>
+ </DialogContent>
+ </Dialog>
  </div>
  );
 }
