@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FolderKanban, Columns3, List, Lock, UserCheck, Check, Archive, FolderOpen } from 'lucide-react';
+import { Plus, Search, FolderKanban, Columns3, List, Lock, UserCheck, Check, Archive, FolderOpen, RotateCcw } from 'lucide-react';
 import { PhaseBadge } from '@/components/ui/phase-badge';
 import { ProjectKanban } from '@/components/project/project-kanban';
 import { api, ApiError } from '@/lib/api-client';
@@ -95,6 +95,16 @@ export default function ProjectsPage() {
  toast.error('Error', message);
  } finally {
  setCreating(false);
+ }
+ };
+
+ const handleLifecycleChange = async (projectId: string, newStatus: string) => {
+ try {
+ await api.patch(`/projects/${projectId}/lifecycle-status`, { status: newStatus });
+ toast.success('Estado actualizado', newStatus === 'ACTIVE' ? 'Proyecto reactivado' : `Proyecto ${newStatus === 'ARCHIVED' ? 'archivado' : 'deshabilitado'}`);
+ await loadProjects();
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al cambiar estado del proyecto');
  }
  };
 
@@ -243,7 +253,7 @@ export default function ProjectsPage() {
  </div>
 
  {view === 'kanban' ? (
- <ProjectKanban projects={filtered} onProjectMoved={loadProjects} />
+ <ProjectKanban projects={filtered} onProjectMoved={loadProjects} onLifecycleChange={handleLifecycleChange} />
  ) : filtered.length === 0 ? (
  <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16">
  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
@@ -306,6 +316,20 @@ export default function ProjectsPage() {
  }}
  >
  <Check className="mr-2 h-4 w-4" /> Aceptar Proyecto
+ </Button>
+ )}
+ {(project.lifecycleStatus === 'DISABLED' || project.lifecycleStatus === 'ARCHIVED') && (
+ <Button
+ size="sm"
+ variant="outline"
+ className="mt-3 w-full"
+ onClick={(e) => {
+ e.preventDefault();
+ e.stopPropagation();
+ handleLifecycleChange(project.id, 'ACTIVE');
+ }}
+ >
+ <RotateCcw className="mr-2 h-4 w-4" /> Reactivar
  </Button>
  )}
  </div>

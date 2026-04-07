@@ -16,10 +16,11 @@ import {
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatRelative } from '@/lib/utils';
-import { Pause, CheckCircle2, Lock, Archive } from 'lucide-react';
+import { Pause, CheckCircle2, Lock, Archive, RotateCcw, ArchiveRestore } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const PROJECT_COLUMNS = [
@@ -31,11 +32,13 @@ const PROJECT_COLUMNS = [
  { status: 'SUPPORT', name: 'Soporte', color: '#EF4444' },
 ];
 
-function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: boolean; onClick?: () => void }) {
+function ProjectCard({ project, overlay, onClick, onLifecycleChange }: { project: any; overlay?: boolean; onClick?: () => void; onLifecycleChange?: (projectId: string, newStatus: string) => void }) {
  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
  useSortable({ id: project.id });
 
  const isFrozen = (project.client && project.client.status !== 'ACTIVE') || (project.lifecycleStatus && project.lifecycleStatus !== 'ACTIVE');
+ const isDisabled = project.lifecycleStatus === 'DISABLED';
+ const isArchived = project.lifecycleStatus === 'ARCHIVED';
 
  const style = {
  transform: CSS.Transform.toString(transform),
@@ -49,18 +52,18 @@ function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: bo
  style={style}
  {...attributes}
  {...listeners}
- onClick={() => { if (!isDragging && !isFrozen && onClick) onClick(); }}
+ onClick={() => { if (!isDragging && onClick) onClick(); }}
  className={`rounded-xl bg-card p-4 transition-all
  border border-transparent hover:border-border
- ${isFrozen ? 'cursor-not-allowed grayscale' : 'cursor-grab active:cursor-grabbing'}
+ ${isFrozen ? 'grayscale' : 'cursor-grab active:cursor-grabbing'}
  ${overlay ? 'shadow-xl rotate-1' : 'shadow-sm'}`}
  >
- {project.lifecycleStatus === 'DISABLED' && (
+ {isDisabled && (
  <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
  <Lock className="h-2.5 w-2.5" /> Deshabilitado
  </span>
  )}
- {project.lifecycleStatus === 'ARCHIVED' && (
+ {isArchived && (
  <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
  <Archive className="h-2.5 w-2.5" /> Archivado
  </span>
@@ -78,11 +81,21 @@ function ProjectCard({ project, overlay, onClick }: { project: any; overlay?: bo
  <span>{project._count?.tasks || 0} tareas</span>
  <span>{formatRelative(project.updatedAt)}</span>
  </div>
+ {(isDisabled || isArchived) && onLifecycleChange && (
+ <Button
+ size="sm"
+ variant="outline"
+ className="mt-2 w-full h-7 text-[11px]"
+ onClick={(e) => { e.stopPropagation(); onLifecycleChange(project.id, 'ACTIVE'); }}
+ >
+ <RotateCcw className="mr-1 h-3 w-3" /> Reactivar
+ </Button>
+ )}
  </div>
  );
 }
 
-function ProjectColumn({ col, projects, onCardClick }: { col: typeof PROJECT_COLUMNS[0]; projects: any[]; onCardClick: (id: string) => void }) {
+function ProjectColumn({ col, projects, onCardClick, onLifecycleChange }: { col: typeof PROJECT_COLUMNS[0]; projects: any[]; onCardClick: (id: string) => void; onLifecycleChange?: (projectId: string, newStatus: string) => void }) {
  const { setNodeRef, isOver } = useDroppable({ id: col.status });
 
  return (
@@ -102,7 +115,7 @@ function ProjectColumn({ col, projects, onCardClick }: { col: typeof PROJECT_COL
  }`}
  >
  {projects.map((p) => (
- <ProjectCard key={p.id} project={p} onClick={() => onCardClick(p.id)} />
+ <ProjectCard key={p.id} project={p} onClick={() => onCardClick(p.id)} onLifecycleChange={onLifecycleChange} />
  ))}
  {projects.length === 0 && (
  <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
@@ -118,9 +131,10 @@ function ProjectColumn({ col, projects, onCardClick }: { col: typeof PROJECT_COL
 interface ProjectKanbanProps {
  projects: any[];
  onProjectMoved?: () => void;
+ onLifecycleChange?: (projectId: string, newStatus: string) => void;
 }
 
-export function ProjectKanban({ projects, onProjectMoved }: ProjectKanbanProps) {
+export function ProjectKanban({ projects, onProjectMoved, onLifecycleChange }: ProjectKanbanProps) {
  const router = useRouter();
  const [localProjects, setLocalProjects] = useState(projects);
  const [activeProject, setActiveProject] = useState<any>(null);
@@ -217,6 +231,7 @@ export function ProjectKanban({ projects, onProjectMoved }: ProjectKanbanProps) 
  col={col}
  projects={kanbanProjects.filter((p) => p.status === col.status)}
  onCardClick={handleCardClick}
+ onLifecycleChange={onLifecycleChange}
  />
  ))}
  </div>
