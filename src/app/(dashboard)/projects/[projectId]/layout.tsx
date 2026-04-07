@@ -1,33 +1,39 @@
 'use client';
 
-import { useParams, usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
- MessageSquare,
  FolderOpen,
  Settings,
  FileText as AlcanceIcon,
  Calculator,
  ListTodo,
- LayoutDashboard,
  FileText,
  BarChart2,
  Timer,
  ClipboardCheck,
  CalendarDays,
+ ChevronsUpDown,
+ Check,
+ Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PhaseBadge } from '@/components/ui/phase-badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
 import { ProjectProvider, useProject } from '@/providers/project-provider';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useOrg } from '@/providers/org-provider';
+import { api } from '@/lib/api-client';
 import { getInitials } from '@/lib/utils';
 
 interface TabItem {
  label: string;
  href: string;
- icon: typeof LayoutDashboard;
+ icon: typeof ListTodo;
  permission?: string;
  badgeKey?: 'suggestions' | 'approvals';
 }
@@ -36,7 +42,6 @@ const primaryTabs: TabItem[] = [
  { label: 'Alcance', href: '/alcance', icon: AlcanceIcon, permission: 'manage:projects' },
  { label: 'Presupuesto', href: '/presupuesto', icon: Calculator, permission: 'manage:projects' },
  { label: 'Tareas', href: '/backlog', icon: ListTodo, permission: 'read:tasks' },
- { label: 'Kanban', href: '/board', icon: LayoutDashboard, permission: 'read:boards' },
  { label: 'Factura', href: '/invoices', icon: FileText, permission: 'read:billing' },
  { label: 'Reportes', href: '/reports', icon: BarChart2, permission: 'read:projects' },
 ];
@@ -63,8 +68,28 @@ const statusLabels: Record<string, string> = {
 function ProjectLayoutInner({ children }: { children: React.ReactNode }) {
  const { projectId } = useParams<{ projectId: string }>();
  const pathname = usePathname();
+ const router = useRouter();
  const { project, loading } = useProject();
  const { hasPermission } = usePermissions();
+ const { organization } = useOrg();
+
+ const [allProjects, setAllProjects] = useState<any[]>([]);
+ const [selectorOpen, setSelectorOpen] = useState(false);
+ const [projectSearch, setProjectSearch] = useState('');
+
+ const filteredProjects = allProjects.filter((p: any) =>
+  p.name.toLowerCase().includes(projectSearch.toLowerCase()),
+ );
+
+ useEffect(() => {
+  if (!organization?.id) return;
+  api.get(`/organizations/${organization.id}/projects?limit=200`)
+   .then((res) => {
+    const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+    setAllProjects(list);
+   })
+   .catch(() => {});
+ }, [organization?.id]);
 
  const base = `/projects/${projectId}`;
 
@@ -104,9 +129,50 @@ function ProjectLayoutInner({ children }: { children: React.ReactNode }) {
  {/* Title Row */}
  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
  <div className="flex items-center gap-3">
- <h1 className="text-xl md:text-2xl font-semibold text-foreground">
+ <Popover open={selectorOpen} onOpenChange={setSelectorOpen}>
+ <PopoverTrigger asChild>
+ <button className="flex items-center gap-2 rounded-lg px-2 py-1 text-xl md:text-2xl font-semibold text-foreground hover:bg-muted transition-colors">
  {project.name}
- </h1>
+ <ChevronsUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+ </button>
+ </PopoverTrigger>
+ <PopoverContent className="w-72 p-2" align="start">
+ <div className="relative mb-2">
+ <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+ <Input
+ placeholder="Buscar proyecto..."
+ className="h-8 pl-8 text-sm"
+ value={projectSearch}
+ onChange={(e) => setProjectSearch(e.target.value)}
+ />
+ </div>
+ <div className="max-h-[260px] overflow-y-auto">
+ {filteredProjects.length === 0 && (
+ <p className="py-4 text-center text-sm text-muted-foreground">Sin resultados</p>
+ )}
+ {filteredProjects.map((p) => (
+ <button
+ key={p.id}
+ onClick={() => {
+ setSelectorOpen(false);
+ setProjectSearch('');
+ if (p.id !== projectId) router.push(`/projects/${p.id}/backlog`);
+ }}
+ className={cn(
+ 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent',
+ p.id === projectId && 'bg-accent',
+ )}
+ >
+ <Check className={cn('h-4 w-4 shrink-0', p.id === projectId ? 'opacity-100' : 'opacity-0')} />
+ <div className="flex flex-col min-w-0">
+ <span className="truncate">{p.name}</span>
+ <span className="text-[10px] text-muted-foreground">{p.slug}</span>
+ </div>
+ </button>
+ ))}
+ </div>
+ </PopoverContent>
+ </Popover>
  <PhaseBadge
  phase={project.status}
  label={statusLabels[project.status] || project.status}
