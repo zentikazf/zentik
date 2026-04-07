@@ -83,12 +83,15 @@ function ProjectLayoutInner({ children }: { children: React.ReactNode }) {
 
  useEffect(() => {
   if (!orgId) return;
-  api.get(`/organizations/${orgId}/projects?limit=200`)
+  api.get<any>(`/organizations/${orgId}/projects?limit=200`)
    .then((res) => {
-    const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+    const raw = res.data;
+    const list = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
     setAllProjects(list);
    })
-   .catch(() => {});
+   .catch((err) => {
+    console.error('Error loading projects for selector:', err);
+   });
  }, [orgId]);
 
  const base = `/projects/${projectId}`;
