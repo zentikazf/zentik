@@ -34,7 +34,7 @@ const phaseLabels: Record<string, string> = {
 // Map Zentik statuses to Onnix phases
 const statusToPhase: Record<string, string> = {
  BACKLOG: 'pendiente',
- TODO: 'planificacion',
+ TODO: 'pendiente',
  IN_PROGRESS: 'desarrollo',
  IN_REVIEW: 'testing',
  DONE: 'produccion',

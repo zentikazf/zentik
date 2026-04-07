@@ -163,8 +163,8 @@ export default function PortalTicketDetailPage() {
  const catConf = CATEGORY_CONFIG[ticket.category] || CATEGORY_CONFIG.SUPPORT_REQUEST;
 
  const TASK_STATUS_LABELS: Record<string, string> = {
- BACKLOG: 'Pendiente', TODO: 'Por hacer', IN_PROGRESS: 'En progreso',
- IN_REVIEW: 'En revision', DONE: 'Completado', CANCELLED: 'Cancelado',
+ BACKLOG: 'Nuevo', TODO: 'Pendiente', IN_PROGRESS: 'En Desarrollo',
+ IN_REVIEW: 'En Revisión', DONE: 'Completada', CANCELLED: 'Cancelada',
  };
 
  return (

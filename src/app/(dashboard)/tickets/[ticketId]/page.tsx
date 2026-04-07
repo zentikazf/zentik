@@ -229,34 +229,34 @@ export default function TicketDetailPage() {
  <ScrollArea className="flex-1 min-h-0" ref={scrollRef}>
  <div className="p-4 space-y-4">
  {messages.map((msg) => {
- const isTeam = msg.user.id !== ticket.client?.id && msg.user.id !== '';
+ const isMe = msg.user.id === user?.id;
  return (
  <div
  key={msg.id}
  className={cn(
- 'flex gap-3 max-w-[85%]',
- isTeam ? 'ml-auto flex-row-reverse' : '',
+ 'flex gap-2.5 max-w-[85%]',
+ isMe ? 'ml-auto flex-row-reverse' : '',
  )}
  >
  <div className={cn(
  'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold',
- isTeam ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground',
+ isMe ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground',
  )}>
  {getInitials(msg.user.name)}
  </div>
+ <div className={cn('flex flex-col gap-1', isMe ? 'items-end' : 'items-start')}>
  <div className={cn(
- 'rounded-xl px-4 py-2.5',
- isTeam
+ 'rounded-2xl px-3 py-2 text-sm leading-relaxed',
+ isMe
  ? 'bg-primary text-primary-foreground rounded-tr-sm'
  : 'bg-secondary text-secondary-foreground rounded-tl-sm',
  )}>
- <div className="flex items-center gap-2 mb-1">
- <span className="text-xs font-semibold">{msg.user.name}</span>
- <span className={cn('text-xs', isTeam ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+ {msg.content}
+ </div>
+ <span className="text-[10px] text-muted-foreground px-1">
+ {!isMe && <span className="font-medium mr-1">{msg.user.name}</span>}
  {new Date(msg.createdAt).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
  </span>
- </div>
- <p className="text-sm leading-relaxed">{msg.content}</p>
  </div>
  </div>
  );

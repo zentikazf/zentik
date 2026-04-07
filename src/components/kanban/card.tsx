@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageCircle, Paperclip, CheckSquare, Eye, Wrench } from 'lucide-react';
+import { MessageCircle, Paperclip, CheckSquare, Eye, Wrench, Sparkles } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -55,6 +55,7 @@ export function KanbanCard({ task, currentUserId, currentUserRoleId, onClick, ov
  const labels = task.taskLabels || [];
  const isAssignedToMe = currentUserId ? assignees.some((a) => a.user.id === currentUserId) : false;
  const isCrossRole = isAssignedToMe && task.role && currentUserRoleId && task.role.id !== currentUserRoleId;
+ const isNew = assignees.length === 0;
 
  return (
  <div
@@ -84,6 +85,12 @@ export function KanbanCard({ task, currentUserId, currentUserRoleId, onClick, ov
  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 bg-warning/15 text-warning">
  <Wrench className="h-3 w-3" />
  <span className="text-xs font-medium">Soporte</span>
+ </div>
+ )}
+ {isNew && (
+ <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 bg-info/15 text-info">
+ <Sparkles className="h-3 w-3" />
+ <span className="text-xs font-medium">New</span>
  </div>
  )}
  {isAssignedToMe && (

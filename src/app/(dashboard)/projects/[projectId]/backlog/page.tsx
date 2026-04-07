@@ -28,8 +28,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
- BACKLOG: 'Backlog', TODO: 'Por hacer', IN_PROGRESS: 'En progreso',
- IN_REVIEW: 'En revisión', DONE: 'Completada', CANCELLED: 'Cancelada',
+ BACKLOG: 'Nuevo', TODO: 'Pendiente', IN_PROGRESS: 'En Desarrollo',
+ IN_REVIEW: 'En Revisión', DONE: 'Completada', CANCELLED: 'Cancelada',
 };
 
 const PRIORITY_COLORS: Record<string, string> = {

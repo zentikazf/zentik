@@ -58,9 +58,9 @@ const priorityConfig: Record<string, { color: string; label: string }> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  BACKLOG: 'Backlog',
-  TODO: 'Por Hacer',
-  IN_PROGRESS: 'En Progreso',
+  BACKLOG: 'Nuevo',
+  TODO: 'Pendiente',
+  IN_PROGRESS: 'En Desarrollo',
   IN_REVIEW: 'En Revisión',
   DONE: 'Completada',
   CANCELLED: 'Cancelada',

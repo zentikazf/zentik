@@ -35,9 +35,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 const TASK_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
- BACKLOG: { label: 'Pendiente', color: 'text-muted-foreground', bg: 'bg-muted', icon: Circle },
- TODO: { label: 'Por Hacer', color: 'text-info', bg: 'bg-info/10', icon: Circle },
- IN_PROGRESS: { label: 'En Progreso', color: 'text-primary', bg: 'bg-primary/10', icon: Loader2 },
+ BACKLOG: { label: 'Nuevo', color: 'text-muted-foreground', bg: 'bg-muted', icon: Circle },
+ TODO: { label: 'Pendiente', color: 'text-info', bg: 'bg-info/10', icon: Circle },
+ IN_PROGRESS: { label: 'En Desarrollo', color: 'text-primary', bg: 'bg-primary/10', icon: Loader2 },
  IN_REVIEW: { label: 'En Revisión', color: 'text-info', bg: 'bg-info/10', icon: Clock },
  DONE: { label: 'Completada', color: 'text-success', bg: 'bg-success/10', icon: CheckCircle2 },
  CANCELLED: { label: 'Cancelada', color: 'text-muted-foreground', bg: 'bg-muted', icon: AlertCircle },

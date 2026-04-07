@@ -25,9 +25,9 @@ import { formatDate, formatRelative, getInitials } from '@/lib/utils';
 
 // ── Constant maps ──────────────────────────────────────────────────
 const STATUS_OPTIONS = [
- { value: 'BACKLOG', label: 'Backlog' },
- { value: 'TODO', label: 'Por Hacer' },
- { value: 'IN_PROGRESS', label: 'En Progreso' },
+ { value: 'BACKLOG', label: 'Nuevo' },
+ { value: 'TODO', label: 'Pendiente' },
+ { value: 'IN_PROGRESS', label: 'En Desarrollo' },
  { value: 'IN_REVIEW', label: 'En Revisión' },
  { value: 'DONE', label: 'Completada' },
  { value: 'CANCELLED', label: 'Cancelada' },
