@@ -22,6 +22,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Building, Plus, Search, Pencil, Trash2, FolderKanban, Mail, Phone, Globe, KeyRound, Clock, MoreHorizontal, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -42,6 +49,9 @@ interface Client {
   contractedHours?: number;
   usedHours?: number;
   loanedHours?: number;
+  developmentHourlyRate?: number | null;
+  supportHourlyRate?: number | null;
+  currency?: string;
   _count?: { projects: number };
 }
 
@@ -79,6 +89,9 @@ export default function ClientsPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [developmentHourlyRate, setDevelopmentHourlyRate] = useState('');
+  const [supportHourlyRate, setSupportHourlyRate] = useState('');
+  const [currency, setCurrency] = useState('PYG');
 
   useEffect(() => {
     if (orgId) loadClients();
@@ -104,6 +117,9 @@ export default function ClientsPage() {
     setEmail('');
     setPhone('');
     setNotes('');
+    setDevelopmentHourlyRate('');
+    setSupportHourlyRate('');
+    setCurrency('PYG');
     setDialogOpen(true);
   };
 
@@ -113,6 +129,13 @@ export default function ClientsPage() {
     setEmail(client.email || '');
     setPhone(client.phone || '');
     setNotes(client.notes || '');
+    setDevelopmentHourlyRate(
+      client.developmentHourlyRate != null ? String(client.developmentHourlyRate) : '',
+    );
+    setSupportHourlyRate(
+      client.supportHourlyRate != null ? String(client.supportHourlyRate) : '',
+    );
+    setCurrency(client.currency || 'PYG');
     setDialogOpen(true);
   };
 
@@ -125,6 +148,13 @@ export default function ClientsPage() {
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
         notes: notes.trim() || undefined,
+        developmentHourlyRate: developmentHourlyRate.trim()
+          ? Number(developmentHourlyRate)
+          : undefined,
+        supportHourlyRate: supportHourlyRate.trim()
+          ? Number(supportHourlyRate)
+          : undefined,
+        currency,
       };
 
       if (editing) {
@@ -560,6 +590,52 @@ export default function ClientsPage() {
                 placeholder="Notas sobre el cliente..."
                 rows={3}
               />
+            </div>
+
+            <div className="pt-2 border-t border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">
+                Tarifas por hora
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">Desarrollo</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={developmentHourlyRate}
+                    onChange={(e) => setDevelopmentHourlyRate(e.target.value)}
+                    placeholder="Ej: 250000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Soporte</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={supportHourlyRate}
+                    onChange={(e) => setSupportHourlyRate(e.target.value)}
+                    placeholder="Ej: 300000"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 mt-3">
+                <Label className="text-xs">Moneda</Label>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PYG">PYG - Guaraní</SelectItem>
+                    <SelectItem value="USD">USD - Dólar</SelectItem>
+                    <SelectItem value="EUR">EUR - Euro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Las tarifas se aplican en facturación según el tipo de tarea (desarrollo o soporte).
+              </p>
             </div>
           </div>
           <DialogFooter>

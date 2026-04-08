@@ -101,11 +101,6 @@ export default function BoardPage() {
  setEditingColumn(null);
  };
 
- const handleAddColumn = () => {
- setEditingColumn(null);
- setColumnDialogOpen(true);
- };
-
  const handleEditColumn = (column: any) => {
  setEditingColumn(column);
  setColumnDialogOpen(true);
@@ -237,7 +232,6 @@ export default function BoardPage() {
  currentUserId={user?.id}
  currentUserRoleId={organization?.roleId}
  showOnlyMyTasks={showOnlyMyTasks}
- onAddColumn={handleAddColumn}
  onEditColumn={handleEditColumn}
  onDeleteColumn={handleDeleteColumn}
  onAddTask={handleAddTask}

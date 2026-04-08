@@ -56,6 +56,9 @@ interface HoursSummary {
  usedHours: number;
  loanedHours: number;
  availableHours: number;
+ developmentHourlyRate: number | null;
+ supportHourlyRate: number | null;
+ currency: string;
  transactions: HoursTransaction[];
 }
 
@@ -266,6 +269,33 @@ export default function ClientDetailPage() {
  <p className="text-2xl font-bold text-warning">{(hours?.loanedHours ?? 0).toFixed(1)}h</p>
  </div>
  </div>
+
+ {/* Tarifas por hora */}
+ {hours && (hours.developmentHourlyRate != null || hours.supportHourlyRate != null) && (
+ <div className="mb-5 rounded-xl border border-border bg-muted/30 p-4">
+ <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">
+ Tarifas por hora ({hours.currency || 'PYG'})
+ </p>
+ <div className="grid grid-cols-2 gap-4">
+ <div>
+ <p className="text-[11px] text-muted-foreground">Desarrollo</p>
+ <p className="text-lg font-bold text-foreground">
+ {hours.developmentHourlyRate != null
+ ? new Intl.NumberFormat('es-PY').format(Number(hours.developmentHourlyRate))
+ : '—'}
+ </p>
+ </div>
+ <div>
+ <p className="text-[11px] text-muted-foreground">Soporte</p>
+ <p className="text-lg font-bold text-foreground">
+ {hours.supportHourlyRate != null
+ ? new Intl.NumberFormat('es-PY').format(Number(hours.supportHourlyRate))
+ : '—'}
+ </p>
+ </div>
+ </div>
+ </div>
+ )}
 
  {/* Progress bar */}
  {hours && hours.contractedHours > 0 && (

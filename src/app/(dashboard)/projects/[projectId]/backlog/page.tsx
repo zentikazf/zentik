@@ -147,7 +147,6 @@ export default function TareasPage() {
   if (selectedBoardId) loadBoard(selectedBoardId);
   setEditingColumn(null);
  };
- const handleAddColumn = () => { setEditingColumn(null); setColumnDialogOpen(true); };
  const handleEditColumn = (column: any) => { setEditingColumn(column); setColumnDialogOpen(true); };
  const handleDeleteColumn = async (columnId: string) => {
   if (!board) return;
@@ -255,7 +254,6 @@ export default function TareasPage() {
        currentUserId={user?.id}
        currentUserRoleId={organization?.roleId}
        showOnlyMyTasks={showOnlyMyTasks}
-       onAddColumn={handleAddColumn}
        onEditColumn={handleEditColumn}
        onDeleteColumn={handleDeleteColumn}
        onAddTask={handleAddTask}

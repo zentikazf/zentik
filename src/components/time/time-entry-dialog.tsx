@@ -199,13 +199,28 @@ export function TimeEntryDialog({
  <SelectValue placeholder="Seleccionar tarea..."/>
  </SelectTrigger>
  <SelectContent>
- {tasks.map((t) => (
- <SelectItem key={t.id} value={t.id}>
- {t.identifier ? `${t.identifier} — ` : ''}{t.title}
+ {tasks.map((t) => {
+ const isSupport = t.type === 'SUPPORT';
+ return (
+ <SelectItem
+ key={t.id}
+ value={t.id}
+ disabled={isSupport}
+ >
+ <span className="flex items-center gap-2">
+ <span>{t.identifier ? `${t.identifier} — ` : ''}{t.title}</span>
+ {isSupport && (
+ <span className="text-[10px] text-muted-foreground">(Soporte — no configurable)</span>
+ )}
+ </span>
  </SelectItem>
- ))}
+ );
+ })}
  </SelectContent>
  </Select>
+ <p className="text-[11px] text-muted-foreground">
+ Las tareas de <strong>soporte</strong> descuentan horas automaticamente del cupo del cliente al completarse — no se registran manualmente aqui.
+ </p>
  </div>
 
  {/* Auto-filled data from task */}

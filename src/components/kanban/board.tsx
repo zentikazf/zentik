@@ -19,7 +19,6 @@ import {
 } from '@dnd-kit/sortable';
 import { KanbanColumn } from './column';
 import { KanbanCard } from './card';
-import { Plus } from 'lucide-react';
 import type { BoardColumn, Task } from '@/types';
 import { useBoardStore } from '@/stores/use-board-store';
 import { api, ApiError } from '@/lib/api-client';
@@ -31,7 +30,6 @@ interface KanbanBoardProps {
  currentUserId?: string;
  currentUserRoleId?: string;
  showOnlyMyTasks?: boolean;
- onAddColumn?: () => void;
  onEditColumn?: (column: any) => void;
  onDeleteColumn?: (columnId: string) => void;
  onAddTask?: (columnId: string) => void;
@@ -44,7 +42,6 @@ export function KanbanBoard({
  currentUserId,
  currentUserRoleId,
  showOnlyMyTasks,
- onAddColumn,
  onEditColumn,
  onDeleteColumn,
  onAddTask,
@@ -165,17 +162,6 @@ export function KanbanBoard({
  );
  })}
  </SortableContext>
-
- {/* Add column placeholder */}
- {onAddColumn && (
- <button
- onClick={onAddColumn}
- className="flex h-[calc(100vh-12rem)] w-72 flex-shrink-0 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-primary"
- >
- <Plus className="h-8 w-8"/>
- <span className="text-sm font-medium">Agregar Columna</span>
- </button>
- )}
  </div>
 
  <DragOverlay>
