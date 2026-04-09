@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FolderKanban, Columns3, List, Lock, UserCheck, Check, Archive, FolderOpen, RotateCcw } from 'lucide-react';
+import { Plus, Search, FolderKanban, Columns3, List, Lock, UserCheck, Check, Archive, FolderOpen, RotateCcw, Rocket } from 'lucide-react';
 import { PhaseBadge } from '@/components/ui/phase-badge';
 import { ProjectKanban } from '@/components/project/project-kanban';
 import { api, ApiError } from '@/lib/api-client';
@@ -32,6 +32,8 @@ export default function ProjectsPage() {
  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
  const [view, setView] = useState<'list' | 'kanban'>('kanban');
  const [lifecycleFilter, setLifecycleFilter] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
+ const [filterClient, setFilterClient] = useState<string>('');
+ const [filterStatus, setFilterStatus] = useState<string>('');
 
  useEffect(() => {
  if (orgId) {
@@ -118,9 +120,22 @@ export default function ProjectsPage() {
  }
  };
 
- const filtered = projects.filter((p) =>
- p.name.toLowerCase().includes(search.toLowerCase()),
- );
+ const startDevelopment = async (projectId: string) => {
+ try {
+ await api.patch(`/projects/${projectId}`, { status: 'DEVELOPMENT', pendingClientReview: false });
+ toast.success('Desarrollo iniciado', 'El proyecto pasó a fase de Desarrollo y el cliente fue notificado');
+ await loadProjects();
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al iniciar desarrollo');
+ }
+ };
+
+ const filtered = projects.filter((p) => {
+ const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+ const matchesClient = !filterClient || p.client?.id === filterClient;
+ const matchesStatus = !filterStatus || p.status === filterStatus;
+ return matchesSearch && matchesClient && matchesStatus;
+ });
 
  const statusLabels: Record<string, string> = {
  DISCOVERY: 'Descubrimiento',
@@ -247,9 +262,31 @@ export default function ProjectsPage() {
  </Dialog>
  </div>
 
- <div className="relative max-w-sm">
+ <div className="flex flex-col sm:flex-row gap-3">
+ <div className="relative max-w-sm flex-1">
  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
  <Input placeholder="Buscar proyectos..."className="pl-9 h-9"value={search} onChange={(e) => setSearch(e.target.value)} />
+ </div>
+ {clients.length > 0 && (
+ <Select value={filterClient || 'all'} onValueChange={(v) => setFilterClient(v === 'all' ? '' : v)}>
+ <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Cliente" /></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="all">Todos los clientes</SelectItem>
+ {clients.map((c) => (
+ <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ )}
+ <Select value={filterStatus || 'all'} onValueChange={(v) => setFilterStatus(v === 'all' ? '' : v)}>
+ <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Estado" /></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="all">Todos los estados</SelectItem>
+ {Object.entries(statusLabels).map(([key, label]) => (
+ <SelectItem key={key} value={key}>{label}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
  </div>
 
  {view === 'kanban' ? (
@@ -316,6 +353,20 @@ export default function ProjectsPage() {
  }}
  >
  <Check className="mr-2 h-4 w-4" /> Aceptar Proyecto
+ </Button>
+ )}
+ {project.status === 'DISCOVERY' && !project.pendingClientReview && project.lifecycleStatus === 'ACTIVE' && (
+ <Button
+ size="sm"
+ variant="outline"
+ className="mt-3 w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+ onClick={(e) => {
+ e.preventDefault();
+ e.stopPropagation();
+ startDevelopment(project.id);
+ }}
+ >
+ <Rocket className="mr-2 h-4 w-4" /> Iniciar Desarrollo
  </Button>
  )}
  {(project.lifecycleStatus === 'DISABLED' || project.lifecycleStatus === 'ARCHIVED') && (

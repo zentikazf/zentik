@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -24,6 +24,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useNotificationStore } from '@/stores/use-notification-store';
+import { useOrg } from '@/providers/org-provider';
+import { api } from '@/lib/api-client';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NotificationPanel } from '@/components/notifications/notification-panel';
 
@@ -52,11 +54,20 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  const [collapsed, setCollapsed] = useState(false);
  const [notifOpen, setNotifOpen] = useState(false);
+ const [pendingProjectsCount, setPendingProjectsCount] = useState(0);
  const pathname = usePathname();
  const { user, logout } = useAuth();
  const { hasPermission, roleName } = usePermissions();
  const { theme, setTheme } = useTheme();
  const { unreadCount } = useNotificationStore();
+ const { orgId } = useOrg();
+
+ useEffect(() => {
+ if (!orgId || !hasPermission('read:projects')) return;
+ api.get(`/organizations/${orgId}/projects/pending-count`)
+ .then((res) => setPendingProjectsCount(res.data?.count ?? 0))
+ .catch(() => {});
+ }, [orgId]);
 
  const isActive = (href: string) => {
  if (href === '/dashboard') return pathname === '/' || pathname === '/dashboard';
@@ -70,6 +81,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  const renderNavItem = (item: NavItem) => {
  const active = isActive(item.href);
  const Icon = item.icon;
+ const badge = item.href === '/projects' && pendingProjectsCount > 0 ? pendingProjectsCount : 0;
 
  return (
  <Link
@@ -85,8 +97,24 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  )}
  title={collapsed ? item.name : undefined}
  >
- <Icon className="h-5 w-5 shrink-0"/>
- {!collapsed && <span className="animate-fade-in">{item.name}</span>}
+ <div className="relative shrink-0">
+ <Icon className="h-5 w-5"/>
+ {badge > 0 && collapsed && (
+ <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-0.5 text-[10px] font-bold text-warning-foreground">
+ {badge > 9 ? '9+' : badge}
+ </span>
+ )}
+ </div>
+ {!collapsed && (
+ <span className="flex-1 animate-fade-in flex items-center justify-between">
+ {item.name}
+ {badge > 0 && (
+ <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-bold text-warning-foreground">
+ {badge}
+ </span>
+ )}
+ </span>
+ )}
  </Link>
  );
  };

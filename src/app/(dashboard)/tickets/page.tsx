@@ -21,6 +21,8 @@ import {
  Clock,
  MessageSquare,
  Filter,
+ ShieldAlert,
+ AlertTriangle,
 } from 'lucide-react';
 import {
  DropdownMenu,
@@ -32,6 +34,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
+interface CategoryConfig {
+ id: string;
+ name: string;
+ criticality: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
 interface Ticket {
  id: string;
  title: string;
@@ -39,10 +47,17 @@ interface Ticket {
  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
  category: string;
  priority: string;
+ criticality?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+ slaResponseBreached?: boolean;
+ slaResolutionBreached?: boolean;
+ responseDeadline?: string | null;
+ resolutionDeadline?: string | null;
  client?: { id: string; name: string; email?: string };
  project?: { id: string; name: string; slug?: string };
  task?: { id: string; title: string; status: string } | null;
  channel?: { id: string; name: string; _count?: { messages: number } } | null;
+ categoryConfig?: { id: string; name: string; criticality: string } | null;
+ createdByUser?: { id: string; name: string } | null;
  createdAt: string;
 }
 
@@ -63,15 +78,21 @@ const statusConfig: Record<string, { label: string; className: string }> = {
  CLOSED: { label: 'Cerrado', className: 'bg-muted text-muted-foreground border-transparent' },
 };
 
-const categoryConfig: Record<string, { label: string; className: string }> = {
- SUPPORT_REQUEST: { label: 'Soporte', className: 'bg-muted text-muted-foreground' },
- NEW_DEVELOPMENT: { label: 'Desarrollo', className: 'bg-muted text-muted-foreground' },
+const categoryLabelMap: Record<string, string> = {
+ SUPPORT_REQUEST: 'Soporte',
+ NEW_DEVELOPMENT: 'Desarrollo',
 };
 
 const priorityConfig: Record<string, { label: string; className: string }> = {
  HIGH: { label: 'Alta', className: 'text-destructive' },
  MEDIUM: { label: 'Media', className: 'text-warning' },
  LOW: { label: 'Baja', className: 'text-muted-foreground' },
+};
+
+const criticalityConfig: Record<string, { label: string; className: string }> = {
+ HIGH: { label: 'Alta', className: 'bg-destructive/10 text-destructive' },
+ MEDIUM: { label: 'Media', className: 'bg-warning/10 text-warning' },
+ LOW: { label: 'Baja', className: 'bg-muted text-muted-foreground' },
 };
 
 export default function TicketsPage() {
@@ -87,6 +108,7 @@ export default function TicketsPage() {
  const [creating, setCreating] = useState(false);
  const [clients, setClients] = useState<{ id: string; name: string; portalEnabled?: boolean }[]>([]);
  const [clientProjects, setClientProjects] = useState<{ id: string; name: string }[]>([]);
+ const [categoryConfigs, setCategoryConfigs] = useState<CategoryConfig[]>([]);
  const [form, setForm] = useState({
  clientId: '',
  projectId: '',
@@ -94,6 +116,7 @@ export default function TicketsPage() {
  description: '',
  category: '',
  priority: 'MEDIUM',
+ categoryConfigId: '',
  });
 
  useEffect(() => {
@@ -103,10 +126,13 @@ export default function TicketsPage() {
  const list = res.data?.data || (Array.isArray(res.data) ? res.data : []);
  setClients(list);
  }).catch(() => {});
+ api.get(`/organizations/${orgId}/ticket-categories`).then((res) => {
+ const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+ setCategoryConfigs(list.filter((c: any) => c.isActive !== false));
+ }).catch(() => {});
  }
  }, [orgId]);
 
- // Load projects when client changes
  useEffect(() => {
  if (form.clientId && form.clientId !== 'none') {
  api.get(`/organizations/${orgId}/projects?clientId=${form.clientId}`).then((res) => {
@@ -152,10 +178,11 @@ export default function TicketsPage() {
  description: form.description.trim() || undefined,
  category: form.category,
  priority: form.priority,
+ ...(form.categoryConfigId && { categoryConfigId: form.categoryConfigId }),
  });
  toast.success('Ticket creado', 'El ticket fue creado exitosamente');
  setShowCreate(false);
- setForm({ clientId: '', projectId: '', title: '', description: '', category: '', priority: 'MEDIUM' });
+ setForm({ clientId: '', projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', categoryConfigId: '' });
  await loadTickets();
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear el ticket');
@@ -165,9 +192,11 @@ export default function TicketsPage() {
  };
 
  const filtered = tickets.filter((t) => {
+ const q = search.toLowerCase();
  const matchesSearch =
- t.title.toLowerCase().includes(search.toLowerCase()) ||
- (t.client?.name || '').toLowerCase().includes(search.toLowerCase());
+ t.title.toLowerCase().includes(q) ||
+ t.id.toLowerCase().includes(q) ||
+ (t.client?.name || '').toLowerCase().includes(q);
  const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
  const matchesPriority = !filterPriority || t.priority === filterPriority;
  const matchesCategory = !filterCategory || t.category === filterCategory;
@@ -191,6 +220,15 @@ export default function TicketsPage() {
  } catch {
  return dateStr;
  }
+ };
+
+ const isSlaBreached = (t: Ticket) => t.slaResponseBreached || t.slaResolutionBreached;
+
+ const getSlaLabel = (t: Ticket) => {
+ if (t.slaResponseBreached && t.slaResolutionBreached) return 'SLA Vencido (respuesta + resolución)';
+ if (t.slaResponseBreached) return 'SLA Respuesta vencido';
+ if (t.slaResolutionBreached) return 'SLA Resolución vencido';
+ return '';
  };
 
  if (loading) {
@@ -285,6 +323,22 @@ export default function TicketsPage() {
  </Select>
  </div>
  </div>
+ {categoryConfigs.length > 0 && (
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Categoría SLA</Label>
+ <Select value={form.categoryConfigId || 'none'} onValueChange={(v) => setForm({ ...form, categoryConfigId: v === 'none' ? '' : v })}>
+ <SelectTrigger><SelectValue placeholder="Sin categoría SLA"/></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="none">Sin categoría SLA</SelectItem>
+ {categoryConfigs.map((c) => (
+ <SelectItem key={c.id} value={c.id}>
+ {c.name} — <span className={cn('text-xs', criticalityConfig[c.criticality]?.className)}>{criticalityConfig[c.criticality]?.label}</span>
+ </SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ </div>
+ )}
  <Button type="submit" className="w-full" disabled={creating}>
  {creating ? 'Creando...' : 'Crear ticket'}
  </Button>
@@ -297,7 +351,7 @@ export default function TicketsPage() {
  <div className="flex flex-col sm:flex-row gap-3">
  <div className="relative max-w-sm flex-1">
  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
- <Input placeholder="Buscar tickets..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
+ <Input placeholder="Buscar por titulo, ID o cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
  </div>
  <div className="flex items-center gap-1.5 flex-wrap">
  {statusFilters.map((sf) => (
@@ -334,7 +388,7 @@ export default function TicketsPage() {
  <DropdownMenuLabel>Tipo</DropdownMenuLabel>
  {(['SUPPORT_REQUEST', 'NEW_DEVELOPMENT'] as const).map((t) => (
  <DropdownMenuCheckboxItem key={t} checked={filterCategory === t} onCheckedChange={(checked) => setFilterCategory(checked ? t : null)}>
- {categoryConfig[t]?.label || t}
+ {categoryLabelMap[t] || t}
  </DropdownMenuCheckboxItem>
  ))}
  {clients.length > 0 && (
@@ -366,22 +420,41 @@ export default function TicketsPage() {
  {filtered.map((ticket) => {
  const status = statusConfig[ticket.status] || statusConfig.OPEN;
  const priority = priorityConfig[ticket.priority] || priorityConfig.MEDIUM;
- const category = categoryConfig[ticket.category] || categoryConfig.SUPPORT_REQUEST;
+ const catLabel = ticket.categoryConfig?.name || categoryLabelMap[ticket.category] || ticket.category;
+ const crit = ticket.criticality || ticket.categoryConfig?.criticality;
+ const critStyle = crit ? criticalityConfig[crit] : null;
+ const breached = isSlaBreached(ticket);
 
  return (
  <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
- <div className="rounded-xl border border-border bg-card p-4 hover:shadow-sm transition-shadow cursor-pointer flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+ <div className={cn(
+ 'rounded-xl border bg-card p-4 hover:shadow-sm transition-shadow cursor-pointer flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4',
+ breached ? 'border-destructive/50' : 'border-border',
+ )}>
  <AlertCircle className={cn('h-5 w-5 shrink-0 hidden sm:block mt-0.5', priority.className)}/>
  <div className="flex-1 min-w-0">
  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
  <div>
+ <div className="flex items-center gap-2">
  <h3 className="text-sm font-medium text-foreground">{ticket.title}</h3>
+ {breached && (
+ <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive" title={getSlaLabel(ticket)}>
+ <ShieldAlert className="h-3 w-3" /> SLA Vencido
+ </span>
+ )}
+ </div>
  <div className="flex items-center gap-2 mt-1 flex-wrap">
+ <span className="text-[10px] font-mono text-muted-foreground/60">{ticket.id.slice(-8)}</span>
  <span className="text-xs text-muted-foreground">{ticket.client?.name || 'Sin cliente'}</span>
  <Badge className={status.className}>{status.label}</Badge>
- <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs', category.className)}>
- {category.label}
+ <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+ {catLabel}
  </span>
+ {critStyle && (
+ <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', critStyle.className)}>
+ <AlertTriangle className="h-2.5 w-2.5" /> {critStyle.label}
+ </span>
+ )}
  </div>
  </div>
  <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">

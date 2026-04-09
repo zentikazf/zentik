@@ -44,9 +44,16 @@ interface ProjectOption {
  name: string;
 }
 
+interface DynamicCategory {
+ id: string;
+ name: string;
+ description?: string;
+}
+
 export default function PortalTicketsPage() {
  const [tickets, setTickets] = useState<TicketItem[]>([]);
  const [projects, setProjects] = useState<ProjectOption[]>([]);
+ const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
  const [loading, setLoading] = useState(true);
  const [showCreate, setShowCreate] = useState(false);
  const [creating, setCreating] = useState(false);
@@ -66,12 +73,15 @@ export default function PortalTicketsPage() {
 
  const loadData = async () => {
  try {
- const [ticketsRes, projectsRes] = await Promise.all([
+ const [ticketsRes, projectsRes, catRes] = await Promise.all([
  api.get<any>('/portal/tickets'),
  api.get<any>('/portal/projects'),
+ api.get<any>('/portal/ticket-categories').catch(() => ({ data: [] })),
  ]);
  setTickets(Array.isArray(ticketsRes.data) ? ticketsRes.data : ticketsRes.data?.data || []);
  setProjects(Array.isArray(projectsRes.data) ? projectsRes.data : projectsRes.data?.data || []);
+ const cats = Array.isArray(catRes.data) ? catRes.data : catRes.data?.data || [];
+ setDynamicCategories(cats);
  } catch {
  toast.error('Error', 'Error al cargar los tickets');
  } finally {
@@ -179,6 +189,9 @@ export default function PortalTicketsPage() {
  <SelectContent>
  <SelectItem value="SUPPORT_REQUEST">Soporte / Error</SelectItem>
  <SelectItem value="NEW_PROJECT">Nuevo Proyecto</SelectItem>
+ {dynamicCategories.map((dc) => (
+ <SelectItem key={dc.id} value={`dynamic:${dc.id}`}>{dc.name}</SelectItem>
+ ))}
  </SelectContent>
  </Select>
  </div>

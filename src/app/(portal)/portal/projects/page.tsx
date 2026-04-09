@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FolderKanban, MessageSquarePlus, Clock, CheckCircle2, ArrowRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
@@ -35,6 +36,7 @@ interface PortalProject {
 export default function PortalProjectsPage() {
  const [projects, setProjects] = useState<PortalProject[]>([]);
  const [loading, setLoading] = useState(true);
+ const [filterStatus, setFilterStatus] = useState<string>('');
 
  useEffect(() => {
  async function load() {
@@ -71,9 +73,20 @@ export default function PortalProjectsPage() {
  <h1 className="text-2xl font-bold text-foreground">Mis Proyectos</h1>
  <p className="text-sm text-muted-foreground mt-1">Gestiona y visualiza el progreso de tus proyectos activos</p>
  </div>
+ <div className="flex items-center gap-3">
+ <Select value={filterStatus || 'all'} onValueChange={(v) => setFilterStatus(v === 'all' ? '' : v)}>
+ <SelectTrigger className="w-[170px] h-9"><SelectValue placeholder="Estado" /></SelectTrigger>
+ <SelectContent>
+ <SelectItem value="all">Todos</SelectItem>
+ {Object.entries(STATUS_CONFIG).map(([key, conf]) => (
+ <SelectItem key={key} value={key}>{conf.label}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
  <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-1.5">
  <FolderKanban className="h-4 w-4 text-primary"/>
  <span className="text-sm font-semibold text-primary">{projects.length} Total</span>
+ </div>
  </div>
  </div>
 
@@ -89,7 +102,7 @@ export default function PortalProjectsPage() {
  </div>
  ) : (
  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
- {projects.map((project) => {
+ {projects.filter((p) => !filterStatus || p.status === filterStatus).map((project) => {
  const config = STATUS_CONFIG[project.status] || STATUS_CONFIG.DEFINITION;
  return (
  <Link

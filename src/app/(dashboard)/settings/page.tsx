@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Shield, CreditCard, Puzzle, History, Building2 } from 'lucide-react';
+import { Users, Shield, CreditCard, Puzzle, History, Building2, TicketCheck } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/use-permissions';
 
@@ -18,6 +18,7 @@ const settingsLinks: SettingsLink[] = [
   { title: 'Roles y Permisos', description: 'Configurar roles y control de acceso', href: '/settings/roles', icon: Shield },
   { title: 'Facturacion', description: 'Gestionar suscripcion y detalles de facturacion', href: '/settings/billing', icon: CreditCard },
   { title: 'Integraciones', description: 'Conectar servicios de terceros', href: '/settings/integrations', icon: Puzzle },
+  { title: 'SLA y Categorías', description: 'Configurar SLA, categorías de ticket y horario hábil', href: '/settings/sla', icon: TicketCheck },
   { title: 'Registro de Actividad', description: 'Historial de acciones de la organizacion', href: '/settings/audit-log', icon: History, ownerOnly: true },
 ];
 
