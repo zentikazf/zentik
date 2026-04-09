@@ -2,22 +2,27 @@
 
 import { useCallback } from 'react';
 import { useAuth } from './use-auth';
+import { useOrg } from '@/providers/org-provider';
 
 export function usePermissions() {
   const { organizations } = useAuth();
-  const org = organizations[0];
-  const roleName = org?.roleName ?? '';
-  // Owner always gets full access even if DB permissions are empty
+  const { orgId } = useOrg();
+
+  // Resolvemos la org activa (no siempre es la primera del listado).
+  const activeOrg = organizations.find((o) => o.id === orgId) ?? organizations[0];
+  const roleName = activeOrg?.roleName ?? '';
+
+  // Owner siempre tiene acceso total aunque el DB esté vacío.
   const permissions = roleName === 'Owner'
     ? ['*:*']
-    : (org?.permissions ?? []);
+    : (activeOrg?.permissions ?? []);
 
   const hasPermission = useCallback(
     (permission: string): boolean => {
       if (permissions.includes('*:*')) return true;
       if (permissions.includes(permission)) return true;
 
-      // "manage:X" implicitly grants "read:X"
+      // "manage:X" implícitamente otorga "read:X"
       const [action, resource] = permission.split(':');
       if (action === 'read') {
         return permissions.includes(`manage:${resource}`);

@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getInitials } from '@/lib/utils';
 import {
   FolderKanban,
   CheckCircle,
@@ -21,15 +23,6 @@ import {
   Target,
   CalendarDays,
   TrendingUp,
-  Activity,
-  Zap,
-  FileText,
-  MessageSquare,
-  UserPlus,
-  Edit3,
-  Trash2,
-  BarChart3,
-  ArrowUpRight,
   Timer,
   Flame,
   ListChecks,
@@ -73,64 +66,6 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Cancelada',
 };
 
-const activityIcons: Record<string, typeof Activity> = {
-  'task.created': Zap,
-  'task.updated': Edit3,
-  'task.completed': CheckCircle,
-  'task.deleted': Trash2,
-  'task.assigned': UserPlus,
-  'task.status.changed': ArrowUpRight,
-  'task.approval.requested': Clock,
-  'task.approval.approved': CheckCircle,
-  'task.approval.rejected': AlertTriangle,
-  'subtask.created': Zap,
-  'project.created': FolderKanban,
-  'project.updated': Edit3,
-  'sprint.created': BarChart3,
-  'sprint.started': ArrowUpRight,
-  'sprint.completed': CheckCircle,
-  'file.uploaded': FileText,
-  'suggestion.created': MessageSquare,
-  'meeting.created': CalendarDays,
-  'meeting.updated': CalendarDays,
-  'meeting.deleted': Trash2,
-  'organization.member.joined': UserPlus,
-  'organization.member.removed': Trash2,
-  'task.label.added': Target,
-  'task.label.removed': Target,
-};
-
-const activityLabels: Record<string, string> = {
-  'task.created': 'creó una tarea',
-  'task.updated': 'actualizó una tarea',
-  'task.completed': 'completó una tarea',
-  'task.deleted': 'eliminó una tarea',
-  'task.assigned': 'asignó una tarea',
-  'task.unassigned': 'desasignó una tarea',
-  'task.status.changed': 'cambió el estado de una tarea',
-  'task.label.added': 'agregó etiqueta',
-  'task.label.removed': 'removió etiqueta',
-  'task.approval.requested': 'solicitó aprobación de tarea',
-  'task.approval.approved': 'aprobó una tarea',
-  'task.approval.rejected': 'rechazó una tarea',
-  'subtask.created': 'creó una subtarea',
-  'project.created': 'creó un proyecto',
-  'project.updated': 'actualizó un proyecto',
-  'sprint.created': 'creó un sprint',
-  'sprint.started': 'inició un sprint',
-  'sprint.completed': 'completó un sprint',
-  'file.uploaded': 'subió un archivo',
-  'file.deleted': 'eliminó un archivo',
-  'suggestion.created': 'envió una sugerencia',
-  'board.column.created': 'creó una columna',
-  'board.column.updated': 'actualizó una columna',
-  'meeting.created': 'programó una reunión',
-  'meeting.updated': 'actualizó una reunión',
-  'meeting.deleted': 'canceló una reunión',
-  'organization.member.joined': 'se unió a la organización',
-  'organization.member.removed': 'fue removido de la organización',
-};
-
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function timeAgo(dateStr: string): string {
@@ -154,23 +89,28 @@ function formatHours(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function getActivityDetail(entry: any): string {
-  if (entry.action === 'task.status.changed' && entry.newData?.fromStatus && entry.newData?.toStatus) {
-    return `${STATUS_LABELS[entry.newData.fromStatus] || entry.newData.fromStatus} → ${STATUS_LABELS[entry.newData.toStatus] || entry.newData.toStatus}`;
+function complianceColor(status: 'GREEN' | 'ORANGE' | 'RED'): { bar: string; badge: string; label: string } {
+  switch (status) {
+    case 'GREEN':
+      return {
+        bar: 'bg-success',
+        badge: 'bg-success/15 text-success',
+        label: 'En cumplimiento',
+      };
+    case 'ORANGE':
+      return {
+        bar: 'bg-warning',
+        badge: 'bg-warning/15 text-warning',
+        label: 'Por debajo',
+      };
+    case 'RED':
+    default:
+      return {
+        bar: 'bg-destructive',
+        badge: 'bg-destructive/15 text-destructive',
+        label: 'Crítico',
+      };
   }
-  if ((entry.action === 'task.label.added' || entry.action === 'task.label.removed') && entry.newData?.labelName) {
-    return entry.newData.labelName;
-  }
-  if (entry.action === 'organization.member.joined' && entry.newData?.userName) {
-    return `${entry.newData.userName} como ${entry.newData.roleName || 'miembro'}`;
-  }
-  if (entry.action === 'organization.member.removed' && entry.newData?.userName) {
-    return entry.newData.userName;
-  }
-  if ((entry.action === 'meeting.created' || entry.action === 'subtask.created') && entry.newData?.title) {
-    return entry.newData.title;
-  }
-  return '';
 }
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -192,7 +132,6 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [recentProjects, setRecentProjects] = useState<any[]>([]);
   const [approvals, setApprovals] = useState<any[]>([]);
-  const [activityLog, setActivityLog] = useState<any[]>([]);
   const [orgTimeData, setOrgTimeData] = useState<any>(null);
 
   // Personal metrics state (for all roles)
@@ -212,7 +151,6 @@ export default function DashboardPage() {
   // Permissions
   const canSeeProjects = hasPermission('read:projects');
   const canManageProjects = hasPermission('manage:projects');
-  const canSeeAudit = hasPermission('read:audit');
   const isManagerial = canSeeProjects && canManageProjects;
 
   const loadDashboard = useCallback(async () => {
@@ -226,8 +164,9 @@ export default function DashboardPage() {
     try {
       const res = await api.get<any>(`/organizations/${orgId}/dashboard${qs ? `?${qs}` : ''}`);
       setDashboardData(res.data);
-    } catch {
-      // Silently fall back
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'No se pudo actualizar el dashboard';
+      toast.error('Error', message);
     }
   }, [orgId, isManagerial, filterStartDate, filterEndDate, filterClientId, filterMemberId]);
 
@@ -259,12 +198,6 @@ export default function DashboardPage() {
         if (canManageProjects) {
           promises.push(
             api.get<any>(`/organizations/${orgId}/approvals`).catch(() => ({ data: [] })),
-          );
-        }
-
-        if (canSeeAudit) {
-          promises.push(
-            api.get<any>(`/organizations/${orgId}/audit-log?limit=8`).catch(() => ({ data: [] })),
           );
         }
 
@@ -329,11 +262,6 @@ export default function DashboardPage() {
           setApprovals(Array.isArray(approvalsData) ? approvalsData : []);
         }
 
-        if (canSeeAudit) {
-          const auditData = results[idx++]?.data;
-          setActivityLog(Array.isArray(auditData) ? auditData : auditData?.data || []);
-        }
-
         if (!isManagerial && canSeeProjects) {
           const orgTime = results[idx++]?.data;
           setOrgTimeData(orgTime);
@@ -346,12 +274,23 @@ export default function DashboardPage() {
       }
     };
     load();
-  }, [orgId, canSeeProjects, canManageProjects, canSeeAudit, isManagerial]);
+  }, [orgId, canSeeProjects, canManageProjects, isManagerial]);
 
-  // Reload dashboard when filters change
+  // Reload dashboard when filters change (post initial load).
   useEffect(() => {
-    if (!loading && isManagerial) loadDashboard();
-  }, [filterStartDate, filterEndDate, filterClientId, filterMemberId]);
+    if (loading || !isManagerial) return;
+    loadDashboard();
+  }, [loading, isManagerial, loadDashboard]);
+
+  // Mantener opciones del filtro de miembros sincronizadas con el snapshot
+  // del backend, pero sin vaciarlas si se aplica un filtro por memberId.
+  useEffect(() => {
+    if (filterMemberId) return;
+    const items = dashboardData?.teamMembers?.items;
+    if (Array.isArray(items)) {
+      setMembers(items.map((m: any) => ({ id: m.id, name: m.name })));
+    }
+  }, [dashboardData, filterMemberId]);
 
   // ── Loading state ─────────────────────────────────────────────────
 
@@ -465,7 +404,14 @@ export default function DashboardPage() {
       {/* ═══════════════════════════════════════════════════════════════
           CUPO 1: Dashboard Gerencial (Owner, PM, PO, Tech Lead)
           ═══════════════════════════════════════════════════════════════ */}
-      {isManagerial && dashboardData ? (
+      {isManagerial ? (
+        !dashboardData ? (
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-[120px] rounded-xl" />
+            ))}
+          </div>
+        ) : (
         <>
           {/* ── Filtros ──────────────────────────────────────────────── */}
           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
@@ -669,64 +615,95 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ── Activity Feed ─────────────────────────────────────────── */}
-          {canSeeAudit && activityLog.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" />
-                  <h2 className="text-base font-semibold text-card-foreground">Actividad Reciente</h2>
+          {/* ── Equipo con Cumplimiento de Horas ─────────────────────── */}
+          {dashboardData.teamMembers?.items && dashboardData.teamMembers.items.length > 0 && (() => {
+            const team = dashboardData.teamMembers.items as any[];
+            const thresholds = dashboardData.teamMembers.thresholds || { green: 120, orange: 100 };
+            const greenMin = thresholds.green;
+            const orangeMin = thresholds.orange;
+            const counts = team.reduce(
+              (acc, m) => {
+                acc[m.complianceStatus] = (acc[m.complianceStatus] || 0) + 1;
+                return acc;
+              },
+              { GREEN: 0, ORANGE: 0, RED: 0 } as Record<'GREEN' | 'ORANGE' | 'RED', number>,
+            );
+            const monthLabel = new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            return (
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    <h2 className="text-base font-semibold text-card-foreground">Equipo</h2>
+                    <Badge variant="info" className="text-[10px]">
+                      {team.length} miembro{team.length !== 1 ? 's' : ''}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground capitalize">{monthLabel}</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-success font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" /> {counts.GREEN}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-warning font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-warning" /> {counts.ORANGE}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-destructive font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-destructive" /> {counts.RED}
+                    </span>
+                  </div>
                 </div>
-                <Badge variant="info" className="text-[10px]">
-                  {activityLog.length} eventos
-                </Badge>
-              </div>
-              <div className="relative">
-                <div className="absolute left-[19px] top-2 bottom-2 w-px bg-border" />
-                <div className="space-y-0.5">
-                  {activityLog.map((entry: any, i: number) => {
-                    const IconComp = activityIcons[entry.action] || Activity;
-                    const label = activityLabels[entry.action] || entry.action;
-                    const resourceName = entry.newData?.title || entry.newData?.name || entry.resourceId?.slice(0, 8);
-                    const detail = getActivityDetail(entry);
-
+                <p className="mb-4 text-[11px] text-muted-foreground">
+                  Cumplimiento mensual · Verde ≥ {greenMin}h · Naranja {orangeMin}–{greenMin - 1}h · Rojo &lt; {orangeMin}h
+                </p>
+                <div className="space-y-3">
+                  {team.map((m) => {
+                    const status = (m.complianceStatus || 'RED') as 'GREEN' | 'ORANGE' | 'RED';
+                    const colors = complianceColor(status);
+                    // El ancho de la barra se escala a greenMin para que "completar" sea llegar a verde.
+                    const pct = Math.min(100, Math.max(0, (m.monthlyHours / greenMin) * 100));
+                    const initials = getInitials(m.name || '');
                     return (
-                      <div
-                        key={entry.id || i}
-                        className="relative flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/50"
-                      >
-                        <div className="relative z-10 flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-muted ring-4 ring-card">
-                          <IconComp className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div className="flex-1 min-w-0 pt-1">
-                          <p className="text-sm text-muted-foreground">
-                            <span className="font-medium text-card-foreground">
-                              {entry.user?.name || entry.newData?.userName || 'Sistema'}
-                            </span>{' '}
-                            {label}
-                            {resourceName && (
-                              <>
-                                {' '}
-                                <span className="font-medium text-foreground/70">
-                                  &quot;{resourceName}&quot;
-                                </span>
-                              </>
-                            )}
-                          </p>
-                          {detail && (
-                            <p className="mt-0.5 text-xs font-medium text-primary">{detail}</p>
-                          )}
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {timeAgo(entry.createdAt)}
-                          </p>
+                      <div key={m.id} className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9">
+                          {m.image && <AvatarImage src={m.image} alt={m.name} />}
+                          <AvatarFallback className="bg-primary/15 text-[10px] font-semibold text-primary">
+                            {initials || '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-card-foreground">{m.name}</p>
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {m.role || 'Sin rol'}
+                                {typeof m.activeTasks === 'number' && (
+                                  <> · {m.activeTasks} activa{m.activeTasks !== 1 ? 's' : ''}</>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.badge}`}>
+                                {colors.label}
+                              </span>
+                              <span className="text-sm font-semibold tabular-nums text-card-foreground">
+                                {m.monthlyHours}h
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${colors.bar}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── Approvals ─────────────────────────────────────────────── */}
           {approvals.length > 0 && (
@@ -872,6 +849,7 @@ export default function DashboardPage() {
             </DialogContent>
           </Dialog>
         </>
+        )
       ) : (
         /* ═══════════════════════════════════════════════════════════════
            CUPO 2: Dashboard Operativo (Developer, QA, Designer, etc.)
@@ -1183,65 +1161,6 @@ export default function DashboardPage() {
                     </Link>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* ── Activity Feed ──────────────────────────────────────── */}
-          {canSeeAudit && activityLog.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" />
-                  <h2 className="text-base font-semibold text-card-foreground">Actividad Reciente</h2>
-                </div>
-                <Badge variant="info" className="text-[10px]">
-                  {activityLog.length} eventos
-                </Badge>
-              </div>
-              <div className="relative">
-                <div className="absolute left-[19px] top-2 bottom-2 w-px bg-border" />
-                <div className="space-y-0.5">
-                  {activityLog.map((entry: any, i: number) => {
-                    const IconComp = activityIcons[entry.action] || Activity;
-                    const label = activityLabels[entry.action] || entry.action;
-                    const resourceName = entry.newData?.title || entry.newData?.name || entry.resourceId?.slice(0, 8);
-                    const detail = getActivityDetail(entry);
-
-                    return (
-                      <div
-                        key={entry.id || i}
-                        className="relative flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/50"
-                      >
-                        <div className="relative z-10 flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-muted ring-4 ring-card">
-                          <IconComp className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div className="flex-1 min-w-0 pt-1">
-                          <p className="text-sm text-muted-foreground">
-                            <span className="font-medium text-card-foreground">
-                              {entry.user?.name || entry.newData?.userName || 'Sistema'}
-                            </span>{' '}
-                            {label}
-                            {resourceName && (
-                              <>
-                                {' '}
-                                <span className="font-medium text-foreground/70">
-                                  &quot;{resourceName}&quot;
-                                </span>
-                              </>
-                            )}
-                          </p>
-                          {detail && (
-                            <p className="mt-0.5 text-xs font-medium text-primary">{detail}</p>
-                          )}
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {timeAgo(entry.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           )}
