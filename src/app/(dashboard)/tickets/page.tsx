@@ -171,7 +171,7 @@ export default function TicketsPage() {
 
  setCreating(true);
  try {
- await api.post(`/organizations/${orgId}/tickets`, {
+ const res = await api.post<any>(`/organizations/${orgId}/tickets`, {
  clientId: form.clientId,
  projectId: form.projectId,
  title: form.title.trim(),
@@ -180,7 +180,8 @@ export default function TicketsPage() {
  priority: form.priority,
  ...(form.categoryConfigId && { categoryConfigId: form.categoryConfigId }),
  });
- toast.success('Ticket creado', 'El ticket fue creado exitosamente');
+ const newId = res.data?.id ? `#${res.data.id.slice(-8).toUpperCase()}` : '';
+ toast.success('Ticket creado', `Ticket ${newId} creado exitosamente`);
  setShowCreate(false);
  setForm({ clientId: '', projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', categoryConfigId: '' });
  await loadTickets();
@@ -444,7 +445,7 @@ export default function TicketsPage() {
  )}
  </div>
  <div className="flex items-center gap-2 mt-1 flex-wrap">
- <span className="text-[10px] font-mono text-muted-foreground/60">{ticket.id.slice(-8)}</span>
+ <span className="text-[10px] font-mono text-muted-foreground/60">#{ticket.id.slice(-8).toUpperCase()}</span>
  <span className="text-xs text-muted-foreground">{ticket.client?.name || 'Sin cliente'}</span>
  <Badge className={status.className}>{status.label}</Badge>
  <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">

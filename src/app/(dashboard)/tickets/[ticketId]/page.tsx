@@ -47,11 +47,23 @@ interface TicketDetail {
  channel: { id: string; name: string; _count?: { messages: number } } | null;
 }
 
+interface ChatFile {
+ id: string;
+ name: string;
+ originalName: string;
+ mimeType: string;
+ size: number;
+ key: string;
+ url: string;
+}
+
 interface ChatMessage {
  id: string;
  content: string;
  createdAt: string;
+ senderType?: 'client' | 'team';
  user: { id: string; name: string; image: string | null };
+ files?: ChatFile[];
 }
 
 export default function TicketDetailPage() {
@@ -67,6 +79,8 @@ export default function TicketDetailPage() {
  const [adminNotes, setAdminNotes] = useState('');
  const [savingNotes, setSavingNotes] = useState(false);
  const [changingStatus, setChangingStatus] = useState(false);
+ const [uploading, setUploading] = useState(false);
+ const fileInputRef = useRef<HTMLInputElement>(null);
  const scrollRef = useRef<HTMLDivElement>(null);
 
  const { joinRoom, leaveRoom } = useSocket({
@@ -75,7 +89,9 @@ export default function TicketDetailPage() {
  id: data.id,
  content: data.content,
  createdAt: data.createdAt,
+ senderType: data.senderType || 'team',
  user: data.user || { id: '', name: 'Sistema', image: null },
+ files: data.files || [],
  };
  setMessages((prev) => [...prev, msg]);
  },
@@ -144,6 +160,30 @@ export default function TicketDetailPage() {
  }
  }, [newMessage, ticket?.channel?.id]);
 
+ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+ const file = e.target.files?.[0];
+ if (!file || !ticket?.channel?.id) return;
+ setUploading(true);
+ try {
+ const formData = new FormData();
+ formData.append('file', file);
+ const uploadRes = await api.post<any>('/files/upload?category=ATTACHMENT', formData, {
+ headers: { 'Content-Type': 'multipart/form-data' },
+ });
+ const fileUrl = uploadRes.data?.url || uploadRes.data?.key || file.name;
+ const msgRes = await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
+ content: `📎 ${file.name}`,
+ });
+ setMessages((prev) => [...prev, msgRes.data]);
+ toast.success('Archivo enviado', file.name);
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al subir archivo');
+ } finally {
+ setUploading(false);
+ if (fileInputRef.current) fileInputRef.current.value = '';
+ }
+ };
+
  const handleStatusChange = async (newStatus: string) => {
  if (newStatus === status || changingStatus) return;
  setChangingStatus(true);
@@ -209,7 +249,10 @@ export default function TicketDetailPage() {
  <div className="px-4 py-3 border-b border-border">
  <div className="flex items-start justify-between gap-3">
  <div>
+ <div className="flex items-center gap-2">
+ <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{ticket.id.slice(-8).toUpperCase()}</span>
  <h1 className="text-base font-semibold text-foreground">{ticket.title}</h1>
+ </div>
  <p className="text-xs text-muted-foreground mt-0.5">
  {ticket.client?.name || 'Sin cliente'} · {new Date(ticket.createdAt).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })}
  </p>
@@ -229,32 +272,43 @@ export default function TicketDetailPage() {
  <ScrollArea className="flex-1 min-h-0" ref={scrollRef}>
  <div className="p-4 space-y-4">
  {messages.map((msg) => {
- const isMe = msg.user.id === user?.id;
+ const isTeam = msg.senderType !== 'client';
+ const isMyMessage = msg.user.id === user?.id;
+ const operatorLabel = isMyMessage ? 'Tú' : msg.user.name;
  return (
  <div
  key={msg.id}
  className={cn(
  'flex gap-2.5 max-w-[85%]',
- isMe ? 'ml-auto flex-row-reverse' : '',
+ isTeam ? 'ml-auto flex-row-reverse' : '',
  )}
  >
  <div className={cn(
  'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold',
- isMe ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground',
+ isTeam ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground',
  )}>
  {getInitials(msg.user.name)}
  </div>
- <div className={cn('flex flex-col gap-1', isMe ? 'items-end' : 'items-start')}>
+ <div className={cn('flex flex-col gap-1', isTeam ? 'items-end' : 'items-start')}>
  <div className={cn(
  'rounded-2xl px-3 py-2 text-sm leading-relaxed',
- isMe
+ isTeam
  ? 'bg-primary text-primary-foreground rounded-tr-sm'
  : 'bg-secondary text-secondary-foreground rounded-tl-sm',
  )}>
  {msg.content}
  </div>
+ {msg.files && msg.files.length > 0 && (
+ <div className="flex flex-col gap-1 mt-1">
+ {msg.files.map((f) => (
+ <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+ <Paperclip className="h-3 w-3" />{f.originalName}
+ </a>
+ ))}
+ </div>
+ )}
  <span className="text-[10px] text-muted-foreground px-1">
- {!isMe && <span className="font-medium mr-1">{msg.user.name}</span>}
+ {isTeam && <span className="font-medium mr-1">{operatorLabel}</span>}
  {new Date(msg.createdAt).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
  </span>
  </div>
@@ -287,9 +341,10 @@ export default function TicketDetailPage() {
  <Button size="sm" onClick={handleSend} disabled={!newMessage.trim() || sending}>
  <Send className="h-4 w-4"/>
  </Button>
- <Button size="sm" variant="outline" className="text-muted-foreground">
+ <Button size="sm" variant="outline" className="text-muted-foreground" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
  <Paperclip className="h-4 w-4"/>
  </Button>
+ <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xlsx,.csv,.txt" />
  </div>
  </div>
  ) : (

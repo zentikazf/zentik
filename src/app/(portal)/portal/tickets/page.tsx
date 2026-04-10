@@ -37,6 +37,7 @@ interface TicketItem {
  createdAt: string;
  project?: { id: string; name: string };
  task?: { id: string; status: string } | null;
+ createdByUser?: { id: string; name: string } | null;
 }
 
 interface ProjectOption {
@@ -55,6 +56,8 @@ export default function PortalTicketsPage() {
  const [projects, setProjects] = useState<ProjectOption[]>([]);
  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
  const [loading, setLoading] = useState(true);
+ const [filterProject, setFilterProject] = useState('');
+ const [filterUser, setFilterUser] = useState('');
  const [showCreate, setShowCreate] = useState(false);
  const [creating, setCreating] = useState(false);
  const [form, setForm] = useState({
@@ -122,13 +125,14 @@ export default function PortalTicketsPage() {
 
  setCreating(true);
  try {
- await api.post<any>(`/portal/projects/${form.projectId}/tickets`, {
+ const res = await api.post<any>(`/portal/projects/${form.projectId}/tickets`, {
  title: form.title.trim(),
  description: form.description.trim() || undefined,
  category: form.category,
  priority: form.priority,
  });
- toast.success('Ticket creado', 'Tu ticket fue enviado al equipo');
+ const newId = res.data?.id ? ` #${res.data.id.slice(-8).toUpperCase()}` : '';
+ toast.success('Ticket creado', `Tu ticket${newId} fue enviado al equipo`);
  setShowCreate(false);
  setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', projectName: '', projectDescription: '' });
  await loadData();
@@ -277,6 +281,52 @@ export default function PortalTicketsPage() {
  </div>
  </div>
 
+ {/* Filters */}
+ {tickets.length > 0 && (
+ <div className="flex flex-wrap items-center gap-3">
+ <Select value={filterProject || 'all'} onValueChange={(v) => setFilterProject(v === 'all' ? '' : v)}>
+ <SelectTrigger className="w-[180px] h-9 text-sm">
+ <SelectValue placeholder="Todos los proyectos" />
+ </SelectTrigger>
+ <SelectContent>
+ <SelectItem value="all">Todos los proyectos</SelectItem>
+ {projects.map((p) => (
+ <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ {(() => {
+ const creators = tickets
+ .filter((t) => t.createdByUser)
+ .reduce<{ id: string; name: string }[]>((acc, t) => {
+ if (t.createdByUser && !acc.find((u) => u.id === t.createdByUser!.id)) {
+ acc.push(t.createdByUser);
+ }
+ return acc;
+ }, []);
+ if (creators.length <= 1) return null;
+ return (
+ <Select value={filterUser || 'all'} onValueChange={(v) => setFilterUser(v === 'all' ? '' : v)}>
+ <SelectTrigger className="w-[180px] h-9 text-sm">
+ <SelectValue placeholder="Todos los usuarios" />
+ </SelectTrigger>
+ <SelectContent>
+ <SelectItem value="all">Todos los usuarios</SelectItem>
+ {creators.map((u) => (
+ <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ );
+ })()}
+ {(filterProject || filterUser) && (
+ <button onClick={() => { setFilterProject(''); setFilterUser(''); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+ Limpiar filtros
+ </button>
+ )}
+ </div>
+ )}
+
  {/* Empty state */}
  {tickets.length === 0 ? (
  <div className="flex flex-col items-center justify-center rounded-xl bg-card py-20 text-center border border-border">
@@ -290,7 +340,11 @@ export default function PortalTicketsPage() {
  </div>
  ) : (
  <div className="space-y-3">
- {tickets.map((ticket) => {
+ {tickets.filter((t) => {
+ if (filterProject && t.project?.id !== filterProject) return false;
+ if (filterUser && t.createdByUser?.id !== filterUser) return false;
+ return true;
+ }).map((ticket) => {
  const statusConf = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
  const catConf = CATEGORY_CONFIG[ticket.category] || CATEGORY_CONFIG.SUPPORT_REQUEST;
 
@@ -307,6 +361,7 @@ export default function PortalTicketsPage() {
  {/* Content */}
  <div className="flex-1 min-w-0">
  <div className="flex items-center gap-2 mb-1">
+ <span className="text-[10px] font-mono text-muted-foreground/60">#{ticket.id.slice(-8).toUpperCase()}</span>
  <Badge className={`${catConf.color} border-none text-[10px] uppercase tracking-wider font-bold`}>
  {catConf.label}
  </Badge>

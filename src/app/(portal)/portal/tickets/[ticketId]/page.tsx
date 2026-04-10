@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ChevronLeft, Send, Ticket, CheckCircle2, Clock, AlertCircle, MessageSquare } from 'lucide-react';
+import { ChevronLeft, Send, Paperclip, Ticket, CheckCircle2, Clock, AlertCircle, MessageSquare } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
@@ -48,7 +48,9 @@ interface ChatMessage {
  id: string;
  content: string;
  createdAt: string;
+ senderType?: 'client' | 'team';
  user: { id: string; name: string; image: string | null };
+ files?: { id: string; originalName: string; mimeType: string; url: string }[];
 }
 
 export default function PortalTicketDetailPage() {
@@ -59,6 +61,8 @@ export default function PortalTicketDetailPage() {
  const [loading, setLoading] = useState(true);
  const [messageText, setMessageText] = useState('');
  const [sending, setSending] = useState(false);
+ const [uploading, setUploading] = useState(false);
+ const fileInputRef = useRef<HTMLInputElement>(null);
  const messagesEndRef = useRef<HTMLDivElement>(null);
 
  const { joinRoom, leaveRoom } = useSocket({
@@ -67,7 +71,9 @@ export default function PortalTicketDetailPage() {
  id: data.id,
  content: data.content,
  createdAt: data.createdAt,
+ senderType: data.senderType || 'team',
  user: data.user || { id: '', name: 'Equipo', image: null },
+ files: data.files || [],
  };
  setMessages((prev) => [...prev, msg]);
  },
@@ -133,6 +139,29 @@ export default function PortalTicketDetailPage() {
  }
  };
 
+ const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+ const file = e.target.files?.[0];
+ if (!file || !ticket?.channel?.id) return;
+ setUploading(true);
+ try {
+ const formData = new FormData();
+ formData.append('file', file);
+ await api.post<any>('/files/upload?category=ATTACHMENT', formData, {
+ headers: { 'Content-Type': 'multipart/form-data' },
+ });
+ const msgRes = await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
+ content: `📎 ${file.name}`,
+ });
+ setMessages((prev) => [...prev, msgRes.data]);
+ toast.success('Archivo enviado', file.name);
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al subir archivo');
+ } finally {
+ setUploading(false);
+ if (fileInputRef.current) fileInputRef.current.value = '';
+ }
+ };
+
  if (loading) {
  return (
  <div className="mx-auto max-w-5xl space-y-6">
@@ -180,6 +209,7 @@ export default function PortalTicketDetailPage() {
  </Link>
  <div className="flex flex-wrap items-center gap-2">
  <Ticket className="h-5 w-5 text-primary"/>
+ <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{ticket.id.slice(-8).toUpperCase()}</span>
  <h1 className="text-xl font-bold text-foreground">{ticket.title}</h1>
  </div>
  <div className="flex items-center gap-2 mt-2">
@@ -293,8 +323,16 @@ export default function PortalTicketDetailPage() {
  >
  {msg.content}
  </div>
+ {msg.files && msg.files.length > 0 && (
+ <div className="flex flex-col gap-1 mt-1">
+ {msg.files.map((f) => (
+ <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+ {f.originalName}
+ </a>
+ ))}
+ </div>
+ )}
  <span className="text-[10px] text-muted-foreground px-1">
- {!isMe && <span className="font-medium text-muted-foreground mr-1">{msg.user.name}</span>}
  {new Date(msg.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
  </span>
  </div>
@@ -309,6 +347,10 @@ export default function PortalTicketDetailPage() {
  <div className="border-t border-border p-3">
  {ticket.channel ? (
  <form onSubmit={handleSend} className="flex items-center gap-2">
+ <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
+ <Paperclip className="h-4 w-4"/>
+ </button>
+ <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xlsx,.csv,.txt" />
  <input
  type="text"
  value={messageText}
