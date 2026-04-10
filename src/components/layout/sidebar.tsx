@@ -55,6 +55,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  const [collapsed, setCollapsed] = useState(false);
  const [notifOpen, setNotifOpen] = useState(false);
  const [pendingProjectsCount, setPendingProjectsCount] = useState(0);
+ const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
  const pathname = usePathname();
  const { user, logout } = useAuth();
  const { hasPermission, roleName } = usePermissions();
@@ -66,6 +67,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  if (!orgId || !hasPermission('read:projects')) return;
  api.get(`/organizations/${orgId}/projects/pending-count`)
  .then((res) => setPendingProjectsCount(res.data?.count ?? 0))
+ .catch(() => {});
+ api.get(`/organizations/${orgId}/approvals/count`)
+ .then((res) => setPendingApprovalsCount(res.data?.count ?? 0))
  .catch(() => {});
  }, [orgId]);
 
@@ -81,7 +85,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  const renderNavItem = (item: NavItem) => {
  const active = isActive(item.href);
  const Icon = item.icon;
- const badge = item.href === '/projects' && pendingProjectsCount > 0 ? pendingProjectsCount : 0;
+ const badge = item.href === '/projects' && pendingProjectsCount > 0
+ ? pendingProjectsCount
+ : item.href === '/approvals' && pendingApprovalsCount > 0
+ ? pendingApprovalsCount
+ : 0;
 
  return (
  <Link

@@ -531,25 +531,20 @@ export default function DashboardPage() {
 
           {/* ── Mini Mis Tareas + Entregas ────────────────────────────── */}
           <div className="grid gap-6 lg:grid-cols-3">
+            {(() => {
+              const activeTasks = myTasks.filter((t: any) => ['TODO', 'IN_PROGRESS', 'IN_REVIEW'].includes(t.status));
+              if (activeTasks.length === 0) return null;
+              return (
             <div className="rounded-xl border border-border bg-card p-5 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-semibold text-card-foreground">Mis Tareas</h2>
                 <Badge variant="info" className="gap-1">
                   <CircleDot className="h-3 w-3" />
-                  {myTasks.filter((t: any) => ['TODO', 'IN_PROGRESS', 'IN_REVIEW'].includes(t.status)).length} activas
+                  {activeTasks.length} activas
                 </Badge>
               </div>
               <div className="space-y-1.5">
                 {(() => {
-                  const activeTasks = myTasks.filter((t: any) => ['TODO', 'IN_PROGRESS', 'IN_REVIEW'].includes(t.status));
-                  if (activeTasks.length === 0) {
-                    return (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <CheckCircle className="h-6 w-6 text-muted-foreground mb-2" />
-                        <p className="text-sm text-muted-foreground">Sin tareas activas</p>
-                      </div>
-                    );
-                  }
                   const userRoleId = organization?.roleId;
                   return activeTasks.slice(0, 6).map((task: any) => {
                     const pConfig = priorityConfig[task.priority] || priorityConfig.MEDIUM;
@@ -577,6 +572,8 @@ export default function DashboardPage() {
                 })()}
               </div>
             </div>
+              );
+            })()}
 
             {/* Entregas cercanas */}
             <div className="rounded-xl border border-border bg-card p-5">
@@ -642,19 +639,16 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-muted-foreground capitalize">{monthLabel}</span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-success font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-success" /> {counts.GREEN}
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" /> {counts.GREEN} En cumplimiento
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-warning font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-warning" /> {counts.ORANGE}
+                      <span className="h-1.5 w-1.5 rounded-full bg-warning" /> {counts.ORANGE} Por debajo
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-destructive font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-destructive" /> {counts.RED}
+                      <span className="h-1.5 w-1.5 rounded-full bg-destructive" /> {counts.RED} Crítico
                     </span>
                   </div>
                 </div>
-                <p className="mb-4 text-[11px] text-muted-foreground">
-                  Cumplimiento mensual · Verde ≥ {greenMin}h · Naranja {orangeMin}–{greenMin - 1}h · Rojo &lt; {orangeMin}h
-                </p>
                 <div className="space-y-3">
                   {team.map((m) => {
                     const status = (m.complianceStatus || 'RED') as 'GREEN' | 'ORANGE' | 'RED';
@@ -678,6 +672,9 @@ export default function DashboardPage() {
                                 {m.role || 'Sin rol'}
                                 {typeof m.activeTasks === 'number' && (
                                   <> · {m.activeTasks} activa{m.activeTasks !== 1 ? 's' : ''}</>
+                                )}
+                                {typeof m.completedTasks === 'number' && (
+                                  <> · {m.completedTasks} completada{m.completedTasks !== 1 ? 's' : ''}</>
                                 )}
                               </p>
                             </div>

@@ -14,6 +14,7 @@ import {
  DialogTitle,
  DialogFooter,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { CheckCircle2, AlertTriangle, Clock, Pencil } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
@@ -36,6 +37,7 @@ export function TimeEntryDialog({
  const [tasks, setTasks] = useState<any[]>([]);
  const [taskId, setTaskId] = useState('');
  const [description, setDescription] = useState('');
+ const [billable, setBillable] = useState(true);
  const [saving, setSaving] = useState(false);
 
  // Task data (auto-filled)
@@ -54,7 +56,7 @@ export function TimeEntryDialog({
  try {
  const res = await api.get(`/projects/${projectId}/tasks?limit=200`);
  const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
- setTasks(list);
+ setTasks(list.filter((t: any) => !['DONE', 'CANCELLED'].includes(t.status) && t.type !== 'SUPPORT'));
  } catch {}
  };
  loadTasks();
@@ -65,6 +67,7 @@ export function TimeEntryDialog({
  if (entry) {
  setTaskId(entry.taskId || '');
  setDescription(entry.description || '');
+ setBillable(entry.billable ?? true);
  if (entry.startTime) setStartDate(new Date(entry.startTime).toISOString().split('T')[0]);
  if (entry.endTime) setEndDate(new Date(entry.endTime).toISOString().split('T')[0]);
  if (entry.duration) setHours(String((entry.duration / 3600).toFixed(1)));
@@ -78,6 +81,7 @@ export function TimeEntryDialog({
  const resetForm = () => {
  setTaskId('');
  setDescription('');
+ setBillable(true);
  setTaskData(null);
  setStartDate('');
  setEndDate('');
@@ -143,7 +147,7 @@ export function TimeEntryDialog({
  startTime: startISO,
  endTime: endISO,
  duration: durationSeconds,
- billable: true,
+ billable,
  };
 
  if (isEdit) {
@@ -317,6 +321,7 @@ export function TimeEntryDialog({
 
  {/* Description */}
  {(confirmed || editing || isEdit) && (
+ <>
  <div className="space-y-2">
  <Label>Nota (opcional)</Label>
  <Textarea
@@ -326,6 +331,14 @@ export function TimeEntryDialog({
  rows={2}
  />
  </div>
+ <div className="flex items-center justify-between rounded-lg border border-border p-3">
+ <div>
+ <Label className="text-sm font-medium">Facturable</Label>
+ <p className="text-[11px] text-muted-foreground">¿Esta entrada se factura al cliente?</p>
+ </div>
+ <Switch checked={billable} onCheckedChange={setBillable} />
+ </div>
+ </>
  )}
  </div>
 
@@ -338,7 +351,7 @@ export function TimeEntryDialog({
  disabled={saving || !taskId || (!confirmed && !editing && !isEdit)}
  className="bg-primary hover:bg-primary/90"
  >
- {saving ? 'Guardando...' : isEdit ? 'Guardar Cambios' : 'Registrar y Facturar'}
+ {saving ? 'Guardando...' : isEdit ? 'Guardar Cambios' : billable ? 'Registrar y Facturar' : 'Registrar Entrada'}
  </Button>
  </DialogFooter>
  </DialogContent>
