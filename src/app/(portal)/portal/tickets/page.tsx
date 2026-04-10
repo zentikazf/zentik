@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Ticket, Plus, Clock, ChevronRight, AlertCircle } from 'lucide-react';
+import { Ticket, Plus, Clock, ChevronRight, AlertCircle, Info } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 
@@ -51,10 +51,18 @@ interface DynamicCategory {
  description?: string;
 }
 
+interface BusinessHours {
+ start: string;
+ end: string;
+ days: string[];
+ timezone: string;
+}
+
 export default function PortalTicketsPage() {
  const [tickets, setTickets] = useState<TicketItem[]>([]);
  const [projects, setProjects] = useState<ProjectOption[]>([]);
  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
+ const [businessHours, setBusinessHours] = useState<BusinessHours | null>(null);
  const [loading, setLoading] = useState(true);
  const [filterProject, setFilterProject] = useState('');
  const [filterUser, setFilterUser] = useState('');
@@ -76,15 +84,17 @@ export default function PortalTicketsPage() {
 
  const loadData = async () => {
  try {
- const [ticketsRes, projectsRes, catRes] = await Promise.all([
+ const [ticketsRes, projectsRes, catRes, bhRes] = await Promise.all([
  api.get<any>('/portal/tickets'),
  api.get<any>('/portal/projects'),
  api.get<any>('/portal/ticket-categories').catch(() => ({ data: [] })),
+ api.get<any>('/portal/business-hours').catch(() => ({ data: null })),
  ]);
  setTickets(Array.isArray(ticketsRes.data) ? ticketsRes.data : ticketsRes.data?.data || []);
  setProjects(Array.isArray(projectsRes.data) ? projectsRes.data : projectsRes.data?.data || []);
  const cats = Array.isArray(catRes.data) ? catRes.data : catRes.data?.data || [];
  setDynamicCategories(cats);
+ setBusinessHours(bhRes.data || null);
  } catch {
  toast.error('Error', 'Error al cargar los tickets');
  } finally {
@@ -115,6 +125,11 @@ export default function PortalTicketsPage() {
  } finally {
  setCreating(false);
  }
+ return;
+ }
+
+ if (form.category === 'SUPPORT_REQUEST' && dynamicCategories.length > 0) {
+ toast.error('Error', 'Selecciona una categoria de soporte');
  return;
  }
 
@@ -186,19 +201,38 @@ export default function PortalTicketsPage() {
  <form onSubmit={handleCreate} className="space-y-4 pt-2">
  <div className="space-y-2">
  <Label className="text-muted-foreground">Tipo de solicitud</Label>
- <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+ <Select
+ value={form.category.startsWith('dynamic:') ? 'SUPPORT_REQUEST' : form.category}
+ onValueChange={(v) => setForm({ ...form, category: v })}
+ >
  <SelectTrigger>
  <SelectValue placeholder="Selecciona el tipo"/>
  </SelectTrigger>
  <SelectContent>
  <SelectItem value="SUPPORT_REQUEST">Soporte / Error</SelectItem>
  <SelectItem value="NEW_PROJECT">Nuevo Proyecto</SelectItem>
+ </SelectContent>
+ </Select>
+ </div>
+
+ {(form.category === 'SUPPORT_REQUEST' || form.category.startsWith('dynamic:')) && dynamicCategories.length > 0 && (
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Categoria</Label>
+ <Select
+ value={form.category.startsWith('dynamic:') ? form.category : ''}
+ onValueChange={(v) => setForm({ ...form, category: v })}
+ >
+ <SelectTrigger>
+ <SelectValue placeholder="Selecciona una categoria"/>
+ </SelectTrigger>
+ <SelectContent>
  {dynamicCategories.map((dc) => (
  <SelectItem key={dc.id} value={`dynamic:${dc.id}`}>{dc.name}</SelectItem>
  ))}
  </SelectContent>
  </Select>
  </div>
+ )}
 
  {form.category === 'NEW_PROJECT' ? (
  <>
@@ -212,16 +246,16 @@ export default function PortalTicketsPage() {
  />
  </div>
  <div className="space-y-2">
- <Label className="text-muted-foreground">Descripción del proyecto</Label>
+ <Label className="text-muted-foreground">Descripcion del proyecto</Label>
  <Textarea
  value={form.projectDescription}
  onChange={(e) => setForm({ ...form, projectDescription: e.target.value })}
- placeholder="Describe qué necesitas en este proyecto..."
+ placeholder="Describe que necesitas en este proyecto..."
  rows={4}
  />
  </div>
  </>
- ) : form.category ? (
+ ) : form.category && form.category !== 'SUPPORT_REQUEST' ? (
  <>
  <div className="space-y-2">
  <Label className="text-muted-foreground">Proyecto</Label>
@@ -254,19 +288,6 @@ export default function PortalTicketsPage() {
  rows={4}
  />
  </div>
- <div className="space-y-2">
- <Label className="text-muted-foreground">Prioridad</Label>
- <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
- <SelectTrigger>
- <SelectValue />
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="LOW">Baja</SelectItem>
- <SelectItem value="MEDIUM">Media</SelectItem>
- <SelectItem value="HIGH">Alta</SelectItem>
- </SelectContent>
- </Select>
- </div>
  </>
  ) : null}
 
@@ -274,6 +295,16 @@ export default function PortalTicketsPage() {
  <Button type="submit" className="w-full rounded-full" disabled={creating}>
  {creating ? 'Enviando...' : form.category === 'NEW_PROJECT' ? 'Solicitar Proyecto' : 'Enviar Ticket'}
  </Button>
+ )}
+
+ {businessHours && (
+ <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+ <Info className="h-3.5 w-3.5 mt-0.5 shrink-0"/>
+ <span>
+ Horario de atencion: {businessHours.days.join(', ')} de {businessHours.start} a {businessHours.end} ({businessHours.timezone}).
+ Los tickets fuera de horario seran atendidos en el siguiente dia habil.
+ </span>
+ </div>
  )}
  </form>
  </DialogContent>

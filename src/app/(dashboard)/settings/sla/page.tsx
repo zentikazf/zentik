@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, ArrowLeft, Clock, AlertTriangle, Settings2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowLeft, Clock, AlertTriangle, Settings2, CalendarDays } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +35,13 @@ interface BusinessHours {
   businessHoursEnd: string;
   businessDays: string;
   timezone: string;
+}
+
+interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  recurring: boolean;
 }
 
 const critLabels: Record<string, { label: string; className: string }> = {
@@ -81,16 +88,22 @@ export default function SlaSettingsPage() {
   });
   const [savingBh, setSavingBh] = useState(false);
 
+  // Holidays
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [holidayForm, setHolidayForm] = useState({ name: '', date: '', recurring: false });
+  const [savingHoliday, setSavingHoliday] = useState(false);
+
   useEffect(() => {
     if (orgId) loadAll();
   }, [orgId]);
 
   const loadAll = async () => {
     try {
-      const [catRes, slaRes, bhRes] = await Promise.all([
+      const [catRes, slaRes, bhRes, holRes] = await Promise.all([
         api.get(`/organizations/${orgId}/ticket-categories`),
         api.get(`/organizations/${orgId}/sla-config`),
         api.get(`/organizations/${orgId}/business-hours`),
+        api.get(`/organizations/${orgId}/holidays`).catch(() => ({ data: [] })),
       ]);
       const cats = Array.isArray(catRes.data) ? catRes.data : catRes.data?.data || [];
       setCategories(cats);
@@ -110,6 +123,9 @@ export default function SlaSettingsPage() {
         setBusinessHours(bh);
         setBhForm(bh);
       }
+
+      const hols = Array.isArray(holRes.data) ? holRes.data : holRes.data?.data || [];
+      setHolidays(hols);
     } catch {
       toast.error('Error', 'Error al cargar configuración de SLA');
     } finally {
@@ -171,6 +187,35 @@ export default function SlaSettingsPage() {
       toast.error('Error', err instanceof ApiError ? err.message : 'Error al guardar SLA');
     } finally {
       setSavingSla(false);
+    }
+  };
+
+  // Holiday CRUD
+  const saveHoliday = async () => {
+    if (!holidayForm.name.trim() || !holidayForm.date) {
+      toast.error('Error', 'Nombre y fecha son requeridos');
+      return;
+    }
+    setSavingHoliday(true);
+    try {
+      await api.post(`/organizations/${orgId}/holidays`, holidayForm);
+      toast.success('Creado', 'Feriado agregado');
+      setHolidayForm({ name: '', date: '', recurring: false });
+      await loadAll();
+    } catch (err) {
+      toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear feriado');
+    } finally {
+      setSavingHoliday(false);
+    }
+  };
+
+  const deleteHoliday = async (id: string) => {
+    try {
+      await api.delete(`/organizations/${orgId}/holidays/${id}`);
+      toast.success('Eliminado', 'Feriado eliminado');
+      await loadAll();
+    } catch (err) {
+      toast.error('Error', err instanceof ApiError ? err.message : 'Error al eliminar');
     }
   };
 
@@ -371,6 +416,65 @@ export default function SlaSettingsPage() {
         <Button onClick={saveBh} disabled={savingBh} className="w-full sm:w-auto">
           {savingBh ? 'Guardando...' : 'Guardar horario'}
         </Button>
+      </section>
+
+      {/* Holidays Section */}
+      <section className="rounded-xl border border-border bg-card p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-base font-semibold">Feriados</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">Los feriados se excluyen del cálculo de SLA (no cuentan como días hábiles).</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
+          <div className="space-y-1">
+            <Label className="text-xs">Nombre</Label>
+            <Input
+              value={holidayForm.name}
+              onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })}
+              placeholder="Ej: Navidad"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Fecha</Label>
+            <Input
+              type="date"
+              value={holidayForm.date}
+              onChange={(e) => setHolidayForm({ ...holidayForm, date: e.target.value })}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer pb-1">
+            <input
+              type="checkbox"
+              checked={holidayForm.recurring}
+              onChange={(e) => setHolidayForm({ ...holidayForm, recurring: e.target.checked })}
+              className="rounded"
+            />
+            Anual
+          </label>
+          <Button size="sm" onClick={saveHoliday} disabled={savingHoliday}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> Agregar
+          </Button>
+        </div>
+
+        {holidays.length > 0 && (
+          <div className="space-y-1 pt-2">
+            {holidays.map((h) => (
+              <div key={h.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">{h.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(h.date).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                  {h.recurring && <Badge variant="secondary" className="text-[10px]">Anual</Badge>}
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteHoliday(h.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

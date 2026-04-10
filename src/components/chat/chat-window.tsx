@@ -71,7 +71,10 @@ export function ChatWindow({ channelId }: ChatWindowProps) {
  ? { id: data.user.id, name: data.user.name, avatarUrl: data.user.image }
  : { id: '', name: 'Sistema', avatarUrl: undefined },
  };
- setMessages((prev) => [...prev, msg]);
+ setMessages((prev) => {
+ if (prev.some((m) => m.id === msg.id)) return prev;
+ return [...prev, msg];
+ });
  };
 
  socket.on('message:new', handleNewMessage);

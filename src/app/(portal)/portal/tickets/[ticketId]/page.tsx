@@ -75,7 +75,10 @@ export default function PortalTicketDetailPage() {
  user: data.user || { id: '', name: 'Equipo', image: null },
  files: data.files || [],
  };
- setMessages((prev) => [...prev, msg]);
+ setMessages((prev) => {
+ if (prev.some((m) => m.id === msg.id)) return prev;
+ return [...prev, msg];
+ });
  },
  });
 

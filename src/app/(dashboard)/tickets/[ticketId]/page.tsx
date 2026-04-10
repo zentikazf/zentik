@@ -93,7 +93,10 @@ export default function TicketDetailPage() {
  user: data.user || { id: '', name: 'Sistema', image: null },
  files: data.files || [],
  };
- setMessages((prev) => [...prev, msg]);
+ setMessages((prev) => {
+ if (prev.some((m) => m.id === msg.id)) return prev;
+ return [...prev, msg];
+ });
  },
  });
 

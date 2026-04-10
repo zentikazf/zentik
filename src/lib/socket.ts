@@ -26,6 +26,9 @@ export function getSocket(): Socket {
       transports: ['websocket', 'polling'],
       autoConnect: false,
       withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
       auth: token ? { token } : undefined,
     });
   }
