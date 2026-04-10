@@ -132,8 +132,8 @@ export default function PortalTicketDetailPage() {
  setMessageText('');
 
  try {
- const res = await api.post<any>(`/channels/${ticket.channel.id}/messages`, { content });
- setMessages((prev) => [...prev, res.data]);
+ await api.post<any>(`/channels/${ticket.channel.id}/messages`, { content });
+ // Message will arrive via WebSocket broadcast (message:new)
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al enviar el mensaje');
  setMessageText(content);
@@ -152,10 +152,9 @@ export default function PortalTicketDetailPage() {
  await api.post<any>('/files/upload?category=ATTACHMENT', formData, {
  headers: { 'Content-Type': 'multipart/form-data' },
  });
- const msgRes = await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
+ await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
  content: `📎 ${file.name}`,
  });
- setMessages((prev) => [...prev, msgRes.data]);
  toast.success('Archivo enviado', file.name);
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al subir archivo');
