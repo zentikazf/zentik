@@ -5,14 +5,16 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Ticket, Plus, Clock, ChevronRight, AlertCircle, Info } from 'lucide-react';
+import { Ticket, Plus, Clock, ChevronRight, AlertCircle, Info, CircleDot, Search, MessageSquare } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
@@ -22,10 +24,20 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
- SUPPORT_REQUEST: { label: 'Soporte', color: 'bg-warning/10 text-warning ' },
- NEW_DEVELOPMENT: { label: 'Desarrollo', color: 'bg-info/10 text-info ' },
- NEW_PROJECT: { label: 'Nuevo Proyecto', color: 'bg-primary/10 text-primary ' },
+ SUPPORT_REQUEST: { label: 'Soporte', color: 'bg-warning/10 text-warning' },
+ NEW_DEVELOPMENT: { label: 'Desarrollo', color: 'bg-info/10 text-info' },
+ NEW_PROJECT: { label: 'Nuevo Proyecto', color: 'bg-primary/10 text-primary' },
 };
+
+type StatusTab = 'all' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+
+const tabConfig: { value: StatusTab; label: string; dotColor: string }[] = [
+ { value: 'all', label: 'Todos', dotColor: '' },
+ { value: 'OPEN', label: 'Abiertos', dotColor: 'bg-primary' },
+ { value: 'IN_PROGRESS', label: 'En Proceso', dotColor: 'bg-warning' },
+ { value: 'RESOLVED', label: 'Resueltos', dotColor: 'bg-success' },
+ { value: 'CLOSED', label: 'Cerrados', dotColor: 'bg-muted-foreground' },
+];
 
 interface TicketItem {
  id: string;
@@ -37,6 +49,7 @@ interface TicketItem {
  createdAt: string;
  project?: { id: string; name: string };
  task?: { id: string; status: string } | null;
+ channel?: { id: string; _count?: { messages: number } } | null;
  createdByUser?: { id: string; name: string } | null;
 }
 
@@ -64,8 +77,9 @@ export default function PortalTicketsPage() {
  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
  const [businessHours, setBusinessHours] = useState<BusinessHours | null>(null);
  const [loading, setLoading] = useState(true);
+ const [activeTab, setActiveTab] = useState<StatusTab>('all');
+ const [search, setSearch] = useState('');
  const [filterProject, setFilterProject] = useState('');
- const [filterUser, setFilterUser] = useState('');
  const [showCreate, setShowCreate] = useState(false);
  const [creating, setCreating] = useState(false);
  const [form, setForm] = useState({
@@ -158,11 +172,107 @@ export default function PortalTicketsPage() {
  }
  };
 
+ const counts = {
+ all: tickets.length,
+ OPEN: tickets.filter((t) => t.status === 'OPEN').length,
+ IN_PROGRESS: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
+ RESOLVED: tickets.filter((t) => t.status === 'RESOLVED').length,
+ CLOSED: tickets.filter((t) => t.status === 'CLOSED').length,
+ };
+
+ const getFilteredTickets = (tab: StatusTab) => {
+ return tickets.filter((t) => {
+ const q = search.toLowerCase();
+ const matchesSearch = !q || t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q);
+ const matchesStatus = tab === 'all' || t.status === tab;
+ const matchesProject = !filterProject || t.project?.id === filterProject;
+ return matchesSearch && matchesStatus && matchesProject;
+ });
+ };
+
+ const renderTicketCard = (ticket: TicketItem) => {
+ const statusConf = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
+ const catConf = CATEGORY_CONFIG[ticket.category] || CATEGORY_CONFIG.SUPPORT_REQUEST;
+
+ return (
+ <Link key={ticket.id} href={`/portal/tickets/${ticket.id}`}>
+ <div className="group rounded-xl bg-card p-4 transition-all hover:shadow-md border border-border hover:border-primary/30">
+ <div className="flex items-start gap-3">
+ {/* Status dot */}
+ <div className={cn('mt-1.5 h-2 w-2 rounded-full shrink-0',
+ ticket.status === 'OPEN' ? 'bg-primary' :
+ ticket.status === 'IN_PROGRESS' ? 'bg-warning' :
+ ticket.status === 'RESOLVED' ? 'bg-success' : 'bg-muted-foreground'
+ )} />
+
+ <div className="flex-1 min-w-0">
+ {/* Title + status */}
+ <div className="flex items-start justify-between gap-3">
+ <div className="min-w-0">
+ <div className="flex items-center gap-2">
+ <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.id.slice(-8).toUpperCase()}</span>
+ <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{ticket.title}</h3>
+ </div>
+ </div>
+ <Badge className={cn(statusConf.color, 'border-none text-[10px] font-semibold shrink-0')}>
+ {statusConf.label}
+ </Badge>
+ </div>
+
+ {/* Tags */}
+ <div className="flex items-center gap-2 mt-2 flex-wrap">
+ <Badge className={cn(catConf.color, 'border-none text-[10px] uppercase tracking-wider font-bold')}>
+ {catConf.label}
+ </Badge>
+ {ticket.project && (
+ <span className="text-[11px] text-primary font-medium">{ticket.project.name}</span>
+ )}
+ </div>
+
+ {/* Footer */}
+ <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+ <span className="flex items-center gap-1">
+ <Clock className="h-3 w-3"/>
+ {new Date(ticket.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+ </span>
+ {ticket.channel?._count?.messages !== undefined && ticket.channel._count.messages > 0 && (
+ <span className="flex items-center gap-1">
+ <MessageSquare className="h-3 w-3"/> {ticket.channel._count.messages}
+ </span>
+ )}
+ </div>
+ </div>
+
+ <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0 mt-1.5"/>
+ </div>
+ </div>
+ </Link>
+ );
+ };
+
+ const renderTicketList = (tab: StatusTab) => {
+ const list = getFilteredTickets(tab);
+ if (list.length === 0) {
+ return (
+ <div className="flex flex-col items-center py-16 text-center">
+ <Ticket className="mb-3 h-10 w-10 text-muted-foreground/50"/>
+ <p className="text-sm text-muted-foreground">
+ {search || filterProject
+ ? 'No se encontraron tickets con esos filtros'
+ : tab === 'all' ? 'No hay tickets aun' : `No hay tickets ${tabConfig.find((t) => t.value === tab)?.label.toLowerCase()}`}
+ </p>
+ </div>
+ );
+ }
+ return <div className="space-y-2">{list.map(renderTicketCard)}</div>;
+ };
+
  if (loading) {
  return (
  <div className="mx-auto max-w-5xl space-y-6">
  <Skeleton className="h-10 w-48 rounded-xl"/>
- <div className="space-y-4">
+ <Skeleton className="h-10 w-full max-w-lg rounded-lg"/>
+ <div className="space-y-3">
  {Array.from({ length: 4 }).map((_, i) => (
  <Skeleton key={i} className="h-24 rounded-xl"/>
  ))}
@@ -172,7 +282,7 @@ export default function PortalTicketsPage() {
  }
 
  return (
- <div className="mx-auto max-w-5xl space-y-8 pb-4">
+ <div className="mx-auto max-w-5xl space-y-6 pb-4">
  {/* Header */}
  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
  <div>
@@ -182,12 +292,11 @@ export default function PortalTicketsPage() {
  </p>
  </div>
  <div className="flex items-center gap-3">
- <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-1.5">
- <Ticket className="h-4 w-4 text-primary"/>
- <span className="text-sm font-semibold text-primary">
- {tickets.length} Total
- </span>
+ {counts.OPEN > 0 && (
+ <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+ <CircleDot className="h-3 w-3"/> {counts.OPEN} abiertos
  </div>
+ )}
  <Dialog open={showCreate} onOpenChange={setShowCreate}>
  <DialogTrigger asChild>
  <Button className="rounded-full">
@@ -312,114 +421,48 @@ export default function PortalTicketsPage() {
  </div>
  </div>
 
- {/* Filters */}
- {tickets.length > 0 && (
- <div className="flex flex-wrap items-center gap-3">
+ {/* Tabs + search */}
+ <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StatusTab)}>
+ <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+ <TabsList className="w-full sm:w-auto">
+ {tabConfig.map((tab) => (
+ <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5 text-xs">
+ {tab.dotColor && <div className={cn('h-1.5 w-1.5 rounded-full', tab.dotColor)} />}
+ {tab.label}
+ {counts[tab.value] > 0 && (
+ <span className="ml-0.5 text-[10px] opacity-60">({counts[tab.value]})</span>
+ )}
+ </TabsTrigger>
+ ))}
+ </TabsList>
+
+ <div className="flex items-center gap-2 sm:ml-auto">
+ <div className="relative flex-1 sm:w-56">
+ <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
+ <Input placeholder="Buscar..." className="pl-9 h-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
+ </div>
+ {projects.length > 1 && (
  <Select value={filterProject || 'all'} onValueChange={(v) => setFilterProject(v === 'all' ? '' : v)}>
- <SelectTrigger className="w-[180px] h-9 text-sm">
- <SelectValue placeholder="Todos los proyectos" />
+ <SelectTrigger className="w-[160px] h-9 text-xs">
+ <SelectValue placeholder="Proyecto" />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">Todos los proyectos</SelectItem>
+ <SelectItem value="all">Todos</SelectItem>
  {projects.map((p) => (
  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
  ))}
  </SelectContent>
  </Select>
- {(() => {
- const creators = tickets
- .filter((t) => t.createdByUser)
- .reduce<{ id: string; name: string }[]>((acc, t) => {
- if (t.createdByUser && !acc.find((u) => u.id === t.createdByUser!.id)) {
- acc.push(t.createdByUser);
- }
- return acc;
- }, []);
- if (creators.length <= 1) return null;
- return (
- <Select value={filterUser || 'all'} onValueChange={(v) => setFilterUser(v === 'all' ? '' : v)}>
- <SelectTrigger className="w-[180px] h-9 text-sm">
- <SelectValue placeholder="Todos los usuarios" />
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="all">Todos los usuarios</SelectItem>
- {creators.map((u) => (
- <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+ )}
+ </div>
+ </div>
+
+ {tabConfig.map((tab) => (
+ <TabsContent key={tab.value} value={tab.value}>
+ {renderTicketList(tab.value)}
+ </TabsContent>
  ))}
- </SelectContent>
- </Select>
- );
- })()}
- {(filterProject || filterUser) && (
- <button onClick={() => { setFilterProject(''); setFilterUser(''); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
- Limpiar filtros
- </button>
- )}
- </div>
- )}
-
- {/* Empty state */}
- {tickets.length === 0 ? (
- <div className="flex flex-col items-center justify-center rounded-xl bg-card py-20 text-center border border-border">
- <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
- <Ticket className="h-7 w-7 text-primary"/>
- </div>
- <h3 className="text-lg font-semibold text-foreground">Sin tickets aun</h3>
- <p className="mt-2 max-w-sm text-sm text-muted-foreground">
- Crea tu primer ticket para reportar un problema o solicitar una nueva funcionalidad.
- </p>
- </div>
- ) : (
- <div className="space-y-3">
- {tickets.filter((t) => {
- if (filterProject && t.project?.id !== filterProject) return false;
- if (filterUser && t.createdByUser?.id !== filterUser) return false;
- return true;
- }).map((ticket) => {
- const statusConf = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
- const catConf = CATEGORY_CONFIG[ticket.category] || CATEGORY_CONFIG.SUPPORT_REQUEST;
-
- return (
- <Link key={ticket.id} href={`/portal/tickets/${ticket.id}`}>
- <div className="group flex items-center gap-4 rounded-xl bg-card p-5 transition-all hover:shadow-lg hover:-translate-y-0.5 border border-border hover:border-primary/30 ">
- {/* Status indicator */}
- <div className={`h-2 w-2 rounded-full shrink-0 ${
- ticket.status === 'OPEN' ? 'bg-primary' :
- ticket.status === 'IN_PROGRESS' ? 'bg-warning' :
- ticket.status === 'RESOLVED' ? 'bg-success' : 'bg-muted-foreground'
- }`} />
-
- {/* Content */}
- <div className="flex-1 min-w-0">
- <div className="flex items-center gap-2 mb-1">
- <span className="text-[10px] font-mono text-muted-foreground/60">#{ticket.id.slice(-8).toUpperCase()}</span>
- <Badge className={`${catConf.color} border-none text-[10px] uppercase tracking-wider font-bold`}>
- {catConf.label}
- </Badge>
- <Badge className={`${statusConf.color} border-none text-[10px] font-semibold`}>
- {statusConf.label}
- </Badge>
- </div>
- <p className="text-sm font-semibold text-foreground truncate">{ticket.title}</p>
- {ticket.project && (
- <p className="text-xs text-primary mt-0.5">{ticket.project.name}</p>
- )}
- </div>
-
- {/* Date + arrow */}
- <div className="flex items-center gap-3 shrink-0">
- <span className="flex items-center gap-1 text-xs text-muted-foreground">
- <Clock className="h-3 w-3"/>
- {new Date(ticket.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
- </span>
- <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary transition-colors"/>
- </div>
- </div>
- </Link>
- );
- })}
- </div>
- )}
+ </Tabs>
 
  {/* Info box when no projects */}
  {projects.length === 0 && tickets.length === 0 && (

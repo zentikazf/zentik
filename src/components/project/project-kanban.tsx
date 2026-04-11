@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatRelative } from '@/lib/utils';
-import { Pause, CheckCircle2, Lock, Archive, RotateCcw, ArchiveRestore } from 'lucide-react';
+import { Lock, Archive, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const PROJECT_COLUMNS = [
@@ -30,6 +30,8 @@ const PROJECT_COLUMNS = [
  { status: 'TESTING', name: 'Testing', color: '#10B981' },
  { status: 'DEPLOY', name: 'Deploy', color: '#06B6D4' },
  { status: 'SUPPORT', name: 'Soporte', color: '#EF4444' },
+ { status: 'ON_HOLD', name: 'En Pausa', color: '#F97316' },
+ { status: 'COMPLETED', name: 'Completado', color: '#6B7280' },
 ];
 
 function ProjectCard({ project, overlay, onClick, onLifecycleChange }: { project: any; overlay?: boolean; onClick?: () => void; onLifecycleChange?: (projectId: string, newStatus: string) => void }) {
@@ -148,11 +150,7 @@ export function ProjectKanban({ projects, onProjectMoved, onLifecycleChange }: P
  useSensor(KeyboardSensor),
  );
 
- const kanbanProjects = localProjects.filter(
- (p) => p.status !== 'ON_HOLD' && p.status !== 'COMPLETED',
- );
- const onHold = localProjects.filter((p) => p.status === 'ON_HOLD');
- const completed = localProjects.filter((p) => p.status === 'COMPLETED');
+ const kanbanProjects = localProjects;
 
  const handleDragStart = useCallback((event: DragStartEvent) => {
  const p = localProjects.find((proj) => proj.id === event.active.id);
@@ -201,23 +199,6 @@ export function ProjectKanban({ projects, onProjectMoved, onLifecycleChange }: P
 
  return (
  <div className="space-y-4">
- {(onHold.length > 0 || completed.length > 0) && (
- <div className="flex gap-3">
- {onHold.length > 0 && (
- <div className="flex items-center gap-1.5 rounded-full bg-warning/10 px-3 py-1 text-xs text-warning">
- <Pause className="h-3 w-3"/>
- {onHold.length} en pausa
- </div>
- )}
- {completed.length > 0 && (
- <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
- <CheckCircle2 className="h-3 w-3"/>
- {completed.length} completados
- </div>
- )}
- </div>
- )}
-
  <DndContext
  sensors={sensors}
  collisionDetection={closestCorners}

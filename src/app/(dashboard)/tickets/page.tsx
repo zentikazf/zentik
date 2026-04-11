@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,6 +24,10 @@ import {
  Filter,
  ShieldAlert,
  AlertTriangle,
+ CircleDot,
+ Loader2,
+ CheckCircle2,
+ XCircle,
 } from 'lucide-react';
 import {
  DropdownMenu,
@@ -61,14 +66,14 @@ interface Ticket {
  createdAt: string;
 }
 
-type StatusFilter = 'all' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+type StatusTab = 'all' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 
-const statusFilters: { value: StatusFilter; label: string }[] = [
- { value: 'all', label: 'Todos' },
- { value: 'OPEN', label: 'Abierto' },
- { value: 'IN_PROGRESS', label: 'En progreso' },
- { value: 'RESOLVED', label: 'Resuelto' },
- { value: 'CLOSED', label: 'Cerrado' },
+const tabConfig: { value: StatusTab; label: string; icon: React.ElementType; dotColor: string }[] = [
+ { value: 'all', label: 'Todos', icon: TicketIcon, dotColor: '' },
+ { value: 'OPEN', label: 'Abiertos', icon: CircleDot, dotColor: 'bg-destructive' },
+ { value: 'IN_PROGRESS', label: 'En progreso', icon: Loader2, dotColor: 'bg-warning' },
+ { value: 'RESOLVED', label: 'Resueltos', icon: CheckCircle2, dotColor: 'bg-success' },
+ { value: 'CLOSED', label: 'Cerrados', icon: XCircle, dotColor: 'bg-muted-foreground' },
 ];
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -83,10 +88,10 @@ const categoryLabelMap: Record<string, string> = {
  NEW_DEVELOPMENT: 'Desarrollo',
 };
 
-const priorityConfig: Record<string, { label: string; className: string }> = {
- HIGH: { label: 'Alta', className: 'text-destructive' },
- MEDIUM: { label: 'Media', className: 'text-warning' },
- LOW: { label: 'Baja', className: 'text-muted-foreground' },
+const priorityConfig: Record<string, { label: string; className: string; bg: string }> = {
+ HIGH: { label: 'Alta', className: 'text-destructive', bg: 'bg-destructive/10 text-destructive' },
+ MEDIUM: { label: 'Media', className: 'text-warning', bg: 'bg-warning/10 text-warning' },
+ LOW: { label: 'Baja', className: 'text-muted-foreground', bg: 'bg-muted text-muted-foreground' },
 };
 
 const criticalityConfig: Record<string, { label: string; className: string }> = {
@@ -100,7 +105,7 @@ export default function TicketsPage() {
  const [tickets, setTickets] = useState<Ticket[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
- const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+ const [activeTab, setActiveTab] = useState<StatusTab>('all');
  const [filterPriority, setFilterPriority] = useState<string | null>(null);
  const [filterCategory, setFilterCategory] = useState<string | null>(null);
  const [filterClient, setFilterClient] = useState<string | null>(null);
@@ -192,19 +197,6 @@ export default function TicketsPage() {
  }
  };
 
- const filtered = tickets.filter((t) => {
- const q = search.toLowerCase();
- const matchesSearch =
- t.title.toLowerCase().includes(q) ||
- t.id.toLowerCase().includes(q) ||
- (t.client?.name || '').toLowerCase().includes(q);
- const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
- const matchesPriority = !filterPriority || t.priority === filterPriority;
- const matchesCategory = !filterCategory || t.category === filterCategory;
- const matchesClient = !filterClient || t.client?.id === filterClient;
- return matchesSearch && matchesStatus && matchesPriority && matchesCategory && matchesClient;
- });
-
  const counts = {
  all: tickets.length,
  OPEN: tickets.filter((t) => t.status === 'OPEN').length,
@@ -214,6 +206,21 @@ export default function TicketsPage() {
  };
 
  const hasActiveFilters = filterPriority !== null || filterCategory !== null || filterClient !== null;
+
+ const getFilteredTickets = (tab: StatusTab) => {
+ return tickets.filter((t) => {
+ const q = search.toLowerCase();
+ const matchesSearch =
+ t.title.toLowerCase().includes(q) ||
+ t.id.toLowerCase().includes(q) ||
+ (t.client?.name || '').toLowerCase().includes(q);
+ const matchesStatus = tab === 'all' || t.status === tab;
+ const matchesPriority = !filterPriority || t.priority === filterPriority;
+ const matchesCategory = !filterCategory || t.category === filterCategory;
+ const matchesClient = !filterClient || t.client?.id === filterClient;
+ return matchesSearch && matchesStatus && matchesPriority && matchesCategory && matchesClient;
+ });
+ };
 
  const formatDate = (dateStr: string) => {
  try {
@@ -226,10 +233,97 @@ export default function TicketsPage() {
  const isSlaBreached = (t: Ticket) => t.slaResponseBreached || t.slaResolutionBreached;
 
  const getSlaLabel = (t: Ticket) => {
- if (t.slaResponseBreached && t.slaResolutionBreached) return 'SLA Vencido (respuesta + resolución)';
+ if (t.slaResponseBreached && t.slaResolutionBreached) return 'SLA Vencido (respuesta + resolucion)';
  if (t.slaResponseBreached) return 'SLA Respuesta vencido';
- if (t.slaResolutionBreached) return 'SLA Resolución vencido';
+ if (t.slaResolutionBreached) return 'SLA Resolucion vencido';
  return '';
+ };
+
+ const renderTicketCard = (ticket: Ticket) => {
+ const status = statusConfig[ticket.status] || statusConfig.OPEN;
+ const priority = priorityConfig[ticket.priority] || priorityConfig.MEDIUM;
+ const catLabel = ticket.categoryConfig?.name || categoryLabelMap[ticket.category] || ticket.category;
+ const crit = ticket.criticality || ticket.categoryConfig?.criticality;
+ const critStyle = crit ? criticalityConfig[crit] : null;
+ const breached = isSlaBreached(ticket);
+
+ return (
+ <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
+ <div className={cn(
+ 'group rounded-xl border bg-card p-4 hover:shadow-md transition-all cursor-pointer',
+ breached ? 'border-destructive/50 hover:border-destructive/70' : 'border-border hover:border-primary/30',
+ )}>
+ <div className="flex items-start gap-3">
+ {/* Priority indicator */}
+ <div className={cn('mt-1 h-2 w-2 rounded-full shrink-0', priority.bg.split(' ')[0])} />
+
+ <div className="flex-1 min-w-0">
+ {/* Title row */}
+ <div className="flex items-start justify-between gap-3">
+ <div className="min-w-0">
+ <div className="flex items-center gap-2 flex-wrap">
+ <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.id.slice(-8).toUpperCase()}</span>
+ <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{ticket.title}</h3>
+ </div>
+ </div>
+ <div className="flex items-center gap-2 shrink-0">
+ {breached && (
+ <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive" title={getSlaLabel(ticket)}>
+ <ShieldAlert className="h-3 w-3" /> SLA
+ </span>
+ )}
+ <Badge className={cn(status.className, 'text-[10px]')}>{status.label}</Badge>
+ </div>
+ </div>
+
+ {/* Meta row */}
+ <div className="flex items-center gap-2 mt-2 flex-wrap">
+ <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+ {catLabel}
+ </span>
+ <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', priority.bg)}>
+ {priority.label}
+ </span>
+ {critStyle && (
+ <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', critStyle.className)}>
+ <AlertTriangle className="h-2.5 w-2.5" /> {critStyle.label}
+ </span>
+ )}
+ <span className="text-[11px] text-muted-foreground">{ticket.client?.name || 'Sin cliente'}</span>
+ {ticket.project && (
+ <span className="text-[11px] text-primary">{ticket.project.name}</span>
+ )}
+ </div>
+
+ {/* Footer row */}
+ <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+ <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> {formatDate(ticket.createdAt)}</span>
+ {ticket.channel?._count?.messages !== undefined && ticket.channel._count.messages > 0 && (
+ <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3"/> {ticket.channel._count.messages}</span>
+ )}
+ </div>
+ </div>
+ </div>
+ </div>
+ </Link>
+ );
+ };
+
+ const renderTicketList = (tab: StatusTab) => {
+ const list = getFilteredTickets(tab);
+ if (list.length === 0) {
+ return (
+ <div className="flex flex-col items-center py-16 text-center">
+ <TicketIcon className="mb-3 h-10 w-10 text-muted-foreground/50"/>
+ <p className="text-sm text-muted-foreground">
+ {search || hasActiveFilters
+ ? 'No se encontraron tickets con esos filtros'
+ : tab === 'all' ? 'No hay tickets de soporte aun' : `No hay tickets ${tabConfig.find((t) => t.value === tab)?.label.toLowerCase()}`}
+ </p>
+ </div>
+ );
+ }
+ return <div className="space-y-2">{list.map(renderTicketCard)}</div>;
  };
 
  if (loading) {
@@ -237,11 +331,7 @@ export default function TicketsPage() {
  <div className="space-y-4">
  <Skeleton className="h-10 w-64"/>
  <Skeleton className="h-5 w-80"/>
- <div className="flex gap-2 mt-4">
- {Array.from({ length: 5 }).map((_, i) => (
- <Skeleton key={i} className="h-9 w-24 rounded-full"/>
- ))}
- </div>
+ <Skeleton className="h-10 w-full max-w-lg rounded-lg mt-4"/>
  <div className="space-y-3 mt-4">
  {Array.from({ length: 5 }).map((_, i) => (
  <Skeleton key={i} className="h-24 rounded-xl"/>
@@ -259,6 +349,13 @@ export default function TicketsPage() {
  <h1 className="text-xl sm:text-[22px] font-semibold text-foreground">Tickets de soporte</h1>
  <p className="mt-1 text-sm text-muted-foreground">Gestion de solicitudes y soporte</p>
  </div>
+ <div className="flex items-center gap-3">
+ {/* Summary badges */}
+ {counts.OPEN > 0 && (
+ <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+ <CircleDot className="h-3 w-3"/> {counts.OPEN} abiertos
+ </div>
+ )}
  <Dialog open={showCreate} onOpenChange={setShowCreate}>
  <DialogTrigger asChild>
  <Button><Plus className="mr-2 h-4 w-4"/> Nuevo ticket</Button>
@@ -326,11 +423,11 @@ export default function TicketsPage() {
  </div>
  {categoryConfigs.length > 0 && (
  <div className="space-y-2">
- <Label className="text-muted-foreground">Categoría SLA</Label>
+ <Label className="text-muted-foreground">Categoria SLA</Label>
  <Select value={form.categoryConfigId || 'none'} onValueChange={(v) => setForm({ ...form, categoryConfigId: v === 'none' ? '' : v })}>
- <SelectTrigger><SelectValue placeholder="Sin categoría SLA"/></SelectTrigger>
+ <SelectTrigger><SelectValue placeholder="Sin categoria SLA"/></SelectTrigger>
  <SelectContent>
- <SelectItem value="none">Sin categoría SLA</SelectItem>
+ <SelectItem value="none">Sin categoria SLA</SelectItem>
  {categoryConfigs.map((c) => (
  <SelectItem key={c.id} value={c.id}>
  {c.name} — <span className={cn('text-xs', criticalityConfig[c.criticality]?.className)}>{criticalityConfig[c.criticality]?.label}</span>
@@ -347,35 +444,32 @@ export default function TicketsPage() {
  </DialogContent>
  </Dialog>
  </div>
-
- {/* Search + Filters */}
- <div className="flex flex-col sm:flex-row gap-3">
- <div className="relative max-w-sm flex-1">
- <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
- <Input placeholder="Buscar por titulo, ID o cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
  </div>
- <div className="flex items-center gap-1.5 flex-wrap">
- {statusFilters.map((sf) => (
- <button
- key={sf.value}
- onClick={() => setStatusFilter(sf.value)}
- className={cn(
- 'px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
- statusFilter === sf.value
- ? 'bg-primary text-primary-foreground border-primary'
- : 'bg-card text-muted-foreground border-border hover:bg-muted',
- )}
- >
- {sf.label} ({counts[sf.value]})
- </button>
- ))}
 
+ {/* Tabs + search */}
+ <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StatusTab)}>
+ <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+ <TabsList className="w-full sm:w-auto">
+ {tabConfig.map((tab) => (
+ <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5 text-xs">
+ {tab.dotColor && <div className={cn('h-1.5 w-1.5 rounded-full', tab.dotColor)} />}
+ {tab.label}
+ <span className="ml-0.5 text-[10px] opacity-60">({counts[tab.value]})</span>
+ </TabsTrigger>
+ ))}
+ </TabsList>
+
+ <div className="flex items-center gap-2 sm:ml-auto">
+ <div className="relative flex-1 sm:w-64">
+ <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
+ <Input placeholder="Buscar..." className="pl-9 h-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
+ </div>
  <DropdownMenu>
  <DropdownMenuTrigger asChild>
- <Button variant="outline" size="sm" className={cn('gap-1', hasActiveFilters && 'border-primary text-primary')}>
+ <Button variant="outline" size="sm" className={cn('gap-1 h-9 shrink-0', hasActiveFilters && 'border-primary text-primary')}>
  <Filter className="h-3.5 w-3.5"/>
- Filtros
- {hasActiveFilters && <span className="ml-1 rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">{(filterPriority ? 1 : 0) + (filterCategory ? 1 : 0) + (filterClient ? 1 : 0)}</span>}
+ <span className="hidden sm:inline">Filtros</span>
+ {hasActiveFilters && <span className="rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">{(filterPriority ? 1 : 0) + (filterCategory ? 1 : 0) + (filterClient ? 1 : 0)}</span>}
  </Button>
  </DropdownMenuTrigger>
  <DropdownMenuContent align="end" className="w-56">
@@ -416,76 +510,12 @@ export default function TicketsPage() {
  </div>
  </div>
 
- {/* Ticket list */}
- <div className="space-y-2">
- {filtered.map((ticket) => {
- const status = statusConfig[ticket.status] || statusConfig.OPEN;
- const priority = priorityConfig[ticket.priority] || priorityConfig.MEDIUM;
- const catLabel = ticket.categoryConfig?.name || categoryLabelMap[ticket.category] || ticket.category;
- const crit = ticket.criticality || ticket.categoryConfig?.criticality;
- const critStyle = crit ? criticalityConfig[crit] : null;
- const breached = isSlaBreached(ticket);
-
- return (
- <Link key={ticket.id} href={`/tickets/${ticket.id}`}>
- <div className={cn(
- 'rounded-xl border bg-card p-4 hover:shadow-sm transition-shadow cursor-pointer flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4',
- breached ? 'border-destructive/50' : 'border-border',
- )}>
- <AlertCircle className={cn('h-5 w-5 shrink-0 hidden sm:block mt-0.5', priority.className)}/>
- <div className="flex-1 min-w-0">
- <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4">
- <div>
- <div className="flex items-center gap-2">
- <h3 className="text-sm font-medium text-foreground">{ticket.title}</h3>
- {breached && (
- <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive" title={getSlaLabel(ticket)}>
- <ShieldAlert className="h-3 w-3" /> SLA Vencido
- </span>
- )}
- </div>
- <div className="flex items-center gap-2 mt-1 flex-wrap">
- <span className="text-[10px] font-mono text-muted-foreground/60">#{ticket.id.slice(-8).toUpperCase()}</span>
- <span className="text-xs text-muted-foreground">{ticket.client?.name || 'Sin cliente'}</span>
- <Badge className={status.className}>{status.label}</Badge>
- <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
- {catLabel}
- </span>
- {critStyle && (
- <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', critStyle.className)}>
- <AlertTriangle className="h-2.5 w-2.5" /> {critStyle.label}
- </span>
- )}
- </div>
- </div>
- <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
- {ticket.channel?._count?.messages !== undefined && (
- <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3"/> {ticket.channel._count.messages}</span>
- )}
- <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> {formatDate(ticket.createdAt)}</span>
- </div>
- </div>
- {ticket.project && (
- <p className="text-xs text-primary mt-1">{ticket.project.name}</p>
- )}
- </div>
- </div>
- </Link>
- );
- })}
- </div>
-
- {/* Empty state */}
- {filtered.length === 0 && (
- <div className="flex flex-col items-center py-16 text-center">
- <TicketIcon className="mb-3 h-10 w-10 text-muted-foreground/50"/>
- <p className="text-muted-foreground">
- {search || statusFilter !== 'all' || hasActiveFilters
- ? 'No se encontraron tickets con esos filtros'
- : 'No hay tickets de soporte aun'}
- </p>
- </div>
- )}
+ {tabConfig.map((tab) => (
+ <TabsContent key={tab.value} value={tab.value}>
+ {renderTicketList(tab.value)}
+ </TabsContent>
+ ))}
+ </Tabs>
  </div>
  );
 }

@@ -246,7 +246,7 @@ export default function TicketDetailPage() {
  <ArrowLeft className="h-4 w-4 mr-1"/> Tickets
  </Button>
 
- <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
+ <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0" style={{ maxHeight: 'calc(100vh - 120px)' }}>
  {/* Conversation panel */}
  <div className="flex-1 flex flex-col rounded-xl border border-border bg-card min-h-0">
  <div className="px-4 py-3 border-b border-border">
@@ -357,7 +357,7 @@ export default function TicketDetailPage() {
  </div>
 
  {/* Sidebar */}
- <div className="w-full lg:w-72 space-y-3 shrink-0">
+ <div className="w-full lg:w-72 space-y-3 shrink-0 overflow-y-auto">
  {/* Details card */}
  <div className="rounded-xl border border-border bg-card p-4 space-y-3">
  <h3 className="text-sm font-semibold text-foreground">Detalles</h3>
