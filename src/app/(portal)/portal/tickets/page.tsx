@@ -196,8 +196,8 @@ export default function PortalTicketsPage() {
 
  return (
  <Link key={ticket.id} href={`/portal/tickets/${ticket.id}`}>
- <div className="group rounded-xl bg-card p-4 transition-all hover:shadow-md border border-border hover:border-primary/30">
- <div className="flex items-start gap-3">
+ <div className="group rounded-xl bg-card p-3 sm:p-4 transition-all hover:shadow-md border border-border hover:border-primary/30 active:scale-[0.99]">
+ <div className="flex items-start gap-2.5 sm:gap-3">
  {/* Status dot */}
  <div className={cn('mt-1.5 h-2 w-2 rounded-full shrink-0',
  ticket.status === 'OPEN' ? 'bg-primary' :
@@ -206,44 +206,38 @@ export default function PortalTicketsPage() {
  )} />
 
  <div className="flex-1 min-w-0">
- {/* Title + status */}
- <div className="flex items-start justify-between gap-3">
- <div className="min-w-0">
- <div className="flex items-center gap-2">
+ {/* Title row */}
+ <div className="flex items-start justify-between gap-2">
+ <div className="min-w-0 flex-1">
  <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.id.slice(-8).toUpperCase()}</span>
- <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{ticket.title}</h3>
+ <h3 className="text-[13px] sm:text-sm font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 sm:truncate leading-snug mt-0.5">{ticket.title}</h3>
  </div>
- </div>
- <Badge className={cn(statusConf.color, 'border-none text-[10px] font-semibold shrink-0')}>
+ <Badge className={cn(statusConf.color, 'border-none text-[10px] font-semibold shrink-0 whitespace-nowrap')}>
  {statusConf.label}
  </Badge>
  </div>
 
- {/* Tags */}
- <div className="flex items-center gap-2 mt-2 flex-wrap">
- <Badge className={cn(catConf.color, 'border-none text-[10px] uppercase tracking-wider font-bold')}>
+ {/* Tags + meta */}
+ <div className="flex items-center gap-1.5 sm:gap-2 mt-1.5 flex-wrap">
+ <Badge className={cn(catConf.color, 'border-none text-[9px] sm:text-[10px] uppercase tracking-wider font-bold px-1.5 py-0')}>
  {catConf.label}
  </Badge>
  {ticket.project && (
- <span className="text-[11px] text-primary font-medium">{ticket.project.name}</span>
+ <span className="text-[10px] sm:text-[11px] text-primary font-medium truncate max-w-[120px] sm:max-w-none">{ticket.project.name}</span>
  )}
- </div>
-
- {/* Footer */}
- <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
- <span className="flex items-center gap-1">
+ <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground ml-auto">
  <Clock className="h-3 w-3"/>
  {new Date(ticket.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
  </span>
  {ticket.channel?._count?.messages !== undefined && ticket.channel._count.messages > 0 && (
- <span className="flex items-center gap-1">
+ <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground">
  <MessageSquare className="h-3 w-3"/> {ticket.channel._count.messages}
  </span>
  )}
  </div>
  </div>
 
- <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0 mt-1.5"/>
+ <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0 mt-1.5 hidden sm:block"/>
  </div>
  </div>
  </Link>
@@ -254,9 +248,9 @@ export default function PortalTicketsPage() {
  const list = getFilteredTickets(tab);
  if (list.length === 0) {
  return (
- <div className="flex flex-col items-center py-16 text-center">
- <Ticket className="mb-3 h-10 w-10 text-muted-foreground/50"/>
- <p className="text-sm text-muted-foreground">
+ <div className="flex flex-col items-center py-12 sm:py-16 text-center px-4">
+ <Ticket className="mb-3 h-8 w-8 sm:h-10 sm:w-10 text-muted-foreground/50"/>
+ <p className="text-xs sm:text-sm text-muted-foreground">
  {search || filterProject
  ? 'No se encontraron tickets con esos filtros'
  : tab === 'all' ? 'No hay tickets aun' : `No hay tickets ${tabConfig.find((t) => t.value === tab)?.label.toLowerCase()}`}
@@ -269,12 +263,13 @@ export default function PortalTicketsPage() {
 
  if (loading) {
  return (
- <div className="mx-auto max-w-5xl space-y-6">
- <Skeleton className="h-10 w-48 rounded-xl"/>
- <Skeleton className="h-10 w-full max-w-lg rounded-lg"/>
- <div className="space-y-3">
+ <div className="mx-auto max-w-5xl space-y-5 px-4 sm:px-0">
+ <Skeleton className="h-8 sm:h-10 w-40 sm:w-48 rounded-xl"/>
+ <Skeleton className="h-10 w-full rounded-lg"/>
+ <Skeleton className="h-9 w-full rounded-lg"/>
+ <div className="space-y-2">
  {Array.from({ length: 4 }).map((_, i) => (
- <Skeleton key={i} className="h-24 rounded-xl"/>
+ <Skeleton key={i} className="h-20 sm:h-24 rounded-xl"/>
  ))}
  </div>
  </div>
@@ -282,25 +277,25 @@ export default function PortalTicketsPage() {
  }
 
  return (
- <div className="mx-auto max-w-5xl space-y-6 pb-4">
+ <div className="mx-auto max-w-5xl space-y-5 px-4 sm:px-0 pb-4">
  {/* Header */}
- <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
- <div>
- <h1 className="text-2xl font-bold text-foreground">Mis Tickets</h1>
- <p className="text-sm text-muted-foreground mt-1">
+ <div className="flex items-start justify-between gap-3">
+ <div className="min-w-0">
+ <h1 className="text-xl sm:text-2xl font-bold text-foreground">Mis Tickets</h1>
+ <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
  Seguimiento de solicitudes de soporte y desarrollo
  </p>
  </div>
- <div className="flex items-center gap-3">
+ <div className="flex items-center gap-2 shrink-0">
  {counts.OPEN > 0 && (
- <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+ <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
  <CircleDot className="h-3 w-3"/> {counts.OPEN} abiertos
  </div>
  )}
  <Dialog open={showCreate} onOpenChange={setShowCreate}>
  <DialogTrigger asChild>
- <Button className="rounded-full">
- <Plus className="mr-2 h-4 w-4"/> Nuevo Ticket
+ <Button size="sm" className="rounded-full h-9 px-3 sm:px-4">
+ <Plus className="h-4 w-4 sm:mr-2"/> <span className="hidden sm:inline">Nuevo Ticket</span>
  </Button>
  </DialogTrigger>
  <DialogContent className="sm:max-w-md">
@@ -423,31 +418,35 @@ export default function PortalTicketsPage() {
 
  {/* Tabs + search */}
  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StatusTab)}>
- <div className="flex flex-col sm:flex-row sm:items-center gap-3">
- <TabsList className="w-full sm:w-auto">
+ <div className="space-y-3">
+ {/* Scrollable tabs */}
+ <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto scrollbar-none">
+ <TabsList className="w-max sm:w-auto inline-flex">
  {tabConfig.map((tab) => (
- <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5 text-xs">
+ <TabsTrigger key={tab.value} value={tab.value} className="gap-1 text-[11px] sm:text-xs px-2.5 sm:px-3">
  {tab.dotColor && <div className={cn('h-1.5 w-1.5 rounded-full', tab.dotColor)} />}
- {tab.label}
+ <span className="whitespace-nowrap">{tab.label}</span>
  {counts[tab.value] > 0 && (
- <span className="ml-0.5 text-[10px] opacity-60">({counts[tab.value]})</span>
+ <span className="text-[10px] opacity-60">({counts[tab.value]})</span>
  )}
  </TabsTrigger>
  ))}
  </TabsList>
+ </div>
 
- <div className="flex items-center gap-2 sm:ml-auto">
- <div className="relative flex-1 sm:w-56">
+ {/* Search + filter */}
+ <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+ <div className="relative flex-1">
  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
- <Input placeholder="Buscar..." className="pl-9 h-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
+ <Input placeholder="Buscar tickets..." className="pl-9 h-9 text-sm" value={search} onChange={(e) => setSearch(e.target.value)}/>
  </div>
  {projects.length > 1 && (
  <Select value={filterProject || 'all'} onValueChange={(v) => setFilterProject(v === 'all' ? '' : v)}>
- <SelectTrigger className="w-[160px] h-9 text-xs">
+ <SelectTrigger className="w-full sm:w-[160px] h-9 text-xs">
  <SelectValue placeholder="Proyecto" />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="all">Todos</SelectItem>
+ <SelectItem value="all">Todos los proyectos</SelectItem>
  {projects.map((p) => (
  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
  ))}
