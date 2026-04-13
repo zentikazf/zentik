@@ -17,7 +17,7 @@ import { ActivityFeed } from '@/components/activity/activity-feed';
 import {
  ArrowLeft, Calendar, Tag, User, Clock, CheckCircle2, Paperclip,
  Download, File as FileIcon, Image, FileText, Plus, Send, MessageSquare,
- Upload, Shield, Eye, EyeOff,
+ Upload, Shield, Eye, EyeOff, AlertTriangle,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
@@ -74,6 +74,8 @@ export default function TaskDetailPage() {
 
  // Project members for assignee picker
  const [projectMembers, setProjectMembers] = useState<any[]>([]);
+ // Available client hours
+ const [clientHours, setClientHours] = useState<{ availableHours: number; clientName: string; contractedHours: number; usedHours: number } | null>(null);
 
  // ── Load task ─────────────────────────────────────────────────
  const loadTask = useCallback(async () => {
@@ -111,6 +113,9 @@ export default function TaskDetailPage() {
    api.get(`/projects/${projectId}/members`).then((res) => {
     const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
     setProjectMembers(list);
+   }).catch(() => {});
+   api.get(`/projects/${projectId}/available-hours`).then((res) => {
+    if (res.data) setClientHours(res.data);
    }).catch(() => {});
   }
  }, [projectId]);
@@ -431,9 +436,21 @@ export default function TaskDetailPage() {
  <Separator />
 
  {/* Estimated hours */}
+ <div className="space-y-1">
  <div className="flex items-center justify-between">
  <span className="text-muted-foreground text-xs">Horas estimadas</span>
  <input type="number" min="0" step="0.5" value={task.estimatedHours ?? ''} onChange={(e) => { const v = e.target.value; patchTask({ estimatedHours: v ? Number(v) : 0 }); }} placeholder="—" className="h-7 w-20 rounded border border-border bg-background px-2 text-xs text-foreground text-right"/>
+ </div>
+ {task.type === 'SUPPORT' && clientHours && (
+ <div className="flex items-center justify-between text-[10px]">
+ <span className="text-muted-foreground">Disponibles: {clientHours.availableHours.toFixed(1)}h / {clientHours.contractedHours}h</span>
+ {task.estimatedHours && task.estimatedHours > clientHours.availableHours && (
+ <span className="flex items-center gap-1 text-destructive font-medium">
+ <AlertTriangle className="h-3 w-3"/> Excede
+ </span>
+ )}
+ </div>
+ )}
  </div>
  <Separator />
 
