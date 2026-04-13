@@ -149,9 +149,7 @@ export default function PortalTicketDetailPage() {
  try {
  const formData = new FormData();
  formData.append('file', file);
- await api.post<any>('/files/upload?category=ATTACHMENT', formData, {
- headers: { 'Content-Type': 'multipart/form-data' },
- });
+ await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
  await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
  content: `📎 ${file.name}`,
  });

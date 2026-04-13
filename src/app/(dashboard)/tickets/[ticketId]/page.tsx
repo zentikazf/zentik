@@ -170,9 +170,7 @@ export default function TicketDetailPage() {
  try {
  const formData = new FormData();
  formData.append('file', file);
- const uploadRes = await api.post<any>('/files/upload?category=ATTACHMENT', formData, {
- headers: { 'Content-Type': 'multipart/form-data' },
- });
+ const uploadRes = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
  const fileUrl = uploadRes.data?.url || uploadRes.data?.key || file.name;
  await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
  content: `📎 ${file.name}`,
