@@ -11,10 +11,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Ticket, Plus, Clock, ChevronRight, AlertCircle, Info, CircleDot, Search, MessageSquare } from 'lucide-react';
+import { Ticket, Plus, Clock, ChevronRight, AlertCircle, Info, CircleDot, Search, MessageSquare, User } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
@@ -41,6 +42,7 @@ const tabConfig: { value: StatusTab; label: string; dotColor: string }[] = [
 
 interface TicketItem {
  id: string;
+ ticketNumber: string | null;
  title: string;
  description: string | null;
  category: string;
@@ -72,6 +74,7 @@ interface BusinessHours {
 }
 
 export default function PortalTicketsPage() {
+ const { user } = useAuth();
  const [tickets, setTickets] = useState<TicketItem[]>([]);
  const [projects, setProjects] = useState<ProjectOption[]>([]);
  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
@@ -80,6 +83,7 @@ export default function PortalTicketsPage() {
  const [activeTab, setActiveTab] = useState<StatusTab>('all');
  const [search, setSearch] = useState('');
  const [filterProject, setFilterProject] = useState('');
+ const [onlyMine, setOnlyMine] = useState(false);
  const [showCreate, setShowCreate] = useState(false);
  const [creating, setCreating] = useState(false);
  const [form, setForm] = useState({
@@ -94,12 +98,15 @@ export default function PortalTicketsPage() {
 
  useEffect(() => {
  loadData();
- }, []);
+ }, [onlyMine]);
 
  const loadData = async () => {
  try {
+ const ticketParams = new URLSearchParams();
+ if (onlyMine && user?.id) ticketParams.set('createdByUserId', user.id);
+ const qs = ticketParams.toString() ? `?${ticketParams.toString()}` : '';
  const [ticketsRes, projectsRes, catRes, bhRes] = await Promise.all([
- api.get<any>('/portal/tickets'),
+ api.get<any>(`/portal/tickets${qs}`),
  api.get<any>('/portal/projects'),
  api.get<any>('/portal/ticket-categories').catch(() => ({ data: [] })),
  api.get<any>('/portal/business-hours').catch(() => ({ data: null })),
@@ -160,8 +167,8 @@ export default function PortalTicketsPage() {
  category: form.category,
  priority: form.priority,
  });
- const newId = res.data?.id ? ` #${res.data.id.slice(-8).toUpperCase()}` : '';
- toast.success('Ticket creado', `Tu ticket${newId} fue enviado al equipo`);
+ const ticketNum = res.data?.ticketNumber || res.data?.id?.slice(-8).toUpperCase();
+ toast.success('Ticket creado', `Tu ticket #${ticketNum} fue enviado al equipo`);
  setShowCreate(false);
  setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', projectName: '', projectDescription: '' });
  await loadData();
@@ -183,7 +190,7 @@ export default function PortalTicketsPage() {
  const getFilteredTickets = (tab: StatusTab) => {
  return tickets.filter((t) => {
  const q = search.toLowerCase();
- const matchesSearch = !q || t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q);
+ const matchesSearch = !q || t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || (t.ticketNumber || '').toLowerCase().includes(q);
  const matchesStatus = tab === 'all' || t.status === tab;
  const matchesProject = !filterProject || t.project?.id === filterProject;
  return matchesSearch && matchesStatus && matchesProject;
@@ -209,7 +216,7 @@ export default function PortalTicketsPage() {
  {/* Title row */}
  <div className="flex items-start justify-between gap-2">
  <div className="min-w-0 flex-1">
- <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.id.slice(-8).toUpperCase()}</span>
+ <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.ticketNumber || ticket.id.slice(-8).toUpperCase()}</span>
  <h3 className="text-[13px] sm:text-sm font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 sm:truncate leading-snug mt-0.5">{ticket.title}</h3>
  </div>
  <Badge className={cn(statusConf.color, 'border-none text-[10px] font-semibold shrink-0 whitespace-nowrap')}>
@@ -224,6 +231,11 @@ export default function PortalTicketsPage() {
  </Badge>
  {ticket.project && (
  <span className="text-[10px] sm:text-[11px] text-primary font-medium truncate max-w-[120px] sm:max-w-none">{ticket.project.name}</span>
+ )}
+ {ticket.createdByUser && (
+ <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground">
+ <User className="h-3 w-3"/>{ticket.createdByUser.name}
+ </span>
  )}
  <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground ml-auto">
  <Clock className="h-3 w-3"/>
@@ -440,6 +452,15 @@ export default function PortalTicketsPage() {
  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
  <Input placeholder="Buscar tickets..." className="pl-9 h-9 text-sm" value={search} onChange={(e) => setSearch(e.target.value)}/>
  </div>
+ <Button
+ variant={onlyMine ? 'default' : 'outline'}
+ size="sm"
+ className="h-9 text-xs gap-1.5 shrink-0"
+ onClick={() => setOnlyMine(!onlyMine)}
+ >
+ <User className="h-3.5 w-3.5"/>
+ Mis tickets
+ </Button>
  {projects.length > 1 && (
  <Select value={filterProject || 'all'} onValueChange={(v) => setFilterProject(v === 'all' ? '' : v)}>
  <SelectTrigger className="w-full sm:w-[160px] h-9 text-xs">

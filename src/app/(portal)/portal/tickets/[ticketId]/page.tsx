@@ -32,6 +32,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 
 interface TicketDetail {
  id: string;
+ ticketNumber: string | null;
  title: string;
  description: string | null;
  category: string;
@@ -42,6 +43,7 @@ interface TicketDetail {
  project: { id: string; name: string } | null;
  task: { id: string; title: string; status: string } | null;
  channel: { id: string; name: string } | null;
+ createdByUser: { id: string; name: string } | null;
 }
 
 interface ChatMessage {
@@ -209,7 +211,7 @@ export default function PortalTicketDetailPage() {
  </Link>
  <div className="flex flex-wrap items-center gap-2">
  <Ticket className="h-5 w-5 text-primary"/>
- <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{ticket.id.slice(-8).toUpperCase()}</span>
+ <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{ticket.ticketNumber || ticket.id.slice(-8).toUpperCase()}</span>
  <h1 className="text-xl font-bold text-foreground">{ticket.title}</h1>
  </div>
  <div className="flex items-center gap-2 mt-2">
@@ -259,6 +261,12 @@ export default function PortalTicketDetailPage() {
  })}
  </span>
  </div>
+ {ticket.createdByUser && (
+ <div className="flex items-center justify-between text-sm">
+ <span className="text-muted-foreground">Creado por</span>
+ <span className="font-medium text-foreground">{ticket.createdByUser.name}</span>
+ </div>
+ )}
  {ticket.task && (
  <div className="flex items-center justify-between text-sm">
  <span className="text-muted-foreground">Tarea</span>

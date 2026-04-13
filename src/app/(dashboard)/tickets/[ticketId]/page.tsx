@@ -34,6 +34,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 interface TicketDetail {
  id: string;
+ ticketNumber: string | null;
  title: string;
  description: string | null;
  category: string;
@@ -45,6 +46,7 @@ interface TicketDetail {
  project: { id: string; name: string; slug?: string } | null;
  task: { id: string; title: string; status: string; priority?: string } | null;
  channel: { id: string; name: string; _count?: { messages: number } } | null;
+ createdByUser: { id: string; name: string } | null;
 }
 
 interface ChatFile {
@@ -251,7 +253,7 @@ export default function TicketDetailPage() {
  <div className="flex items-start justify-between gap-3">
  <div>
  <div className="flex items-center gap-2">
- <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{ticket.id.slice(-8).toUpperCase()}</span>
+ <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{ticket.ticketNumber || ticket.id.slice(-8).toUpperCase()}</span>
  <h1 className="text-base font-semibold text-foreground">{ticket.title}</h1>
  </div>
  <p className="text-xs text-muted-foreground mt-0.5">
@@ -389,6 +391,12 @@ export default function TicketDetailPage() {
  <span className="text-muted-foreground flex items-center gap-1.5"><Clock className="h-3.5 w-3.5"/> Creado</span>
  <span className="text-foreground">{new Date(ticket.createdAt).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
  </div>
+ {ticket.createdByUser && (
+ <div className="flex items-center justify-between">
+ <span className="text-muted-foreground flex items-center gap-1.5"><User className="h-3.5 w-3.5"/> Creado por</span>
+ <span className="font-medium text-foreground">{ticket.createdByUser.name}</span>
+ </div>
+ )}
  </div>
  </div>
 

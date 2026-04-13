@@ -47,6 +47,7 @@ interface CategoryConfig {
 
 interface Ticket {
  id: string;
+ ticketNumber: string | null;
  title: string;
  description?: string;
  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
@@ -185,8 +186,8 @@ export default function TicketsPage() {
  priority: form.priority,
  ...(form.categoryConfigId && { categoryConfigId: form.categoryConfigId }),
  });
- const newId = res.data?.id ? `#${res.data.id.slice(-8).toUpperCase()}` : '';
- toast.success('Ticket creado', `Ticket ${newId} creado exitosamente`);
+ const ticketNum = res.data?.ticketNumber || res.data?.id?.slice(-8).toUpperCase();
+ toast.success('Ticket creado', `Ticket #${ticketNum} creado exitosamente`);
  setShowCreate(false);
  setForm({ clientId: '', projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', categoryConfigId: '' });
  await loadTickets();
@@ -213,6 +214,7 @@ export default function TicketsPage() {
  const matchesSearch =
  t.title.toLowerCase().includes(q) ||
  t.id.toLowerCase().includes(q) ||
+ (t.ticketNumber || '').toLowerCase().includes(q) ||
  (t.client?.name || '').toLowerCase().includes(q);
  const matchesStatus = tab === 'all' || t.status === tab;
  const matchesPriority = !filterPriority || t.priority === filterPriority;
@@ -262,7 +264,7 @@ export default function TicketsPage() {
  <div className="flex items-start justify-between gap-3">
  <div className="min-w-0">
  <div className="flex items-center gap-2 flex-wrap">
- <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.id.slice(-8).toUpperCase()}</span>
+ <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.ticketNumber || ticket.id.slice(-8).toUpperCase()}</span>
  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{ticket.title}</h3>
  </div>
  </div>
@@ -298,6 +300,9 @@ export default function TicketsPage() {
  {/* Footer row */}
  <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
  <span className="flex items-center gap-1"><Clock className="h-3 w-3"/> {formatDate(ticket.createdAt)}</span>
+ {ticket.createdByUser && (
+ <span className="text-[11px] text-muted-foreground">por {ticket.createdByUser.name}</span>
+ )}
  {ticket.channel?._count?.messages !== undefined && ticket.channel._count.messages > 0 && (
  <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3"/> {ticket.channel._count.messages}</span>
  )}
