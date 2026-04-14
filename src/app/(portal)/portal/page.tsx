@@ -12,6 +12,9 @@ import {
  CheckCircle2,
  Bell,
  Activity,
+ AlertTriangle,
+ Info,
+ ShieldAlert,
 } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/use-auth';
@@ -145,6 +148,49 @@ export default function PortalDashboard() {
      </p>
     </div>
    </div>
+
+   {/* Hours alert */}
+   {data.hours && data.hours.contractedHours > 0 && (() => {
+    const pct = data.hours.percentUsed;
+    const available = data.hours.availableHours;
+    if (available <= 0) return (
+     <div className="flex items-start gap-3 rounded-xl bg-destructive/10 border border-destructive/20 p-4">
+      <ShieldAlert className="h-5 w-5 text-destructive shrink-0 mt-0.5"/>
+      <div>
+       <p className="text-sm font-semibold text-destructive">Horas agotadas</p>
+       <p className="text-xs text-destructive/80 mt-0.5">Has consumido todas las horas contratadas. Contacta con tu equipo para gestionar mas horas y continuar con el soporte.</p>
+      </div>
+     </div>
+    );
+    if (pct >= 90) return (
+     <div className="flex items-start gap-3 rounded-xl bg-destructive/10 border border-destructive/20 p-4">
+      <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5"/>
+      <div>
+       <p className="text-sm font-semibold text-destructive">Quedan pocas horas ({available.toFixed(0)}h)</p>
+       <p className="text-xs text-destructive/80 mt-0.5">Has utilizado el {pct}% de tus horas contratadas. Te recomendamos coordinar con tu equipo la adquisicion de horas adicionales.</p>
+      </div>
+     </div>
+    );
+    if (pct >= 75) return (
+     <div className="flex items-start gap-3 rounded-xl bg-warning/10 border border-warning/20 p-4">
+      <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5"/>
+      <div>
+       <p className="text-sm font-semibold text-warning">Consumo elevado de horas ({pct}%)</p>
+       <p className="text-xs text-warning/80 mt-0.5">Llevas {data.hours.usedHours.toFixed(0)}h de {data.hours.contractedHours}h contratadas. Considera planificar el uso restante de tus horas.</p>
+      </div>
+     </div>
+    );
+    if (pct >= 50) return (
+     <div className="flex items-start gap-3 rounded-xl bg-primary/5 border border-primary/10 p-4">
+      <Info className="h-5 w-5 text-primary shrink-0 mt-0.5"/>
+      <div>
+       <p className="text-sm font-medium text-primary">Uso de horas al {pct}%</p>
+       <p className="text-xs text-muted-foreground mt-0.5">Tienes {available.toFixed(0)}h disponibles de {data.hours.contractedHours}h contratadas. Todo en orden.</p>
+      </div>
+     </div>
+    );
+    return null;
+   })()}
 
    {/* Quick Actions */}
    <div>

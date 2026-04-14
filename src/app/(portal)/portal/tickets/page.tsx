@@ -86,6 +86,7 @@ export default function PortalTicketsPage() {
  const [onlyMine, setOnlyMine] = useState(false);
  const [showCreate, setShowCreate] = useState(false);
  const [creating, setCreating] = useState(false);
+ const [attachFile, setAttachFile] = useState<File | null>(null);
  const [form, setForm] = useState({
  projectId: '',
  title: '',
@@ -167,9 +168,21 @@ export default function PortalTicketsPage() {
  category: form.category,
  priority: form.priority,
  });
+
+ // Upload optional attachment to the ticket channel
+ if (attachFile && res.data?.channel?.id) {
+ const fd = new FormData();
+ fd.append('file', attachFile);
+ await api.upload<any>('/files/upload?category=ATTACHMENT', fd).catch(() => {});
+ await api.post(`/channels/${res.data.channel.id}/messages`, {
+ content: `📎 ${attachFile.name}`,
+ }).catch(() => {});
+ }
+
  const ticketNum = res.data?.ticketNumber || res.data?.id?.slice(-8).toUpperCase();
  toast.success('Ticket creado', `Tu ticket #${ticketNum} fue enviado al equipo`);
  setShowCreate(false);
+ setAttachFile(null);
  setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', projectName: '', projectDescription: '' });
  await loadData();
  } catch (err) {
@@ -406,6 +419,27 @@ export default function PortalTicketsPage() {
  </div>
  </>
  ) : null}
+
+ {form.category && form.category !== 'NEW_PROJECT' && (
+ <div className="space-y-2">
+ <Label className="text-muted-foreground">Archivo adjunto <span className="text-muted-foreground/50">(opcional)</span></Label>
+ <div className="flex items-center gap-2">
+ <Input
+ type="file"
+ className="text-xs"
+ onChange={(e) => setAttachFile(e.target.files?.[0] || null)}
+ />
+ {attachFile && (
+ <Button type="button" variant="ghost" size="sm" className="text-xs shrink-0" onClick={() => setAttachFile(null)}>
+ Quitar
+ </Button>
+ )}
+ </div>
+ {attachFile && (
+ <p className="text-[10px] text-muted-foreground">Se adjuntara al chat del ticket despues de crearlo.</p>
+ )}
+ </div>
+ )}
 
  {form.category && (
  <Button type="submit" className="w-full rounded-full" disabled={creating}>

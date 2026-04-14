@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ChevronLeft, Send, Paperclip, Ticket, CheckCircle2, Clock, AlertCircle, MessageSquare } from 'lucide-react';
+import { ChevronLeft, Send, Paperclip, Ticket, CheckCircle2, Clock, AlertCircle, MessageSquare, FileText, Image, Download } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
@@ -382,6 +382,53 @@ export default function PortalTicketDetailPage() {
  </div>
  </div>
  </div>
+
+    {/* Archivos adjuntos — full width */}
+    {(() => {
+     const allFiles = messages.flatMap((m) =>
+      (m.files || []).map((f) => ({ ...f, sentBy: m.user.name, sentAt: m.createdAt }))
+     );
+     if (allFiles.length === 0) return null;
+     return (
+      <div className="rounded-xl bg-card p-5 border border-border">
+       <h2 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center gap-2">
+        <Paperclip className="h-4 w-4 text-primary"/>
+        Archivos adjuntos ({allFiles.length})
+       </h2>
+       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {allFiles.map((f) => {
+         const isImage = f.mimeType?.startsWith('image/');
+         return (
+          <a
+           key={f.id}
+           href={f.url}
+           target="_blank"
+           rel="noopener noreferrer"
+           className="group flex items-center gap-3 rounded-lg border border-border p-3 transition-all hover:bg-muted/30 hover:border-primary/30"
+          >
+           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+            {isImage ? (
+             <Image className="h-5 w-5 text-primary"/>
+            ) : (
+             <FileText className="h-5 w-5 text-primary"/>
+            )}
+           </div>
+           <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+             {f.originalName}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+             {f.sentBy} · {new Date(f.sentAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+            </p>
+           </div>
+           <Download className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary shrink-0 transition-colors"/>
+          </a>
+         );
+        })}
+       </div>
+      </div>
+     );
+    })()}
  </div>
  );
 }

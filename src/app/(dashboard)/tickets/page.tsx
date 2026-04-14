@@ -283,12 +283,12 @@ export default function TicketsPage() {
  <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
  {catLabel}
  </span>
- <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', priority.bg)}>
- {priority.label}
+ <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', priority.bg)}>
+ Prioridad: {priority.label}
  </span>
  {critStyle && (
  <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', critStyle.className)}>
- <AlertTriangle className="h-2.5 w-2.5" /> {critStyle.label}
+ <AlertTriangle className="h-2.5 w-2.5" /> Criticidad: {critStyle.label}
  </span>
  )}
  <span className="text-[11px] text-muted-foreground">{ticket.client?.name || 'Sin cliente'}</span>
