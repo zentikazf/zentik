@@ -222,7 +222,7 @@ export default function PortalTicketDetailPage() {
  {statusConf.label}
  </Badge>
  <span className="text-xs text-muted-foreground">
- Prioridad: <span className="font-medium text-muted-foreground">{PRIORITY_LABEL[ticket.priority] || ticket.priority}</span>
+ Criticidad: <span className="font-medium text-muted-foreground">{PRIORITY_LABEL[ticket.priority] || ticket.priority}</span>
  </span>
  </div>
  </div>

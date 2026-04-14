@@ -367,7 +367,7 @@ export default function TicketDetailPage() {
  <span className="font-medium text-foreground">{CATEGORY_LABELS[ticket.category] || ticket.category}</span>
  </div>
  <div className="flex items-center justify-between">
- <span className="text-muted-foreground flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5"/> Prioridad</span>
+ <span className="text-muted-foreground flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5"/> Criticidad</span>
  <span className={cn(
  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
  ticket.priority === 'HIGH' ? 'bg-destructive/10 text-destructive' :

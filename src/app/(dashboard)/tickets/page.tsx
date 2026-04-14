@@ -89,16 +89,10 @@ const categoryLabelMap: Record<string, string> = {
  NEW_DEVELOPMENT: 'Desarrollo',
 };
 
-const priorityConfig: Record<string, { label: string; className: string; bg: string }> = {
+const criticalityConfig: Record<string, { label: string; className: string; bg: string }> = {
  HIGH: { label: 'Alta', className: 'text-destructive', bg: 'bg-destructive/10 text-destructive' },
  MEDIUM: { label: 'Media', className: 'text-warning', bg: 'bg-warning/10 text-warning' },
  LOW: { label: 'Baja', className: 'text-muted-foreground', bg: 'bg-muted text-muted-foreground' },
-};
-
-const criticalityConfig: Record<string, { label: string; className: string }> = {
- HIGH: { label: 'Alta', className: 'bg-destructive/10 text-destructive' },
- MEDIUM: { label: 'Media', className: 'bg-warning/10 text-warning' },
- LOW: { label: 'Baja', className: 'bg-muted text-muted-foreground' },
 };
 
 export default function TicketsPage() {
@@ -243,10 +237,9 @@ export default function TicketsPage() {
 
  const renderTicketCard = (ticket: Ticket) => {
  const status = statusConfig[ticket.status] || statusConfig.OPEN;
- const priority = priorityConfig[ticket.priority] || priorityConfig.MEDIUM;
  const catLabel = ticket.categoryConfig?.name || categoryLabelMap[ticket.category] || ticket.category;
- const crit = ticket.criticality || ticket.categoryConfig?.criticality;
- const critStyle = crit ? criticalityConfig[crit] : null;
+ const crit = ticket.criticality || ticket.categoryConfig?.criticality || ticket.priority;
+ const critStyle = criticalityConfig[crit] || criticalityConfig.MEDIUM;
  const breached = isSlaBreached(ticket);
 
  return (
@@ -256,8 +249,8 @@ export default function TicketsPage() {
  breached ? 'border-destructive/50 hover:border-destructive/70' : 'border-border hover:border-primary/30',
  )}>
  <div className="flex items-start gap-3">
- {/* Priority indicator */}
- <div className={cn('mt-1 h-2 w-2 rounded-full shrink-0', priority.bg.split(' ')[0])} />
+ {/* Criticality indicator */}
+ <div className={cn('mt-1 h-2 w-2 rounded-full shrink-0', critStyle.bg.split(' ')[0])} />
 
  <div className="flex-1 min-w-0">
  {/* Title row */}
@@ -283,14 +276,9 @@ export default function TicketsPage() {
  <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
  {catLabel}
  </span>
- <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', priority.bg)}>
- Prioridad: {priority.label}
- </span>
- {critStyle && (
- <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', critStyle.className)}>
+ <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', critStyle.bg)}>
  <AlertTriangle className="h-2.5 w-2.5" /> Criticidad: {critStyle.label}
  </span>
- )}
  <span className="text-[11px] text-muted-foreground">{ticket.client?.name || 'Sin cliente'}</span>
  {ticket.project && (
  <span className="text-[11px] text-primary">{ticket.project.name}</span>
@@ -415,7 +403,7 @@ export default function TicketsPage() {
  </Select>
  </div>
  <div className="space-y-2">
- <Label className="text-muted-foreground">Prioridad</Label>
+ <Label className="text-muted-foreground">Criticidad</Label>
  <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
  <SelectTrigger><SelectValue/></SelectTrigger>
  <SelectContent>
@@ -478,10 +466,10 @@ export default function TicketsPage() {
  </Button>
  </DropdownMenuTrigger>
  <DropdownMenuContent align="end" className="w-56">
- <DropdownMenuLabel>Prioridad</DropdownMenuLabel>
+ <DropdownMenuLabel>Criticidad</DropdownMenuLabel>
  {(['HIGH', 'MEDIUM', 'LOW'] as const).map((p) => (
  <DropdownMenuCheckboxItem key={p} checked={filterPriority === p} onCheckedChange={(checked) => setFilterPriority(checked ? p : null)}>
- {priorityConfig[p]?.label || p}
+ {criticalityConfig[p]?.label || p}
  </DropdownMenuCheckboxItem>
  ))}
  <DropdownMenuSeparator/>
