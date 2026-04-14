@@ -324,6 +324,8 @@ export default function PortalTicketDetailPage() {
  </AvatarFallback>
  </Avatar>
  <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+ {/* Hide text bubble when message is just a file attachment marker */}
+ {!(msg.files?.length && msg.content.startsWith('\u{1F4CE}')) && (
  <div
  className={`rounded-2xl px-3 py-2 text-sm leading-relaxed ${
  isMe
@@ -333,8 +335,9 @@ export default function PortalTicketDetailPage() {
  >
  {msg.content}
  </div>
+ )}
  {msg.files && msg.files.length > 0 && (
- <div className="flex flex-col gap-1.5 mt-1.5">
+ <div className="flex flex-col gap-1.5">
  {msg.files.map((f) => (
  <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" download={f.originalName}
   className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2 text-xs hover:bg-muted/50 transition-colors">
@@ -388,52 +391,6 @@ export default function PortalTicketDetailPage() {
  </div>
  </div>
 
-    {/* Archivos adjuntos — full width */}
-    {(() => {
-     const allFiles = messages.flatMap((m) =>
-      (m.files || []).map((f) => ({ ...f, sentBy: m.user.name, sentAt: m.createdAt }))
-     );
-     if (allFiles.length === 0) return null;
-     return (
-      <div className="rounded-xl bg-card p-5 border border-border">
-       <h2 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center gap-2">
-        <Paperclip className="h-4 w-4 text-primary"/>
-        Archivos adjuntos ({allFiles.length})
-       </h2>
-       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {allFiles.map((f) => {
-         const isImage = f.mimeType?.startsWith('image/');
-         return (
-          <a
-           key={f.id}
-           href={f.url}
-           target="_blank"
-           rel="noopener noreferrer"
-           className="group flex items-center gap-3 rounded-lg border border-border p-3 transition-all hover:bg-muted/30 hover:border-primary/30"
-          >
-           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-            {isImage ? (
-             <Image className="h-5 w-5 text-primary"/>
-            ) : (
-             <FileText className="h-5 w-5 text-primary"/>
-            )}
-           </div>
-           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
-             {f.originalName}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-             {f.sentBy} · {new Date(f.sentAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-            </p>
-           </div>
-           <Download className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary shrink-0 transition-colors"/>
-          </a>
-         );
-        })}
-       </div>
-      </div>
-     );
-    })()}
  </div>
  );
 }

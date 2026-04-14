@@ -293,6 +293,7 @@ export default function TicketDetailPage() {
  {getInitials(msg.user.name)}
  </div>
  <div className={cn('flex flex-col gap-1', isTeam ? 'items-end' : 'items-start')}>
+ {!(msg.files?.length && msg.content.startsWith('\u{1F4CE}')) && (
  <div className={cn(
  'rounded-2xl px-3 py-2 text-sm leading-relaxed',
  isTeam
@@ -301,8 +302,9 @@ export default function TicketDetailPage() {
  )}>
  {msg.content}
  </div>
+ )}
  {msg.files && msg.files.length > 0 && (
- <div className="flex flex-col gap-1.5 mt-1.5">
+ <div className="flex flex-col gap-1.5">
  {msg.files.map((f) => (
  <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" download={f.originalName}
   className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2 text-xs hover:bg-muted/50 transition-colors">
