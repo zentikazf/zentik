@@ -188,7 +188,7 @@ const modules: Module[] = [
   {
     id: 'tickets',
     title: 'Tickets',
-    description: 'Como crear, dar seguimiento y comunicarte sobre solicitudes.',
+    description: 'Como crear, dar seguimiento y comunicarte sobre solicitudes. Soporta dos flujos: Soporte/Configuracion y Nuevo Proyecto.',
     icon: Ticket,
     color: 'bg-amber-500/10 text-amber-500',
     sections: [
@@ -202,17 +202,30 @@ const modules: Module[] = [
               <h4 className="font-semibold text-sm mb-2">Objetivo:</h4>
               <p className="text-sm text-muted-foreground">Centralizar todas las solicitudes en un solo lugar con trazabilidad completa: desde la creacion hasta la resolucion.</p>
             </div>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+              <h4 className="font-semibold text-sm mb-2 text-amber-600 dark:text-amber-400">Dos tipos de ticket disponibles:</h4>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <ArrowRight className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  <span><strong>Soporte y Configuracion</strong> — para reportar errores, pedir ajustes o solicitar asistencia tecnica sobre proyectos existentes.</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <ArrowRight className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  <span><strong>Nuevo Proyecto</strong> — para solicitar el desarrollo de un proyecto completamente nuevo desde cero.</span>
+                </li>
+              </ul>
+            </div>
           </div>
         ),
       },
       {
-        id: 'tickets-create',
-        title: 'Crear un ticket',
+        id: 'tickets-create-soporte',
+        title: 'Ticket de Soporte / Configuracion',
         content: (
           <div className="space-y-4">
-            <p>Para crear un ticket nuevo:</p>
+            <p>Usa este flujo cuando necesitas <strong>reportar un problema, pedir un ajuste o solicitar asistencia tecnica</strong> sobre un proyecto ya existente.</p>
+            <p className="text-sm text-muted-foreground">Al hacer clic en <strong>"Nuevo ticket"</strong> y seleccionar <strong>Soporte y Configuracion</strong>:</p>
             <ol className="list-decimal list-inside space-y-2 text-sm">
-              <li>Haz clic en el boton <strong>"Nuevo ticket"</strong> en la esquina superior derecha.</li>
               <li>Selecciona el <strong>proyecto</strong> al que pertenece la solicitud.</li>
               <li>Escribe un <strong>titulo</strong> claro y descriptivo.</li>
               <li>Agrega una <strong>descripcion</strong> detallada del problema o solicitud.</li>
@@ -223,6 +236,27 @@ const modules: Module[] = [
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <h4 className="font-semibold text-sm mb-2">Buena practica:</h4>
               <p className="text-xs text-muted-foreground">Un titulo claro como "Error al generar reporte de ventas" es mucho mejor que "No funciona". Incluye pasos para reproducir el problema si es posible.</p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'tickets-create-proyecto',
+        title: 'Ticket de Nuevo Proyecto',
+        content: (
+          <div className="space-y-4">
+            <p>Usa este flujo cuando quieres <strong>solicitar el desarrollo de un proyecto nuevo</strong> — una funcionalidad, modulo o sistema que no existe todavia.</p>
+            <p className="text-sm text-muted-foreground">Al hacer clic en <strong>"Nuevo ticket"</strong> selecciona la opcion <strong>Nuevo Proyecto</strong> dentro del modal:</p>
+            <ol className="list-decimal list-inside space-y-2 text-sm">
+              <li>Haz clic en el boton <strong>"Nuevo ticket"</strong> en la esquina superior derecha.</li>
+              <li>En el modal, elige la opcion <strong>"Nuevo Proyecto"</strong>.</li>
+              <li>Escribe un <strong>titulo</strong> que identifique el proyecto que deseas solicitar.</li>
+              <li>Describe en detalle el <strong>alcance y objetivos</strong> del proyecto.</li>
+              <li>Haz clic en <strong>"Crear ticket"</strong> para enviar la solicitud.</li>
+            </ol>
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <h4 className="font-semibold text-sm mb-2">¿Que pasa despues?</h4>
+              <p className="text-xs text-muted-foreground">El equipo revisara la solicitud, te puede contactar para aclarar detalles y luego procedera a crear el proyecto formal en la plataforma. Podras hacer seguimiento del avance desde la seccion de <strong>Proyectos</strong>.</p>
             </div>
           </div>
         ),
