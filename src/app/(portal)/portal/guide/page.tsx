@@ -157,10 +157,12 @@ const modules: Module[] = [
               <li><strong>Tareas visibles</strong> — cantidad completadas vs totales</li>
               <li><strong>Fecha de inicio y fin</strong> estimadas del proyecto</li>
             </ul>
+            {/*
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <h4 className="font-semibold text-sm mb-2">Nota:</h4>
               <p className="text-xs text-muted-foreground">Solo se muestran proyectos con estado <strong>Activo</strong>. Los proyectos archivados o deshabilitados no aparecen en esta vista.</p>
             </div>
+            */}
           </div>
         ),
       },
@@ -173,7 +175,6 @@ const modules: Module[] = [
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
               <li><strong>Descripcion</strong> del proyecto</li>
               <li><strong>Lista de tareas</strong> con su estado actual (Pendiente, En Desarrollo, En Revision, Completada)</li>
-              <li><strong>Hitos/sprints</strong> si el proyecto los tiene configurados</li>
             </ul>
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <h4 className="font-semibold text-sm mb-2">Buena practica:</h4>
