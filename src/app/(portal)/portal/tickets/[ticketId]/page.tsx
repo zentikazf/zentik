@@ -151,9 +151,11 @@ export default function PortalTicketDetailPage() {
  try {
  const formData = new FormData();
  formData.append('file', file);
- await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
+ const uploadRes = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
+ const fileId = uploadRes.data?.id;
  await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
  content: `📎 ${file.name}`,
+ ...(fileId && { fileIds: [fileId] }),
  });
  toast.success('Archivo enviado', file.name);
  } catch (err) {
@@ -332,10 +334,13 @@ export default function PortalTicketDetailPage() {
  {msg.content}
  </div>
  {msg.files && msg.files.length > 0 && (
- <div className="flex flex-col gap-1 mt-1">
+ <div className="flex flex-col gap-1.5 mt-1.5">
  {msg.files.map((f) => (
- <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
- {f.originalName}
+ <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" download={f.originalName}
+  className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2 text-xs hover:bg-muted/50 transition-colors">
+ <FileText className="h-4 w-4 text-primary shrink-0"/>
+ <span className="truncate font-medium text-foreground">{f.originalName}</span>
+ <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-auto"/>
  </a>
  ))}
  </div>

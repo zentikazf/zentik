@@ -173,11 +173,11 @@ export default function TicketDetailPage() {
  const formData = new FormData();
  formData.append('file', file);
  const uploadRes = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
- const fileUrl = uploadRes.data?.url || uploadRes.data?.key || file.name;
+ const fileId = uploadRes.data?.id;
  await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
  content: `📎 ${file.name}`,
+ ...(fileId && { fileIds: [fileId] }),
  });
- // Message will arrive via WebSocket broadcast (message:new)
  toast.success('Archivo enviado', file.name);
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al subir archivo');
@@ -302,10 +302,12 @@ export default function TicketDetailPage() {
  {msg.content}
  </div>
  {msg.files && msg.files.length > 0 && (
- <div className="flex flex-col gap-1 mt-1">
+ <div className="flex flex-col gap-1.5 mt-1.5">
  {msg.files.map((f) => (
- <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
- <Paperclip className="h-3 w-3" />{f.originalName}
+ <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" download={f.originalName}
+  className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2 text-xs hover:bg-muted/50 transition-colors">
+ <Paperclip className="h-4 w-4 text-primary shrink-0"/>
+ <span className="truncate font-medium text-foreground">{f.originalName}</span>
  </a>
  ))}
  </div>

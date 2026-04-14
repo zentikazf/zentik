@@ -173,9 +173,11 @@ export default function PortalTicketsPage() {
  if (attachFile && res.data?.channel?.id) {
  const fd = new FormData();
  fd.append('file', attachFile);
- await api.upload<any>('/files/upload?category=ATTACHMENT', fd).catch(() => {});
+ const uploadRes = await api.upload<any>('/files/upload?category=ATTACHMENT', fd).catch(() => null);
+ const fileId = uploadRes?.data?.id;
  await api.post(`/channels/${res.data.channel.id}/messages`, {
  content: `📎 ${attachFile.name}`,
+ ...(fileId && { fileIds: [fileId] }),
  }).catch(() => {});
  }
 
