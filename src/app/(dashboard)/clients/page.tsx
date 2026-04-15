@@ -30,7 +30,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Building, Plus, Search, Pencil, Trash2, FolderKanban, Mail, Phone, Globe, KeyRound, Clock, MoreHorizontal, Eye } from 'lucide-react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
@@ -362,6 +361,12 @@ export default function ClientsPage() {
                       <Pencil className="mr-2 h-4 w-4" />
                       Editar
                     </DropdownMenuItem>
+                    {client.portalEnabled && (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openPortalDialog(client); }}>
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        Crear Acceso Portal
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     {(client.status === 'ACTIVE' || !client.status) && (
                       <>
@@ -446,6 +451,14 @@ export default function ClientsPage() {
                   <FolderKanban className="mr-1 h-3 w-3" />
                   {client._count?.projects ?? 0} proyectos
                 </Badge>
+                <div className="flex items-center gap-1.5 ml-auto" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-[10px] text-muted-foreground">Portal</span>
+                  <Switch
+                    checked={!!client.portalEnabled}
+                    onCheckedChange={(checked) => handleTogglePortal(client.id, checked)}
+                    className="scale-75"
+                  />
+                </div>
               </div>
             </div>
           );
