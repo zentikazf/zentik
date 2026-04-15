@@ -31,8 +31,10 @@ import {
  FolderKanban,
  Mail,
 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
+import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
 
 interface SubUser {
@@ -82,6 +84,7 @@ interface ClientDetail {
 export default function ClientDetailPage() {
  const { clientId } = useParams<{ clientId: string }>();
  const { orgId } = useOrg();
+ const { user: authUser } = useAuth();
  const [client, setClient] = useState<ClientDetail | null>(null);
  const [hours, setHours] = useState<HoursSummary | null>(null);
  const [loading, setLoading] = useState(true);
@@ -99,6 +102,11 @@ export default function ClientDetailPage() {
  // Delete sub-user confirmation
  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
  const [deleting, setDeleting] = useState(false);
+
+ // Delete hours transaction
+ const [deleteTxConfirm, setDeleteTxConfirm] = useState<{ id: string; type: string; hours: number; note: string | null } | null>(null);
+ const [deleteTxReason, setDeleteTxReason] = useState('');
+ const [deletingTx, setDeletingTx] = useState(false);
 
  useEffect(() => {
  if (orgId && clientId) loadData();
@@ -152,6 +160,25 @@ export default function ClientDetailPage() {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al eliminar usuario');
  } finally {
  setDeleting(false);
+ }
+ };
+
+ const handleDeleteTransaction = async () => {
+ if (!orgId || !deleteTxConfirm || !deleteTxReason.trim() || !authUser?.id) return;
+ setDeletingTx(true);
+ try {
+ await api.post(`/organizations/${orgId}/clients/${clientId}/hours/${deleteTxConfirm.id}/delete`, {
+ reason: deleteTxReason.trim(),
+ deletedById: authUser.id,
+ });
+ toast.success('Transacción eliminada', 'Se revirtió el efecto en las horas del cliente');
+ setDeleteTxConfirm(null);
+ setDeleteTxReason('');
+ loadData();
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al eliminar transacción');
+ } finally {
+ setDeletingTx(false);
  }
  };
 
@@ -338,9 +365,16 @@ export default function ClientDetailPage() {
  <span className={`text-sm font-semibold ${tx.type === 'PURCHASE' || tx.type === 'REFUND' ? 'text-success' : conf.color}`}>
  {tx.type === 'PURCHASE' || tx.type === 'REFUND' ? '+' : '-'}{tx.hours.toFixed(2)}h
  </span>
- <span className="text-[10px] text-muted-foreground">
+ <span className="text-[10px] text-muted-foreground whitespace-nowrap">
  {new Date(tx.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
  </span>
+ <button
+ onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note })}
+ className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+ title="Eliminar transacción"
+ >
+ <Trash2 className="h-3.5 w-3.5"/>
+ </button>
  </div>
  );
  })}
@@ -365,32 +399,32 @@ export default function ClientDetailPage() {
  {/* Owner */}
  {client.user && (
  <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 mb-3">
- <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
+ <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary">
  <Mail className="h-3.5 w-3.5 text-primary"/>
  </div>
  <div className="flex-1 min-w-0">
- <p className="text-sm font-medium text-card-foreground">{client.user.name}</p>
- <p className="text-xs text-muted-foreground">{client.user.email}</p>
+ <p className="text-sm font-medium text-card-foreground truncate">{client.user.name}</p>
+ <p className="text-xs text-muted-foreground truncate">{client.user.email}</p>
  </div>
- <Badge className="bg-primary/15 text-primary text-[10px]">Owner</Badge>
+ <Badge className="bg-primary/15 text-primary text-[10px] shrink-0">Owner</Badge>
  </div>
  )}
 
  {/* Sub-users */}
  {client.users.length > 0 ? (
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+ <div className="space-y-2">
  {client.users.map((u) => (
  <div key={u.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
- <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+ <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
  {u.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
  </div>
  <div className="flex-1 min-w-0">
- <p className="text-sm font-medium text-card-foreground">{u.name}</p>
- <p className="text-xs text-muted-foreground">{u.email}</p>
+ <p className="text-sm font-medium text-card-foreground truncate">{u.name}</p>
+ <p className="text-xs text-muted-foreground truncate">{u.email}</p>
  </div>
  <button
  onClick={() => setDeleteConfirm({ id: u.id, name: u.name })}
- className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+ className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
  >
  <Trash2 className="h-3.5 w-3.5"/>
  </button>
@@ -496,6 +530,33 @@ export default function ClientDetailPage() {
  <Button variant="outline"onClick={() => setDeleteConfirm(null)} disabled={deleting}>Cancelar</Button>
  <Button variant="destructive"onClick={handleDeleteSubUser} disabled={deleting}>
  {deleting ? 'Eliminando...' : 'Eliminar'}
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
+
+ {/* Delete Hours Transaction Dialog */}
+ <Dialog open={!!deleteTxConfirm} onOpenChange={(open) => { if (!open) { setDeleteTxConfirm(null); setDeleteTxReason(''); } }}>
+ <DialogContent className="max-w-md">
+ <DialogHeader>
+ <DialogTitle>Eliminar transacción de horas</DialogTitle>
+ </DialogHeader>
+ <p className="text-sm text-muted-foreground">
+ Se revertirá el efecto de esta transacción (<strong>{deleteTxConfirm?.type === 'PURCHASE' ? '+' : '-'}{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) sobre las horas del cliente.
+ </p>
+ <div className="space-y-2 pt-2">
+ <Label>Motivo de eliminación *</Label>
+ <Textarea
+ value={deleteTxReason}
+ onChange={(e) => setDeleteTxReason(e.target.value)}
+ placeholder="Ej: Carga duplicada, error de cálculo..."
+ rows={3}
+ />
+ </div>
+ <DialogFooter>
+ <Button variant="outline" onClick={() => { setDeleteTxConfirm(null); setDeleteTxReason(''); }} disabled={deletingTx}>Cancelar</Button>
+ <Button variant="destructive" onClick={handleDeleteTransaction} disabled={deletingTx || !deleteTxReason.trim()}>
+ {deletingTx ? 'Eliminando...' : 'Eliminar'}
  </Button>
  </DialogFooter>
  </DialogContent>
