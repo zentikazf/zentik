@@ -204,10 +204,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
  if (loading || isClient) {
  return (
  <div className="flex h-screen flex-col items-center justify-center bg-background">
- <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold mb-4">
- Z
- </div>
- <p className="text-lg font-semibold text-foreground">zentik</p>
+ <p className="text-lg font-semibold text-foreground">Onnix</p>
  <div className="mt-4 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"/>
  </div>
  );
