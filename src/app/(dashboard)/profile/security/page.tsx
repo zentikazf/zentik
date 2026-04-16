@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type { FormEvent } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,6 +21,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatDateTime } from '@/lib/utils';
+import { updatePasswordSchema, type UpdatePasswordInput } from '@/lib/validations';
 
 interface Session {
  id: string;
@@ -52,9 +55,16 @@ export default function SecurityPage() {
  const { user } = useAuth();
  const [sessions, setSessions] = useState<Session[]>([]);
  const [loadingSessions, setLoadingSessions] = useState(true);
- const [sendingReset, setSendingReset] = useState(false);
  const [sendingVerification, setSendingVerification] = useState(false);
  const [revokingId, setRevokingId] = useState<string | null>(null);
+ const [passwordForm, setPasswordForm] = useState<UpdatePasswordInput>({
+ currentPassword: '',
+ newPassword: '',
+ confirmPassword: '',
+ });
+ const [passwordErrors, setPasswordErrors] = useState<Partial<Record<keyof UpdatePasswordInput, string>>>({});
+ const [passwordGeneralError, setPasswordGeneralError] = useState('');
+ const [updatingPassword, setUpdatingPassword] = useState(false);
 
  useEffect(() => {
  api.get<Session[]>('/auth/sessions')
@@ -66,17 +76,59 @@ export default function SecurityPage() {
  .finally(() => setLoadingSessions(false));
  }, []);
 
- const handleResetPassword = async () => {
- if (!user?.email) return;
- setSendingReset(true);
+ const handlePasswordFieldChange = (field: keyof UpdatePasswordInput, value: string) => {
+ setPasswordForm((prev) => ({ ...prev, [field]: value }));
+ if (passwordErrors[field]) setPasswordErrors((prev) => ({ ...prev, [field]: undefined }));
+ if (passwordGeneralError) setPasswordGeneralError('');
+ };
+
+ const handleUpdatePassword = async (e: FormEvent) => {
+ e.preventDefault();
+ setPasswordErrors({});
+ setPasswordGeneralError('');
+
+ const result = updatePasswordSchema.safeParse(passwordForm);
+ if (!result.success) {
+ const errors: Partial<Record<keyof UpdatePasswordInput, string>> = {};
+ result.error.errors.forEach((err) => {
+ const field = err.path[0] as keyof UpdatePasswordInput;
+ if (!errors[field]) errors[field] = err.message;
+ });
+ setPasswordErrors(errors);
+ return;
+ }
+
+ setUpdatingPassword(true);
  try {
- await api.post('/auth/forgot-password', { email: user.email });
- toast.success('Correo enviado', 'Revisa tu bandeja de entrada para restablecer tu contraseña');
+ await api.post('/auth/update-password', {
+ currentPassword: result.data.currentPassword,
+ newPassword: result.data.newPassword,
+ });
+ setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+ toast.success('Contraseña actualizada', 'Se cerraron otras sesiones activas por seguridad');
+ // Refresh session list so revoked sessions disappear
+ try {
+ const res = await api.get<Session[]>('/auth/sessions');
+ setSessions(Array.isArray(res.data) ? res.data : []);
+ } catch {}
  } catch (err) {
- const message = err instanceof ApiError ? err.message : 'Error al enviar el correo';
- toast.error('Error', message);
+ if (err instanceof ApiError) {
+ if (err.code === 'INVALID_CURRENT_PASSWORD') {
+ setPasswordErrors({ currentPassword: 'La contraseña actual es incorrecta' });
+ } else if (err.code === 'PASSWORD_UNCHANGED') {
+ setPasswordErrors({ newPassword: 'La nueva contraseña debe ser distinta de la actual' });
+ } else if (err.code === 'INVALID_PASSWORD') {
+ setPasswordErrors({ newPassword: err.message || 'La contraseña no cumple los requisitos' });
+ } else if (err.code === 'NO_PASSWORD_SET') {
+ setPasswordGeneralError('Esta cuenta no tiene contraseña configurada. Usa el flujo de restablecimiento.');
+ } else {
+ setPasswordGeneralError(err.message || 'No se pudo actualizar la contraseña');
+ }
+ } else {
+ setPasswordGeneralError('No se pudo conectar al servidor. Verifica tu conexión.');
+ }
  } finally {
- setSendingReset(false);
+ setUpdatingPassword(false);
  }
  };
 
@@ -154,12 +206,91 @@ export default function SecurityPage() {
  <h3 className="text-lg font-semibold text-foreground">Contraseña</h3>
  </div>
  <p className="mb-4 text-sm text-muted-foreground">
- Para cambiar tu contraseña, te enviaremos un enlace de restablecimiento a tu correo electrónico.
+ Actualiza tu contraseña regularmente. Al cambiarla se cerrarán las demás sesiones activas por seguridad.
  </p>
- <Button variant="outline"className="rounded-full"onClick={handleResetPassword} disabled={sendingReset}>
- <Mail className="mr-2 h-4 w-4"/>
- {sendingReset ? 'Enviando...' : 'Enviar enlace de restablecimiento'}
+
+ {passwordGeneralError && (
+ <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
+ <p className="text-sm text-destructive">{passwordGeneralError}</p>
+ </div>
+ )}
+
+ <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-md" noValidate>
+ <div>
+ <label htmlFor="currentPassword" className="block text-sm font-medium text-foreground">
+ Contraseña actual
+ </label>
+ <input
+ id="currentPassword"
+ type="password"
+ value={passwordForm.currentPassword}
+ onChange={(e) => handlePasswordFieldChange('currentPassword', e.target.value)}
+ autoComplete="current-password"
+ className={`mt-1.5 block w-full rounded-xl border px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
+ passwordErrors.currentPassword
+ ? 'border-destructive/30 bg-destructive/10 focus:border-destructive focus:ring-destructive/20'
+ : 'border-border bg-muted focus:border-ring focus:ring-ring/20'
+ }`}
+ />
+ {passwordErrors.currentPassword && (
+ <p className="mt-1 text-xs text-destructive">{passwordErrors.currentPassword}</p>
+ )}
+ </div>
+ <div>
+ <label htmlFor="newPassword" className="block text-sm font-medium text-foreground">
+ Nueva contraseña
+ </label>
+ <input
+ id="newPassword"
+ type="password"
+ value={passwordForm.newPassword}
+ onChange={(e) => handlePasswordFieldChange('newPassword', e.target.value)}
+ placeholder="Mínimo 8 caracteres"
+ autoComplete="new-password"
+ className={`mt-1.5 block w-full rounded-xl border px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
+ passwordErrors.newPassword
+ ? 'border-destructive/30 bg-destructive/10 focus:border-destructive focus:ring-destructive/20'
+ : 'border-border bg-muted focus:border-ring focus:ring-ring/20'
+ }`}
+ />
+ {passwordErrors.newPassword && (
+ <p className="mt-1 text-xs text-destructive">{passwordErrors.newPassword}</p>
+ )}
+ </div>
+ <div>
+ <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
+ Confirmar nueva contraseña
+ </label>
+ <input
+ id="confirmPassword"
+ type="password"
+ value={passwordForm.confirmPassword}
+ onChange={(e) => handlePasswordFieldChange('confirmPassword', e.target.value)}
+ placeholder="Repite la nueva contraseña"
+ autoComplete="new-password"
+ className={`mt-1.5 block w-full rounded-xl border px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
+ passwordErrors.confirmPassword
+ ? 'border-destructive/30 bg-destructive/10 focus:border-destructive focus:ring-destructive/20'
+ : 'border-border bg-muted focus:border-ring focus:ring-ring/20'
+ }`}
+ />
+ {passwordErrors.confirmPassword && (
+ <p className="mt-1 text-xs text-destructive">{passwordErrors.confirmPassword}</p>
+ )}
+ </div>
+ <div className="flex flex-wrap items-center gap-3 pt-2">
+ <Button type="submit" className="rounded-full" disabled={updatingPassword}>
+ <KeyRound className="mr-2 h-4 w-4"/>
+ {updatingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
  </Button>
+ <Link
+ href="/forgot-password"
+ className="text-sm font-medium text-primary hover:underline"
+ >
+ ¿Olvidaste tu contraseña?
+ </Link>
+ </div>
+ </form>
  </div>
 
  {/* Active Sessions */}

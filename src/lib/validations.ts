@@ -30,6 +30,21 @@ export const resetPasswordSchema = z
     path: ['confirmPassword'],
   });
 
+export const updatePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'La contrasena actual es requerida'),
+    newPassword: z.string().min(8, 'Minimo 8 caracteres'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Las contrasenas no coinciden',
+    path: ['confirmPassword'],
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'La nueva contrasena debe ser distinta de la actual',
+    path: ['newPassword'],
+  });
+
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido').max(100),
   description: z.string().max(500).optional(),
@@ -71,6 +86,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type CreateSprintInput = z.infer<typeof createSprintSchema>;
