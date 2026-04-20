@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Building, Plus, Search, Pencil, Trash2, FolderKanban, Mail, Phone, Globe, KeyRound, Clock, MoreHorizontal, Eye } from 'lucide-react';
+import { Building, Plus, Search, Pencil, Trash2, FolderKanban, Mail, Phone, Globe, KeyRound, Clock, MoreHorizontal, Eye, EyeOff, Copy, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
@@ -79,9 +79,10 @@ export default function ClientsPage() {
   const [portalDialogOpen, setPortalDialogOpen] = useState(false);
   const [portalClient, setPortalClient] = useState<Client | null>(null);
   const [portalEmail, setPortalEmail] = useState('');
-  const [portalPassword, setPortalPassword] = useState('');
   const [portalName, setPortalName] = useState('');
   const [savingPortal, setSavingPortal] = useState(false);
+  const [portalResult, setPortalResult] = useState<{ temporaryPassword?: string } | null>(null);
+  const [showPortalPassword, setShowPortalPassword] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -202,28 +203,44 @@ export default function ClientsPage() {
   const openPortalDialog = (client: Client) => {
     setPortalClient(client);
     setPortalEmail(client.email || '');
-    setPortalPassword('');
     setPortalName(client.name);
+    setPortalResult(null);
+    setShowPortalPassword(false);
     setPortalDialogOpen(true);
   };
 
+  const closePortalDialog = () => {
+    setPortalDialogOpen(false);
+    setPortalClient(null);
+    setPortalEmail('');
+    setPortalName('');
+    setPortalResult(null);
+    setShowPortalPassword(false);
+  };
+
   const handleCreatePortalAccess = async () => {
-    if (!orgId || !portalClient || !portalEmail.trim() || !portalPassword.trim() || !portalName.trim()) return;
+    if (!orgId || !portalClient || !portalEmail.trim() || !portalName.trim()) return;
     setSavingPortal(true);
     try {
-      await api.post(`/organizations/${orgId}/clients/${portalClient.id}/create-user`, {
+      const res = await api.post(`/organizations/${orgId}/clients/${portalClient.id}/create-user`, {
         email: portalEmail.trim(),
-        password: portalPassword.trim(),
         name: portalName.trim(),
       });
-      toast.success('Acceso portal creado', `El cliente puede iniciar sesión con ${portalEmail.trim()}`);
-      setPortalDialogOpen(false);
+      setPortalResult(res.data);
+      toast.success('Acceso portal creado', `${portalName.trim()} ha sido agregado al portal`);
       loadClients();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Error al crear acceso portal';
       toast.error('Error', message);
     } finally {
       setSavingPortal(false);
+    }
+  };
+
+  const copyPortalPassword = () => {
+    if (portalResult?.temporaryPassword) {
+      navigator.clipboard.writeText(portalResult.temporaryPassword);
+      toast.success('Copiado', 'Contraseña temporal copiada al portapapeles');
     }
   };
 
@@ -512,55 +529,111 @@ export default function ClientsPage() {
       </Dialog>
 
       {/* Portal Access Dialog */}
-      <Dialog open={portalDialogOpen} onOpenChange={setPortalDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Crear Acceso al Portal</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Crea credenciales para que <strong>{portalClient?.name}</strong> pueda acceder al portal de clientes y ver el progreso de sus proyectos.
-          </p>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Nombre *</Label>
-              <Input
-                value={portalName}
-                onChange={(e) => setPortalName(e.target.value)}
-                placeholder="Nombre del usuario"
-              />
+      {portalDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-foreground">
+                {portalResult ? 'Acceso Creado' : 'Crear Acceso al Portal'}
+              </h2>
+              <button onClick={closePortalDialog} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted">
+                <X className="h-4 w-4"/>
+              </button>
             </div>
-            <div className="space-y-2">
-              <Label>Email *</Label>
-              <Input
-                type="email"
-                value={portalEmail}
-                onChange={(e) => setPortalEmail(e.target.value)}
-                placeholder="cliente@empresa.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Contraseña *</Label>
-              <Input
-                type="password"
-                value={portalPassword}
-                onChange={(e) => setPortalPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-              />
-            </div>
+
+            {portalResult ? (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-success/10 p-4">
+                  <p className="text-sm font-medium text-success">
+                    Usuario creado exitosamente
+                  </p>
+                  <p className="mt-1 text-xs text-success">
+                    El usuario podrá acceder al portal con estas credenciales
+                  </p>
+                </div>
+
+                {portalResult.temporaryPassword && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">Contraseña temporal</label>
+                    <div className="flex items-center gap-2 rounded-xl bg-muted p-3">
+                      <code className="flex-1 text-sm font-mono text-foreground">
+                        {showPortalPassword ? portalResult.temporaryPassword : '••••••••••'}
+                      </code>
+                      <button
+                        onClick={() => setShowPortalPassword(!showPortalPassword)}
+                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+                      >
+                        {showPortalPassword ? <EyeOff className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}
+                      </button>
+                      <button
+                        onClick={copyPortalPassword}
+                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+                      >
+                        <Copy className="h-4 w-4"/>
+                      </button>
+                    </div>
+                    <p className="text-xs text-warning">
+                      Guarda esta contraseña. No se mostrará de nuevo.
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={closePortalDialog}
+                  className="w-full rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Crea credenciales para que <strong>{portalClient?.name}</strong> pueda acceder al portal de clientes.
+                </p>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nombre completo</label>
+                  <input
+                    type="text"
+                    value={portalName}
+                    onChange={(e) => setPortalName(e.target.value)}
+                    placeholder="Nombre del usuario"
+                    className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Correo electrónico</label>
+                  <input
+                    type="email"
+                    value={portalEmail}
+                    onChange={(e) => setPortalEmail(e.target.value)}
+                    placeholder="cliente@empresa.com"
+                    className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se generará una contraseña temporal automáticamente.
+                </p>
+                <div className="flex gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={closePortalDialog}
+                    className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreatePortalAccess}
+                    disabled={savingPortal || !portalEmail.trim() || !portalName.trim()}
+                    className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {savingPortal ? 'Creando...' : 'Crear Acceso'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPortalDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleCreatePortalAccess}
-              disabled={savingPortal || !portalEmail.trim() || !portalPassword.trim() || portalPassword.trim().length < 8}
-            >
-              {savingPortal ? 'Creando...' : 'Crear Acceso'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

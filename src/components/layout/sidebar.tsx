@@ -56,6 +56,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  const [notifOpen, setNotifOpen] = useState(false);
  const [pendingProjectsCount, setPendingProjectsCount] = useState(0);
  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+ const [openTicketsCount, setOpenTicketsCount] = useState(0);
  const pathname = usePathname();
  const { user, logout } = useAuth();
  const { hasPermission, roleName } = usePermissions();
@@ -70,6 +71,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  .catch(() => {});
  api.get(`/organizations/${orgId}/approvals/count`)
  .then((res) => setPendingApprovalsCount(res.data?.count ?? 0))
+ .catch(() => {});
+ api.get(`/organizations/${orgId}/tickets/open-count`)
+ .then((res) => setOpenTicketsCount(res.data?.count ?? 0))
  .catch(() => {});
  }, [orgId]);
 
@@ -89,6 +93,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  ? pendingProjectsCount
  : item.href === '/approvals' && pendingApprovalsCount > 0
  ? pendingApprovalsCount
+ : item.href === '/tickets' && openTicketsCount > 0
+ ? openTicketsCount
  : 0;
 
  return (
