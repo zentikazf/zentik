@@ -6,5 +6,5 @@ export default async function ProjectPage({
  params: Promise<{ projectId: string }>;
 }) {
  const { projectId } = await params;
- redirect(`/projects/${projectId}/board`);
+ redirect(`/projects/${projectId}/backlog`);
 }
