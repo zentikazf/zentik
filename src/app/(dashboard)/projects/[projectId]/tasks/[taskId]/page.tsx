@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
-import { formatDate, formatRelative, getInitials } from '@/lib/utils';
+import { formatDate, formatRelative, getInitials, cn } from '@/lib/utils';
 
 // ── Constant maps ──────────────────────────────────────────────────
 const STATUS_OPTIONS = [
@@ -59,6 +59,10 @@ export default function TaskDetailPage() {
  const [titleDraft, setTitleDraft] = useState('');
  const [descDraft, setDescDraft] = useState('');
 
+ // Horas estimadas: draft local + guardado explicito
+ const [hoursDraft, setHoursDraft] = useState<string>('');
+ const [savingHours, setSavingHours] = useState(false);
+
  // Comments
  const [comments, setComments] = useState<any[]>([]);
  const [newComment, setNewComment] = useState('');
@@ -84,6 +88,11 @@ export default function TaskDetailPage() {
  setTask(res.data);
  setTitleDraft(res.data.title || '');
  setDescDraft(res.data.description || '');
+ setHoursDraft(
+ res.data.estimatedHours !== null && res.data.estimatedHours !== undefined
+ ? String(res.data.estimatedHours)
+ : '',
+ );
  } catch (err) {
  const msg = err instanceof ApiError ? err.message : 'Error al cargar la tarea';
  toast.error('Error', msg);
@@ -141,6 +150,37 @@ export default function TaskDetailPage() {
  if (descDraft !== task.description) await patchTask({ description: descDraft });
  setEditDesc(false);
  };
+
+ // ── Save estimated hours (manual, con boton) ──────────────────
+ const saveHours = async () => {
+ const current = task?.estimatedHours ?? null;
+ const parsed = hoursDraft.trim() === '' ? null : Number(hoursDraft);
+ if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
+ toast.error('Error', 'Ingresá un número válido de horas');
+ return;
+ }
+ if (parsed === current) return;
+ setSavingHours(true);
+ try {
+ await patchTask({ estimatedHours: parsed ?? 0 });
+ } finally {
+ setSavingHours(false);
+ }
+ };
+
+ const resetHours = () => {
+ setHoursDraft(
+ task?.estimatedHours !== null && task?.estimatedHours !== undefined
+ ? String(task.estimatedHours)
+ : '',
+ );
+ };
+
+ const hoursDirty =
+ hoursDraft.trim() !==
+ (task?.estimatedHours !== null && task?.estimatedHours !== undefined
+ ? String(task.estimatedHours)
+ : '');
 
  // ── Create subtask ────────────────────────────────────────────
  const handleCreateSubtask = async () => {
@@ -439,7 +479,33 @@ export default function TaskDetailPage() {
  <div className="space-y-1">
  <div className="flex items-center justify-between">
  <span className="text-muted-foreground text-xs">Horas estimadas</span>
- <input type="number" min="0" step="0.5" value={task.estimatedHours ?? ''} onChange={(e) => { const v = e.target.value; patchTask({ estimatedHours: v ? Number(v) : 0 }); }} placeholder="—" className="h-7 w-20 rounded border border-border bg-background px-2 text-xs text-foreground text-right"/>
+ <div className="flex items-center gap-1.5">
+ <input
+ type="number"
+ min="0"
+ step="0.5"
+ value={hoursDraft}
+ onChange={(e) => setHoursDraft(e.target.value)}
+ onKeyDown={(e) => {
+ if (e.key === 'Enter') { e.preventDefault(); saveHours(); }
+ if (e.key === 'Escape') { e.preventDefault(); resetHours(); }
+ }}
+ placeholder="—"
+ className={cn(
+ 'h-7 w-20 rounded border bg-background px-2 text-xs text-foreground text-right transition-colors',
+ hoursDirty ? 'border-warning' : 'border-border',
+ )}
+ />
+ <Button
+ size="sm"
+ variant="outline"
+ className="h-7 px-2 text-xs"
+ disabled={!hoursDirty || savingHours}
+ onClick={saveHours}
+ >
+ {savingHours ? 'Guardando...' : 'Guardar'}
+ </Button>
+ </div>
  </div>
  {task.type === 'SUPPORT' && clientHours && (
  <div className="flex items-center justify-between text-[10px]">
