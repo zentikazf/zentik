@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Settings, Shield } from 'lucide-react';
+import { User, Settings, Shield, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const profileNav = [
  { name: 'Perfil', href: '/profile', icon: User },
  { name: 'Preferencias', href: '/profile/preferences', icon: Settings },
+ { name: 'Notificaciones', href: '/profile/notifications', icon: Bell },
  { name: 'Seguridad', href: '/profile/security', icon: Shield },
 ];
 
