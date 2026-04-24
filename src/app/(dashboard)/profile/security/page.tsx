@@ -22,6 +22,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatDateTime } from '@/lib/utils';
 import { updatePasswordSchema, type UpdatePasswordInput } from '@/lib/validations';
+import { PasswordToggle } from '@/components/ui/password-input';
 
 interface Session {
  id: string;
@@ -65,6 +66,9 @@ export default function SecurityPage() {
  const [passwordErrors, setPasswordErrors] = useState<Partial<Record<keyof UpdatePasswordInput, string>>>({});
  const [passwordGeneralError, setPasswordGeneralError] = useState('');
  const [updatingPassword, setUpdatingPassword] = useState(false);
+ const [showCurrent, setShowCurrent] = useState(false);
+ const [showNew, setShowNew] = useState(false);
+ const [showConfirm, setShowConfirm] = useState(false);
 
  useEffect(() => {
  api.get<Session[]>('/auth/sessions')
@@ -220,18 +224,21 @@ export default function SecurityPage() {
  <label htmlFor="currentPassword" className="block text-sm font-medium text-foreground">
  Contraseña actual
  </label>
+ <div className="relative mt-1.5">
  <input
  id="currentPassword"
- type="password"
+ type={showCurrent ? 'text' : 'password'}
  value={passwordForm.currentPassword}
  onChange={(e) => handlePasswordFieldChange('currentPassword', e.target.value)}
  autoComplete="current-password"
- className={`mt-1.5 block w-full rounded-xl border px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
+ className={`block w-full rounded-xl border px-4 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
  passwordErrors.currentPassword
  ? 'border-destructive/30 bg-destructive/10 focus:border-destructive focus:ring-destructive/20'
  : 'border-border bg-muted focus:border-ring focus:ring-ring/20'
  }`}
  />
+ <PasswordToggle visible={showCurrent} onToggle={() => setShowCurrent((v) => !v)} className="top-1" />
+ </div>
  {passwordErrors.currentPassword && (
  <p className="mt-1 text-xs text-destructive">{passwordErrors.currentPassword}</p>
  )}
@@ -240,19 +247,22 @@ export default function SecurityPage() {
  <label htmlFor="newPassword" className="block text-sm font-medium text-foreground">
  Nueva contraseña
  </label>
+ <div className="relative mt-1.5">
  <input
  id="newPassword"
- type="password"
+ type={showNew ? 'text' : 'password'}
  value={passwordForm.newPassword}
  onChange={(e) => handlePasswordFieldChange('newPassword', e.target.value)}
  placeholder="Mínimo 8 caracteres"
  autoComplete="new-password"
- className={`mt-1.5 block w-full rounded-xl border px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
+ className={`block w-full rounded-xl border px-4 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
  passwordErrors.newPassword
  ? 'border-destructive/30 bg-destructive/10 focus:border-destructive focus:ring-destructive/20'
  : 'border-border bg-muted focus:border-ring focus:ring-ring/20'
  }`}
  />
+ <PasswordToggle visible={showNew} onToggle={() => setShowNew((v) => !v)} className="top-1" />
+ </div>
  {passwordErrors.newPassword && (
  <p className="mt-1 text-xs text-destructive">{passwordErrors.newPassword}</p>
  )}
@@ -261,19 +271,22 @@ export default function SecurityPage() {
  <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
  Confirmar nueva contraseña
  </label>
+ <div className="relative mt-1.5">
  <input
  id="confirmPassword"
- type="password"
+ type={showConfirm ? 'text' : 'password'}
  value={passwordForm.confirmPassword}
  onChange={(e) => handlePasswordFieldChange('confirmPassword', e.target.value)}
  placeholder="Repite la nueva contraseña"
  autoComplete="new-password"
- className={`mt-1.5 block w-full rounded-xl border px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
+ className={`block w-full rounded-xl border px-4 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
  passwordErrors.confirmPassword
  ? 'border-destructive/30 bg-destructive/10 focus:border-destructive focus:ring-destructive/20'
  : 'border-border bg-muted focus:border-ring focus:ring-ring/20'
  }`}
  />
+ <PasswordToggle visible={showConfirm} onToggle={() => setShowConfirm((v) => !v)} className="top-1" />
+ </div>
  {passwordErrors.confirmPassword && (
  <p className="mt-1 text-xs text-destructive">{passwordErrors.confirmPassword}</p>
  )}

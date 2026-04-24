@@ -6,12 +6,15 @@ import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
+import { PasswordToggle } from '@/components/ui/password-input';
 
 function WelcomeChangePasswordModal({ onComplete, userName }: { onComplete: () => void; userName?: string }) {
  const [step, setStep] = useState<'welcome' | 'password'>('welcome');
  const [password, setPassword] = useState('');
  const [confirm, setConfirm] = useState('');
  const [saving, setSaving] = useState(false);
+ const [showPassword, setShowPassword] = useState(false);
+ const [showConfirm, setShowConfirm] = useState(false);
 
  const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -74,27 +77,33 @@ function WelcomeChangePasswordModal({ onComplete, userName }: { onComplete: () =
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
        <div>
         <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nueva contrasena</label>
-        <input
-         type="password"
-         value={password}
-         onChange={(e) => setPassword(e.target.value)}
-         placeholder="Minimo 6 caracteres"
-         required
-         minLength={6}
-         autoFocus
-         className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        />
+        <div className="relative">
+         <input
+          type={showPassword ? 'text' : 'password'}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Minimo 6 caracteres"
+          required
+          minLength={6}
+          autoFocus
+          className="w-full rounded-md border border-input bg-background px-4 py-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+         />
+         <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} className="top-1" />
+        </div>
        </div>
        <div>
         <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Confirmar contrasena</label>
-        <input
-         type="password"
-         value={confirm}
-         onChange={(e) => setConfirm(e.target.value)}
-         placeholder="Repite tu contrasena"
-         required
-         className="w-full rounded-md border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        />
+        <div className="relative">
+         <input
+          type={showConfirm ? 'text' : 'password'}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder="Repite tu contrasena"
+          required
+          className="w-full rounded-md border border-input bg-background px-4 py-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+         />
+         <PasswordToggle visible={showConfirm} onToggle={() => setShowConfirm((v) => !v)} className="top-1" />
+        </div>
        </div>
        <button
         type="submit"

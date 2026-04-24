@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { KeyRound, CheckCircle2, ArrowLeft, AlertCircle } from 'lucide-react';
 import { resetPasswordSchema, type ResetPasswordInput } from '@/lib/validations';
 import { api, ApiError } from '@/lib/api-client';
+import { PasswordToggle } from '@/components/ui/password-input';
 
 function ResetPasswordInner() {
   const router = useRouter();
@@ -18,6 +19,8 @@ function ResetPasswordInner() {
   const [generalError, setGeneralError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   function handleChange(field: keyof ResetPasswordInput, value: string) {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -127,15 +130,18 @@ function ResetPasswordInner() {
               <label htmlFor="password" className="block text-sm font-medium text-foreground">
                 Nueva contraseña
               </label>
-              <input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => handleChange('password', e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                autoComplete="new-password"
-                className={inputClass('password')}
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  autoComplete="new-password"
+                  className={`${inputClass('password')} pr-10`}
+                />
+                <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
+              </div>
               {fieldErrors.password && (
                 <p className="mt-1 text-xs text-destructive">{fieldErrors.password}</p>
               )}
@@ -144,15 +150,18 @@ function ResetPasswordInner() {
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
                 Confirmar contraseña
               </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                value={formData.confirmPassword}
-                onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                placeholder="Repite la contraseña"
-                autoComplete="new-password"
-                className={inputClass('confirmPassword')}
-              />
+              <div className="relative">
+                <input
+                  id="confirmPassword"
+                  type={showConfirm ? 'text' : 'password'}
+                  value={formData.confirmPassword}
+                  onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                  placeholder="Repite la contraseña"
+                  autoComplete="new-password"
+                  className={`${inputClass('confirmPassword')} pr-10`}
+                />
+                <PasswordToggle visible={showConfirm} onToggle={() => setShowConfirm((v) => !v)} />
+              </div>
               {fieldErrors.confirmPassword && (
                 <p className="mt-1 text-xs text-destructive">{fieldErrors.confirmPassword}</p>
               )}

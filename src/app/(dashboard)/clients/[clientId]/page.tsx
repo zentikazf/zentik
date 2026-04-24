@@ -30,6 +30,10 @@ import {
  ArrowDownRight,
  FolderKanban,
  Mail,
+ Eye,
+ EyeOff,
+ Copy,
+ CheckCircle2,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
@@ -91,8 +95,10 @@ export default function ClientDetailPage() {
 
  // Add sub-user dialog
  const [showAddUser, setShowAddUser] = useState(false);
- const [userForm, setUserForm] = useState({ name: '', email: '', password: '' });
+ const [userForm, setUserForm] = useState({ name: '', email: '' });
  const [savingUser, setSavingUser] = useState(false);
+ const [userResult, setUserResult] = useState<{ temporaryPassword?: string; email?: string } | null>(null);
+ const [showUserPassword, setShowUserPassword] = useState(false);
 
  // Add hours dialog
  const [showAddHours, setShowAddHours] = useState(false);
@@ -129,22 +135,37 @@ export default function ClientDetailPage() {
  };
 
  const handleAddSubUser = async () => {
- if (!orgId || !userForm.name.trim() || !userForm.email.trim() || !userForm.password.trim()) return;
+ if (!orgId || !userForm.name.trim() || !userForm.email.trim()) return;
  setSavingUser(true);
  try {
- await api.post(`/organizations/${orgId}/clients/${clientId}/users`, {
+ const res = await api.post<any>(`/organizations/${orgId}/clients/${clientId}/users`, {
  name: userForm.name.trim(),
  email: userForm.email.trim(),
- password: userForm.password.trim(),
  });
  toast.success('Usuario creado', 'El usuario fue creado exitosamente');
- setShowAddUser(false);
- setUserForm({ name: '', email: '', password: '' });
+ setUserResult({
+ temporaryPassword: res.data?.temporaryPassword,
+ email: userForm.email.trim(),
+ });
  loadData();
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear usuario');
  } finally {
  setSavingUser(false);
+ }
+ };
+
+ const closeAddUserDialog = () => {
+ setShowAddUser(false);
+ setUserForm({ name: '', email: '' });
+ setUserResult(null);
+ setShowUserPassword(false);
+ };
+
+ const copyUserPassword = () => {
+ if (userResult?.temporaryPassword) {
+ navigator.clipboard.writeText(userResult.temporaryPassword);
+ toast.success('Copiado', 'Contraseña temporal copiada al portapapeles');
  }
  };
 
@@ -460,13 +481,15 @@ export default function ClientDetailPage() {
  </div>
 
  {/* Add Sub-User Dialog */}
- <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
+ <Dialog open={showAddUser} onOpenChange={(open) => { if (!open) closeAddUserDialog(); else setShowAddUser(true); }}>
  <DialogContent className="max-w-md">
+ {!userResult ? (
+ <>
  <DialogHeader>
  <DialogTitle>Agregar usuario</DialogTitle>
  </DialogHeader>
  <p className="text-sm text-muted-foreground">
- Crea un nuevo usuario para <strong>{client.name}</strong> con acceso al portal.
+ Crea un nuevo usuario para <strong>{client.name}</strong> con acceso al portal. La contraseña se genera automáticamente.
  </p>
  <div className="space-y-4 py-2">
  <div className="space-y-2">
@@ -477,17 +500,46 @@ export default function ClientDetailPage() {
  <Label>Email *</Label>
  <Input type="email"value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} placeholder="usuario@empresa.com"/>
  </div>
- <div className="space-y-2">
- <Label>Contraseña *</Label>
- <Input type="password"value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder="Minimo 8 caracteres"/>
- </div>
  </div>
  <DialogFooter>
- <Button variant="outline"onClick={() => setShowAddUser(false)}>Cancelar</Button>
- <Button onClick={handleAddSubUser} disabled={savingUser || !userForm.name.trim() || !userForm.email.trim() || userForm.password.length < 8}>
+ <Button variant="outline"onClick={closeAddUserDialog}>Cancelar</Button>
+ <Button onClick={handleAddSubUser} disabled={savingUser || !userForm.name.trim() || !userForm.email.trim()}>
  {savingUser ? 'Creando...' : 'Crear Usuario'}
  </Button>
  </DialogFooter>
+ </>
+ ) : (
+ <>
+ <DialogHeader>
+ <DialogTitle className="flex items-center gap-2">
+ <CheckCircle2 className="h-5 w-5 text-success" />
+ Usuario creado
+ </DialogTitle>
+ </DialogHeader>
+ <p className="text-sm text-muted-foreground">
+ Guardá esta contraseña temporal y compartila con el usuario <strong>{userResult.email}</strong>. No la podrás ver de nuevo.
+ </p>
+ <div className="space-y-3 py-2">
+ <div className="space-y-2">
+ <Label>Contraseña temporal</Label>
+ <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
+ <code className="flex-1 text-sm font-mono text-foreground">
+ {showUserPassword ? userResult.temporaryPassword : '•'.repeat(userResult.temporaryPassword?.length ?? 12)}
+ </code>
+ <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowUserPassword((v) => !v)}>
+ {showUserPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+ </Button>
+ <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={copyUserPassword}>
+ <Copy className="h-4 w-4" />
+ </Button>
+ </div>
+ </div>
+ </div>
+ <DialogFooter>
+ <Button onClick={closeAddUserDialog}>Entendido</Button>
+ </DialogFooter>
+ </>
+ )}
  </DialogContent>
  </Dialog>
 

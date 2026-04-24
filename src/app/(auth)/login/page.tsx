@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { loginSchema, type LoginInput } from '@/lib/validations';
 import { api, ApiError } from '@/lib/api-client';
+import { PasswordToggle } from '@/components/ui/password-input';
 
 export default function LoginPage() {
  const router = useRouter();
@@ -13,6 +14,7 @@ export default function LoginPage() {
  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof LoginInput, string>>>({});
  const [generalError, setGeneralError] = useState('');
  const [isLoading, setIsLoading] = useState(false);
+ const [showPassword, setShowPassword] = useState(false);
 
  function handleChange(field: keyof LoginInput, value: string) {
  setFormData((prev) => ({ ...prev, [field]: value }));
@@ -125,15 +127,18 @@ export default function LoginPage() {
  ¿Olvidaste tu contraseña?
  </Link>
  </div>
+ <div className="relative">
  <input
  id="password"
- type="password"
+ type={showPassword ? 'text' : 'password'}
  value={formData.password}
  onChange={(e) => handleChange('password', e.target.value)}
  placeholder="••••••••"
  autoComplete="current-password"
- className={inputClass('password')}
+ className={`${inputClass('password')} pr-10`}
  />
+ <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
+ </div>
  {fieldErrors.password && (
  <p className="mt-1 text-xs text-destructive">{fieldErrors.password}</p>
  )}

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { registerSchema, type RegisterInput } from '@/lib/validations';
 import { api, ApiError } from '@/lib/api-client';
+import { PasswordToggle } from '@/components/ui/password-input';
 
 export default function RegisterPage() {
  const router = useRouter();
@@ -13,6 +14,7 @@ export default function RegisterPage() {
  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof RegisterInput, string>>>({});
  const [generalError, setGeneralError] = useState('');
  const [isLoading, setIsLoading] = useState(false);
+ const [showPassword, setShowPassword] = useState(false);
 
  function handleChange(field: keyof RegisterInput, value: string) {
  setFormData((prev) => ({ ...prev, [field]: value }));
@@ -133,15 +135,18 @@ export default function RegisterPage() {
  <label htmlFor="password"className="block text-sm font-medium text-foreground">
  Contraseña
  </label>
+ <div className="relative">
  <input
  id="password"
- type="password"
+ type={showPassword ? 'text' : 'password'}
  value={formData.password}
  onChange={(e) => handleChange('password', e.target.value)}
  placeholder="Mínimo 8 caracteres"
  autoComplete="new-password"
- className={inputClass('password')}
+ className={`${inputClass('password')} pr-10`}
  />
+ <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
+ </div>
  {fieldErrors.password && (
  <p className="mt-1 text-xs text-destructive">{fieldErrors.password}</p>
  )}
