@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
+import { TASK_TYPE_OPTIONS } from '@/lib/task-utils';
 
 interface CreateTaskDialogProps {
  projectId: string;
@@ -59,6 +60,7 @@ export function CreateTaskDialog({
  const [title, setTitle] = useState('');
  const [description, setDescription] = useState('');
  const [priority, setPriority] = useState('MEDIUM');
+ const [taskType, setTaskType] = useState<'PROJECT' | 'SUPPORT'>('PROJECT');
  const [estimatedHours, setEstimatedHours] = useState('');
  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
@@ -94,6 +96,7 @@ export function CreateTaskDialog({
  setTitle('');
  setDescription('');
  setPriority('MEDIUM');
+ setTaskType('PROJECT');
  setEstimatedHours('');
  setAssigneeIds([]);
  setDueDate('');
@@ -114,6 +117,7 @@ export function CreateTaskDialog({
  title: title.trim(),
  description: description.trim() || undefined,
  priority,
+ type: taskType,
  status: defaultStatus || 'BACKLOG',
  };
 
@@ -199,6 +203,24 @@ export function CreateTaskDialog({
  <SelectItem value="LOW">Baja</SelectItem>
  </SelectContent>
  </Select>
+ </div>
+
+ {/* Task type */}
+ <div className="space-y-2">
+ <Label>Tipo de tarea</Label>
+ <Select value={taskType} onValueChange={(v) => setTaskType(v as 'PROJECT' | 'SUPPORT')}>
+ <SelectTrigger>
+ <SelectValue />
+ </SelectTrigger>
+ <SelectContent>
+ {TASK_TYPE_OPTIONS.map((opt) => (
+ <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ <p className="text-[11px] text-muted-foreground">
+ Las tareas de tipo Soporte descuentan horas del cliente al completarse.
+ </p>
  </div>
 
  {/* Estimated hours */}

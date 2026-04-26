@@ -22,6 +22,7 @@ import {
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatDate, formatRelative, getInitials, cn } from '@/lib/utils';
+import { TASK_TYPE_OPTIONS } from '@/lib/task-utils';
 
 // ── Constant maps ──────────────────────────────────────────────────
 const STATUS_OPTIONS = [
@@ -424,6 +425,20 @@ export default function TaskDetailPage() {
  </SelectTrigger>
  <SelectContent>
  {PRIORITY_OPTIONS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+ </SelectContent>
+ </Select>
+ </div>
+ <Separator />
+
+ {/* Type */}
+ <div className="flex items-center justify-between">
+ <span className="text-muted-foreground text-xs">Tipo</span>
+ <Select value={task.type ?? 'PROJECT'} onValueChange={(v) => patchTask({ type: v })}>
+ <SelectTrigger className="h-7 w-32 text-xs border-none shadow-none">
+ <SelectValue />
+ </SelectTrigger>
+ <SelectContent>
+ {TASK_TYPE_OPTIONS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
  </SelectContent>
  </Select>
  </div>

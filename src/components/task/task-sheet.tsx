@@ -28,6 +28,7 @@ import { formatDate, formatRelative, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 import { LabelSelector } from '@/components/labels/label-selector';
 import { ActivityFeed } from '@/components/activity/activity-feed';
+import { TASK_TYPE_OPTIONS } from '@/lib/task-utils';
 
 const STATUS_OPTIONS = [
  { value: 'BACKLOG', label: 'Nuevo' },
@@ -335,6 +336,22 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  <SelectContent>
  {PRIORITY_OPTIONS.map((p) => (
  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ </div>
+ <Separator />
+
+ {/* Type */}
+ <div className="flex items-center justify-between">
+ <span className="text-muted-foreground text-xs">Tipo</span>
+ <Select value={task.type ?? 'PROJECT'} onValueChange={(v) => patchTask({ type: v })}>
+ <SelectTrigger className="h-7 w-36 text-xs border-none shadow-none">
+ <SelectValue />
+ </SelectTrigger>
+ <SelectContent>
+ {TASK_TYPE_OPTIONS.map((t) => (
+ <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
  ))}
  </SelectContent>
  </Select>
