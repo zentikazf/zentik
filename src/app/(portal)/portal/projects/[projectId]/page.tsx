@@ -186,6 +186,23 @@ export default function PortalProjectDetail() {
     </div>
    </div>
 
+   {/* Acceso a documentos */}
+   <Link
+    href={`/portal/projects/${projectId}/documents`}
+    className="flex items-center justify-between rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/50"
+   >
+    <div className="flex items-center gap-4">
+     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+      <FileText className="h-5 w-5 text-primary"/>
+     </div>
+     <div>
+      <p className="text-base font-semibold text-foreground">Documentos del proyecto</p>
+      <p className="text-xs text-muted-foreground">Mirá los archivos compartidos por el equipo</p>
+     </div>
+    </div>
+    <ArrowLeft className="h-4 w-4 rotate-180 text-muted-foreground"/>
+   </Link>
+
    {/* KPI Cards */}
    <div className="grid gap-4 sm:grid-cols-3">
     <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
