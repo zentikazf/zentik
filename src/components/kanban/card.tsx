@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageCircle, Paperclip, CheckSquare, Eye, Wrench, Sparkles } from 'lucide-react';
+import { CheckSquare, Eye, Wrench, Sparkles, Ticket as TicketIcon } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -26,6 +27,7 @@ interface KanbanCardProps {
  _count?: { subTasks?: number };
  subTasks?: { status: string }[];
  role?: { id: string; name: string } | null;
+ ticket?: { id: string; ticketNumber: string | null; status?: string } | null;
  };
  currentUserId?: string;
  currentUserRoleId?: string;
@@ -71,6 +73,19 @@ export function KanbanCard({ task, currentUserId, currentUserRoleId, onClick, ov
  isAssignedToMe && 'border-l-[3px] border-l-primary',
  )}
  >
+ {/* Ticket badge — solo si la task corresponde a un ticket de soporte */}
+ {task.ticket && (
+ <Link
+ href={`/tickets?ticket=${task.ticket.id}&panel=open`}
+ onClick={(e) => e.stopPropagation()}
+ className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-warning hover:bg-warning/25 transition-colors mb-2"
+ title="Ver ticket de soporte"
+ >
+ <TicketIcon className="h-2.5 w-2.5" />
+ #{task.ticket.ticketNumber || task.ticket.id.slice(-6).toUpperCase()}
+ </Link>
+ )}
+
  {/* Priority + Type Badges + "Tú" */}
  <div className="flex items-center gap-1.5 mb-2">
  <div
