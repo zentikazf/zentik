@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,46 +23,37 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  FileText,
   File as FileIcon,
   Image as ImageIcon,
-  FileText,
   Download,
   Trash2,
   Eye,
   EyeOff,
   Pencil,
   MoreVertical,
-  CheckCircle2,
   Plus,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
-import { formatRelative, formatDate, cn } from '@/lib/utils';
+import { useOrg } from '@/providers/org-provider';
+import { formatRelative, cn } from '@/lib/utils';
 import { formatFileSize, isUpdated } from '@/lib/document-utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-interface DocumentItem {
+interface ClientDocumentItem {
   id: string;
   name: string;
   description?: string | null;
   originalName: string;
   mimeType: string;
   size: number;
-  projectId?: string | null;
-  taskId?: string | null;
   clientVisible?: boolean;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   uploadedBy?: { id: string; name: string };
-  task?: { id: string; title: string } | null;
-  downloadEvents?: Array<{
-    id: string;
-    downloadedAt: string;
-    user: { id: string; name: string };
-  }>;
-  _count?: { downloadEvents: number };
 }
 
 function getFileIcon(mimeType: string) {
@@ -72,9 +62,14 @@ function getFileIcon(mimeType: string) {
   return FileIcon;
 }
 
-export default function FilesPage() {
-  const { projectId } = useParams<{ projectId: string }>();
-  const [files, setFiles] = useState<DocumentItem[]>([]);
+interface Props {
+  clientId: string;
+  clientName: string;
+}
+
+export function ClientDocumentsSection({ clientId, clientName }: Props) {
+  const { orgId } = useOrg();
+  const [files, setFiles] = useState<ClientDocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [onlyVisible, setOnlyVisible] = useState(false);
 
@@ -83,11 +78,12 @@ export default function FilesPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
+  const [uploadVisible, setUploadVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit state
-  const [editTarget, setEditTarget] = useState<DocumentItem | null>(null);
+  const [editTarget, setEditTarget] = useState<ClientDocumentItem | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editFile, setEditFile] = useState<File | null>(null);
@@ -95,16 +91,22 @@ export default function FilesPage() {
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    loadFiles();
-  }, [projectId]);
+    if (clientId) loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   const loadFiles = async () => {
     setLoading(true);
     try {
-      const res = await api.get<any>(`/projects/${projectId}/files`);
-      setFiles(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      const res = await api.get<any>(`/clients/${clientId}/documents`);
+      const list = res.data?.data || (Array.isArray(res.data) ? res.data : []);
+      setFiles(list);
     } catch (err) {
-      toast.error('Error', err instanceof ApiError ? err.message : 'Error al cargar documentos');
+      if (err instanceof ApiError && err.statusCode === 404) {
+        setFiles([]);
+      } else {
+        toast.error('Error', err instanceof ApiError ? err.message : 'Error al cargar documentos');
+      }
     } finally {
       setLoading(false);
     }
@@ -114,11 +116,12 @@ export default function FilesPage() {
     setUploadFile(null);
     setUploadTitle('');
     setUploadDescription('');
+    setUploadVisible(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleUpload = async () => {
-    if (!uploadFile) return;
+    if (!uploadFile || !orgId) return;
     setUploading(true);
     try {
       const formData = new FormData();
@@ -126,10 +129,11 @@ export default function FilesPage() {
       const params = new URLSearchParams();
       if (uploadTitle.trim()) params.set('title', uploadTitle.trim());
       if (uploadDescription.trim()) params.set('description', uploadDescription.trim());
+      if (uploadVisible) params.set('clientVisible', 'true');
       const qs = params.toString() ? `?${params}` : '';
 
       const res = await fetch(
-        `${API_URL}/api/v1/projects/${projectId}/documents${qs}`,
+        `${API_URL}/api/v1/clients/${clientId}/documents${qs}`,
         {
           method: 'POST',
           credentials: 'include',
@@ -140,7 +144,10 @@ export default function FilesPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error?.message || data?.message || 'Error al subir');
       }
-      toast.success('Documento subido', 'Quedó privado. Activá el ojito cuando esté listo para compartir.');
+      toast.success(
+        'Documento subido',
+        uploadVisible ? 'Compartido con el cliente' : 'Quedó privado. Activá el ojito para compartir.',
+      );
       setUploadOpen(false);
       resetUpload();
       loadFiles();
@@ -162,7 +169,7 @@ export default function FilesPage() {
   };
 
   const handleDelete = async (fileId: string, name: string) => {
-    if (!confirm(`¿Eliminar el documento "${name}"? El cliente verá un aviso de "Eliminado".`)) return;
+    if (!confirm(`¿Eliminar el documento "${name}"?`)) return;
     try {
       await api.delete(`/documents/${fileId}`);
       toast.success('Documento eliminado');
@@ -176,7 +183,7 @@ export default function FilesPage() {
     window.open(`${API_URL}/api/v1/documents/${fileId}/download`, '_blank');
   };
 
-  const openEdit = (doc: DocumentItem) => {
+  const openEdit = (doc: ClientDocumentItem) => {
     setEditTarget(doc);
     setEditTitle(doc.name);
     setEditDescription(doc.description ?? '');
@@ -199,7 +206,6 @@ export default function FilesPage() {
       const formData = new FormData();
       if (editFile) formData.append('file', editFile);
       if (editTitle.trim()) formData.append('name', editTitle.trim());
-      // Permitir limpiar la descripción enviando string vacío
       formData.append('description', editDescription.trim());
 
       const res = await fetch(`${API_URL}/api/v1/documents/${editTarget.id}/edit`, {
@@ -221,159 +227,143 @@ export default function FilesPage() {
     }
   };
 
-  // Solo documentos directos del proyecto (con projectId), no los heredados de tasks/messages
-  const projectDocs = files.filter((f) => !!f.projectId);
-  const filtered = projectDocs.filter((f) => {
+  const filtered = files.filter((f) => {
     if (onlyVisible && !f.clientVisible) return false;
     return true;
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Documentos</h1>
-          <p className="text-sm text-muted-foreground">
-            Compartí archivos con el cliente desde su portal. Privados por default — activá el ojito cuando estén listos.
+          <h2 className="text-[15px] font-semibold text-card-foreground flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" /> Documentos del Cliente
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Contratos, NDAs, documentación general — independientes de los proyectos.
           </p>
         </div>
-        <Button onClick={() => setUploadOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Subir documento
+        <Button size="sm" onClick={() => setUploadOpen(true)}>
+          <Plus className="mr-1 h-3 w-3" /> Subir documento
         </Button>
       </div>
 
-      {/* Filtros */}
-      <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
-        <div className="flex items-center gap-2">
-          <Switch checked={onlyVisible} onCheckedChange={setOnlyVisible} id="only-visible" />
-          <Label htmlFor="only-visible" className="text-sm cursor-pointer">Solo visibles al cliente</Label>
+      {/* Filtro */}
+      {files.length > 0 && (
+        <div className="flex items-center gap-2 mb-3">
+          <Switch checked={onlyVisible} onCheckedChange={setOnlyVisible} id="client-only-visible" />
+          <Label htmlFor="client-only-visible" className="text-xs cursor-pointer text-muted-foreground">
+            Solo visibles al cliente
+          </Label>
         </div>
-      </div>
+      )}
 
       {/* Lista */}
-      <div className="rounded-xl border bg-card">
-        {loading ? (
-          <div className="space-y-2 p-4">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <FileIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              {projectDocs.length === 0 ? 'Subí el primer documento del proyecto' : 'No hay documentos visibles para el cliente'}
-            </p>
-          </div>
-        ) : (
-          <TooltipProvider delayDuration={200}>
-            <div className="divide-y">
-              {filtered.map((f) => {
-                const Icon = getFileIcon(f.mimeType);
-                const downloads = f._count?.downloadEvents ?? 0;
-                const isDeleted = !!f.deletedAt;
-                const updated = isUpdated(f.createdAt, f.updatedAt);
-                return (
-                  <div key={f.id} className={cn('flex items-center gap-3 p-4', isDeleted && 'opacity-50')}>
-                    <Icon className="h-8 w-8 shrink-0 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium text-foreground truncate">{f.name}</p>
-                        {updated && !isDeleted && (
-                          <Badge className="bg-info/10 text-info border-transparent text-[10px]">Actualizado</Badge>
-                        )}
-                        {isDeleted && <Badge variant="destructive" className="text-[10px]">Eliminado</Badge>}
-                      </div>
-                      {f.description && (
-                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{f.description}</p>
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-10 text-center">
+          <FileIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
+          <p className="mt-3 text-sm text-muted-foreground">
+            {files.length === 0
+              ? 'Subí el primer documento del cliente'
+              : 'No hay documentos visibles para el cliente'}
+          </p>
+        </div>
+      ) : (
+        <TooltipProvider delayDuration={200}>
+          <div className="divide-y divide-border rounded-lg border border-border">
+            {filtered.map((f) => {
+              const Icon = getFileIcon(f.mimeType);
+              const isDeleted = !!f.deletedAt;
+              const updated = isUpdated(f.createdAt, f.updatedAt);
+              return (
+                <div
+                  key={f.id}
+                  className={cn('flex items-center gap-3 p-3', isDeleted && 'opacity-50')}
+                >
+                  <Icon className="h-7 w-7 shrink-0 text-muted-foreground" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-foreground truncate">{f.name}</p>
+                      {updated && !isDeleted && (
+                        <Badge className="bg-info/10 text-info border-transparent text-[10px]">Actualizado</Badge>
                       )}
-                      <p className="mt-0.5 text-[11px] text-muted-foreground/70">
-                        {formatFileSize(f.size)} · {f.uploadedBy?.name ?? 'Anon'} · {formatRelative(f.createdAt)}
-                      </p>
-                      {downloads > 0 && f.downloadEvents && f.downloadEvents.length > 0 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="mt-1 inline-flex items-center gap-1 cursor-help">
-                              <CheckCircle2 className="h-3 w-3 text-success" />
-                              <span className="text-[11px] text-success">
-                                {downloads === 1
-                                  ? `Descargado por ${f.downloadEvents[0].user.name}`
-                                  : `Descargado ${downloads} veces`}
-                              </span>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <div className="space-y-1 text-xs">
-                              {f.downloadEvents.slice(0, 5).map((ev) => (
-                                <div key={ev.id}>
-                                  <strong>{ev.user.name}</strong> — {formatDate(ev.downloadedAt)}
-                                </div>
-                              ))}
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
+                      {isDeleted && <Badge variant="destructive" className="text-[10px]">Eliminado</Badge>}
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => toggleVisibility(f.id, !!f.clientVisible)}
-                            disabled={isDeleted}
-                            className={cn(
-                              'flex h-8 w-8 items-center justify-center rounded-md border transition-colors',
-                              f.clientVisible
-                                ? 'border-success/40 bg-success/10 text-success hover:bg-success/20'
-                                : 'border-border bg-muted text-muted-foreground hover:bg-muted/80',
-                              isDeleted && 'cursor-not-allowed',
-                            )}
-                          >
-                            {f.clientVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {f.clientVisible ? 'Visible para el cliente' : 'Oculto del cliente — clic para compartir'}
-                        </TooltipContent>
-                      </Tooltip>
-
-                      <Button variant="ghost" size="sm" onClick={() => handleDownload(f.id)} disabled={isDeleted}>
-                        <Download className="h-4 w-4" />
-                      </Button>
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" disabled={isDeleted}>
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(f)}>
-                            <Pencil className="mr-2 h-4 w-4" /> Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(f.id, f.name)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    {f.description && (
+                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{f.description}</p>
+                    )}
+                    <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                      {formatFileSize(f.size)} · {f.uploadedBy?.name ?? 'Anon'} · {formatRelative(f.createdAt)}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          </TooltipProvider>
-        )}
-      </div>
 
-      {/* Modal subir documento */}
+                  <div className="flex items-center gap-1.5">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => toggleVisibility(f.id, !!f.clientVisible)}
+                          disabled={isDeleted}
+                          className={cn(
+                            'flex h-7 w-7 items-center justify-center rounded-md border transition-colors',
+                            f.clientVisible
+                              ? 'border-success/40 bg-success/10 text-success hover:bg-success/20'
+                              : 'border-border bg-muted text-muted-foreground hover:bg-muted/80',
+                            isDeleted && 'cursor-not-allowed',
+                          )}
+                        >
+                          {f.clientVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {f.clientVisible ? 'Visible para el cliente' : 'Oculto del cliente — clic para compartir'}
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownload(f.id)} disabled={isDeleted}>
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={isDeleted}>
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(f)}>
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(f.id, f.name)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </TooltipProvider>
+      )}
+
+      {/* Modal subir */}
       <Dialog open={uploadOpen} onOpenChange={(o) => { setUploadOpen(o); if (!o) resetUpload(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Subir documento</DialogTitle>
+            <DialogTitle>Subir documento del cliente</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Documento general para <strong>{clientName}</strong> — independiente de los proyectos.
+          </p>
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Archivo *</Label>
               <Input
@@ -408,9 +398,12 @@ export default function FilesPage() {
                 rows={3}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              El documento se sube como privado. Activá el ojito en la lista cuando esté listo para compartir con el cliente.
-            </p>
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
+              <Switch checked={uploadVisible} onCheckedChange={setUploadVisible} id="upload-visible" />
+              <Label htmlFor="upload-visible" className="text-sm cursor-pointer">
+                Compartir con el cliente al subir
+              </Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setUploadOpen(false); resetUpload(); }}>Cancelar</Button>
@@ -421,14 +414,14 @@ export default function FilesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal editar documento */}
+      {/* Modal editar */}
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) closeEdit(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar documento</DialogTitle>
           </DialogHeader>
           {editTarget && (
-            <div className="space-y-4">
+            <div className="space-y-4 py-2">
               <div className="space-y-2">
                 <Label>Reemplazar archivo (opcional)</Label>
                 <Input

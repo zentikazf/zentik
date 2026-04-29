@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
   FileText,
   File as FileIcon,
@@ -16,22 +15,18 @@ import {
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatRelative } from '@/lib/utils';
-import {
-  DOCUMENT_CATEGORY_LABELS,
-  DOCUMENT_CATEGORY_COLORS,
-  formatFileSize,
-} from '@/lib/document-utils';
+import { formatFileSize, isUpdated } from '@/lib/document-utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface ClientDocument {
   id: string;
   name: string;
+  description?: string | null;
   mimeType: string;
   size: number;
-  category: string | null;
-  version: number;
   uploadedAt: string;
+  updatedAt: string;
   uploadedByName: string | null;
   deleted: boolean;
 }
@@ -59,14 +54,6 @@ export default function PortalDocumentsPage() {
     if (deleted) return;
     window.open(`${API_URL}/api/v1/portal/documents/${id}/download`, '_blank');
   };
-
-  // Agrupar por categoría
-  const grouped: Record<string, ClientDocument[]> = {};
-  docs.forEach((d) => {
-    const key = d.category || 'OTHER';
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(d);
-  });
 
   if (loading) {
     return (
@@ -97,50 +84,47 @@ export default function PortalDocumentsPage() {
         </p>
       </div>
 
-      {Object.entries(grouped).map(([category, items]) => (
-        <section key={category}>
-          <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-            {DOCUMENT_CATEGORY_LABELS[category] || 'Otro'}
-          </h3>
-          <div className="rounded-xl border bg-card divide-y">
-            {items.map((d) => {
-              const Icon = getFileIcon(d.mimeType);
-              return (
-                <div
-                  key={d.id}
-                  className={`flex items-center gap-3 p-4 ${d.deleted ? 'opacity-60' : ''}`}
-                >
-                  <Icon className="h-8 w-8 shrink-0 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
-                      {d.version > 1 && (
-                        <Badge variant="outline" className="text-[10px]">v{d.version}</Badge>
-                      )}
-                      {d.deleted && (
-                        <Badge className="bg-muted text-muted-foreground text-[10px]">
-                          <AlertCircle className="mr-1 h-3 w-3" /> Eliminado por el equipo
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {formatFileSize(d.size)} · {d.uploadedByName ?? 'Equipo'} · {formatRelative(d.uploadedAt)}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload(d.id, d.deleted)}
-                    disabled={d.deleted}
-                  >
-                    <Download className="mr-2 h-4 w-4" /> Descargar
-                  </Button>
+      <div className="rounded-xl border bg-card divide-y">
+        {docs.map((d) => {
+          const Icon = getFileIcon(d.mimeType);
+          const updated = isUpdated(d.uploadedAt, d.updatedAt);
+          return (
+            <div
+              key={d.id}
+              className={`flex items-center gap-3 p-4 ${d.deleted ? 'opacity-60' : ''}`}
+            >
+              <Icon className="h-8 w-8 shrink-0 text-muted-foreground" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
+                  {updated && !d.deleted && (
+                    <Badge className="bg-info/10 text-info border-transparent text-[10px]">Actualizado</Badge>
+                  )}
+                  {d.deleted && (
+                    <Badge className="bg-muted text-muted-foreground text-[10px]">
+                      <AlertCircle className="mr-1 h-3 w-3" /> Eliminado por el equipo
+                    </Badge>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+                {d.description && (
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{d.description}</p>
+                )}
+                <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                  {formatFileSize(d.size)} · {d.uploadedByName ?? 'Equipo'} · {formatRelative(d.uploadedAt)}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDownload(d.id, d.deleted)}
+                disabled={d.deleted}
+              >
+                <Download className="mr-2 h-4 w-4" /> Descargar
+              </Button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

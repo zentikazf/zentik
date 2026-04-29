@@ -1,0 +1,128 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  FileText,
+  File as FileIcon,
+  Image as ImageIcon,
+  Download,
+  AlertCircle,
+} from 'lucide-react';
+import { api, ApiError } from '@/lib/api-client';
+import { toast } from '@/hooks/use-toast';
+import { formatRelative } from '@/lib/utils';
+import { formatFileSize, isUpdated } from '@/lib/document-utils';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+interface ClientDocument {
+  id: string;
+  name: string;
+  description?: string | null;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  updatedAt: string;
+  uploadedByName: string | null;
+  deleted: boolean;
+}
+
+function getFileIcon(mimeType: string) {
+  if (mimeType?.startsWith('image/')) return ImageIcon;
+  if (mimeType?.includes('pdf') || mimeType?.includes('document')) return FileText;
+  return FileIcon;
+}
+
+export default function PortalClientDocumentsPage() {
+  const [docs, setDocs] = useState<ClientDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .get<ClientDocument[]>('/portal/client-documents')
+      .then((res) => setDocs(res.data || []))
+      .catch((err) =>
+        toast.error('Error', err instanceof ApiError ? err.message : 'No se pudieron cargar los documentos'),
+      )
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleDownload = (id: string, deleted: boolean) => {
+    if (deleted) return;
+    window.open(`${API_URL}/api/v1/portal/client-documents/${id}/download`, '_blank');
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">Documentos</h1>
+        <p className="text-sm text-muted-foreground">
+          Documentos generales compartidos por el equipo (contratos, reportes, etc.).
+        </p>
+      </div>
+
+      {docs.length === 0 ? (
+        <div className="rounded-xl border bg-card p-12 text-center">
+          <FileIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <h2 className="mt-4 text-lg font-medium">Aún no hay documentos compartidos contigo</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Cuando el equipo te comparta un documento general, aparecerá acá.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-xl border bg-card divide-y">
+          {docs.map((d) => {
+            const Icon = getFileIcon(d.mimeType);
+            const updated = isUpdated(d.uploadedAt, d.updatedAt);
+            return (
+              <div
+                key={d.id}
+                className={`flex items-center gap-3 p-4 ${d.deleted ? 'opacity-60' : ''}`}
+              >
+                <Icon className="h-8 w-8 shrink-0 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
+                    {updated && !d.deleted && (
+                      <Badge className="bg-info/10 text-info border-transparent text-[10px]">Actualizado</Badge>
+                    )}
+                    {d.deleted && (
+                      <Badge className="bg-muted text-muted-foreground text-[10px]">
+                        <AlertCircle className="mr-1 h-3 w-3" /> Eliminado por el equipo
+                      </Badge>
+                    )}
+                  </div>
+                  {d.description && (
+                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{d.description}</p>
+                  )}
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                    {formatFileSize(d.size)} · {d.uploadedByName ?? 'Equipo'} · {formatRelative(d.uploadedAt)}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDownload(d.id, d.deleted)}
+                  disabled={d.deleted}
+                >
+                  <Download className="mr-2 h-4 w-4" /> Descargar
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

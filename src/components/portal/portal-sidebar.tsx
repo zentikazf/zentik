@@ -7,6 +7,7 @@ import {
  LayoutDashboard,
  FolderKanban,
  Ticket,
+ FileText,
  BookOpen,
  Bell,
  ChevronLeft,
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
  { name: 'Dashboard', href: '/portal', icon: LayoutDashboard },
  { name: 'Proyectos', href: '/portal/projects', icon: FolderKanban },
  { name: 'Tickets', href: '/portal/tickets', icon: Ticket },
+ { name: 'Documentos', href: '/portal/documents', icon: FileText },
  { name: 'Guia de uso', href: '/portal/guide', icon: BookOpen },
 ];
 

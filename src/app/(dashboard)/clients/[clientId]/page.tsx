@@ -40,6 +40,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
+import { ClientDocumentsSection } from '@/components/clients/client-documents-section';
 
 interface SubUser {
  id: string;
@@ -479,6 +480,9 @@ export default function ClientDetailPage() {
  )}
  </div>
  </div>
+
+ {/* Documentos del cliente — independientes de los proyectos */}
+ <ClientDocumentsSection clientId={clientId} clientName={client.name} />
 
  {/* Add Sub-User Dialog */}
  <Dialog open={showAddUser} onOpenChange={(open) => { if (!open) closeAddUserDialog(); else setShowAddUser(true); }}>
