@@ -17,6 +17,7 @@ import { getInitials } from '@/lib/utils';
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
  IN_PROGRESS: { label: 'En Proceso', color: 'bg-warning/10 text-warning' },
+ IN_REVIEW: { label: 'En Revision', color: 'bg-info/10 text-info' },
  RESOLVED: { label: 'Resuelto', color: 'bg-success/10 text-success' },
  CLOSED: { label: 'Cerrado', color: 'bg-muted text-muted-foreground' },
 };

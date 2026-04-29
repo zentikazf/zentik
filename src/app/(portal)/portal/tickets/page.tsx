@@ -20,6 +20,7 @@ import { useAuth } from '@/hooks/use-auth';
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
  IN_PROGRESS: { label: 'En Proceso', color: 'bg-warning/10 text-warning' },
+ IN_REVIEW: { label: 'En Revision', color: 'bg-info/10 text-info' },
  RESOLVED: { label: 'Resuelto', color: 'bg-success/10 text-success' },
  CLOSED: { label: 'Cerrado', color: 'bg-muted text-muted-foreground' },
 };
@@ -30,12 +31,13 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
  NEW_PROJECT: { label: 'Nuevo Proyecto', color: 'bg-primary/10 text-primary' },
 };
 
-type StatusTab = 'all' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+type StatusTab = 'all' | 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED';
 
 const tabConfig: { value: StatusTab; label: string; dotColor: string }[] = [
  { value: 'all', label: 'Todos', dotColor: '' },
  { value: 'OPEN', label: 'Abiertos', dotColor: 'bg-primary' },
  { value: 'IN_PROGRESS', label: 'En Proceso', dotColor: 'bg-warning' },
+ { value: 'IN_REVIEW', label: 'En Revision', dotColor: 'bg-info' },
  { value: 'RESOLVED', label: 'Resueltos', dotColor: 'bg-success' },
  { value: 'CLOSED', label: 'Cerrados', dotColor: 'bg-muted-foreground' },
 ];
@@ -198,6 +200,7 @@ export default function PortalTicketsPage() {
  all: tickets.length,
  OPEN: tickets.filter((t) => t.status === 'OPEN').length,
  IN_PROGRESS: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
+ IN_REVIEW: tickets.filter((t) => t.status === 'IN_REVIEW').length,
  RESOLVED: tickets.filter((t) => t.status === 'RESOLVED').length,
  CLOSED: tickets.filter((t) => t.status === 'CLOSED').length,
  };
