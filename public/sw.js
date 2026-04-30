@@ -22,8 +22,8 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'Zentik';
   const options = {
     body: payload.body || '',
-    icon: payload.icon || '/icon-192.png',
-    badge: '/icon-badge.png',
+    icon: payload.icon || '/icon.svg',
+    badge: '/icon-badge.svg',
     tag: payload.tag,
     data: {
       url: payload.url || '/',
