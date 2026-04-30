@@ -68,6 +68,8 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  const [editDesc, setEditDesc] = useState(false);
  const [titleDraft, setTitleDraft] = useState('');
  const [descDraft, setDescDraft] = useState('');
+ const [editHours, setEditHours] = useState(false);
+ const [hoursDraft, setHoursDraft] = useState('');
 
  // Comments
  const [comments, setComments] = useState<any[]>([]);
@@ -88,6 +90,11 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  setTask(res.data);
  setTitleDraft(res.data.title || '');
  setDescDraft(res.data.description || '');
+ setHoursDraft(
+ res.data.estimatedHours !== null && res.data.estimatedHours !== undefined
+ ? String(res.data.estimatedHours)
+ : '',
+ );
  } catch (err) {
  const msg = err instanceof ApiError ? err.message : 'Error al cargar la tarea';
  toast.error('Error', msg);
@@ -113,6 +120,7 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  setTab('details');
  setEditTitle(false);
  setEditDesc(false);
+ setEditHours(false);
  setNewComment('');
  setNewSubtask('');
  loadTask();
@@ -151,6 +159,19 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  const saveDesc = async () => {
  if (descDraft !== (task?.description || '')) await patchTask({ description: descDraft });
  setEditDesc(false);
+ };
+
+ const saveHours = async () => {
+ const current = task?.estimatedHours ?? null;
+ const parsed = hoursDraft.trim() === '' ? null : Number(hoursDraft);
+ if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
+ toast.error('Error', 'Ingresá un número válido de horas');
+ setHoursDraft(current !== null ? String(current) : '');
+ setEditHours(false);
+ return;
+ }
+ if (parsed !== current) await patchTask({ estimatedHours: parsed ?? 0 });
+ setEditHours(false);
  };
 
  const handleCreateSubtask = async () => {
@@ -402,9 +423,37 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  {/* Estimated hours */}
  <div className="flex items-center justify-between">
  <span className="text-muted-foreground text-xs">Horas estimadas</span>
- <span className="text-xs text-foreground">
+ {editHours ? (
+ <Input
+ autoFocus
+ type="number"
+ min={0}
+ step="0.5"
+ value={hoursDraft}
+ onChange={(e) => setHoursDraft(e.target.value)}
+ onBlur={saveHours}
+ onKeyDown={(e) => {
+ if (e.key === 'Enter') saveHours();
+ if (e.key === 'Escape') {
+ setHoursDraft(
+ task?.estimatedHours !== null && task?.estimatedHours !== undefined
+ ? String(task.estimatedHours)
+ : '',
+ );
+ setEditHours(false);
+ }
+ }}
+ className="h-7 w-24 text-xs text-right border-none px-0 focus-visible:ring-0 shadow-none"
+ placeholder="0"
+ />
+ ) : (
+ <button
+ onClick={() => setEditHours(true)}
+ className="text-xs text-foreground cursor-text hover:bg-muted rounded-lg px-1.5 -mx-1 py-0.5 transition-colors"
+ >
  {task.estimatedHours ? `${task.estimatedHours}h` : '—'}
- </span>
+ </button>
+ )}
  </div>
  <Separator />
 
