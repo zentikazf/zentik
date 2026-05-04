@@ -1,281 +1,282 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useEffect, useState, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart3, TrendingUp, Clock, CheckCircle2, DollarSign } from 'lucide-react';
+import {
+ Tooltip,
+ TooltipContent,
+ TooltipProvider,
+ TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Info, BarChart3, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
-import { formatDuration } from '@/lib/utils';
+import { formatDuration, getInitials } from '@/lib/utils';
 
-const orgReportTypes = [
- { value: 'overview', label: 'Resumen General' },
- { value: 'tasks', label: 'Reporte de Tareas' },
- { value: 'time', label: 'Reporte de Tiempo' },
- { value: 'team', label: 'Rendimiento del Equipo' },
- { value: 'productivity', label: 'Productividad' },
- { value: 'profitability', label: 'Rentabilidad' },
-];
+interface TeamMonthlyItem {
+ userId: string;
+ name: string;
+ image?: string;
+ role?: string | null;
+ completedTasks: number;
+ totalSeconds: number;
+ hours: number;
+ avgDaysPerTask: number;
+ onTimeTasks: number;
+ performancePct: number | null;
+}
+
+// Format YYYY-MM → "Mayo 2026"
+function formatMonthLabel(monthYM: string): string {
+ const [y, m] = monthYM.split('-').map(Number);
+ const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+ return `${months[m - 1]} ${y}`;
+}
+
+// Build last 12 months as YYYY-MM
+function buildMonthOptions(): string[] {
+ const options: string[] = [];
+ const now = new Date();
+ for (let i = 0; i < 12; i++) {
+ const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+ options.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+ }
+ return options;
+}
 
 export default function ReportsPage() {
  const { orgId } = useOrg();
- const [reportType, setReportType] = useState('overview');
- const [data, setData] = useState<any>(null);
- const [loading, setLoading] = useState(true);
- const [startDate, setStartDate] = useState('');
- const [endDate, setEndDate] = useState('');
+ const { hasPermission } = usePermissions();
+
+ // Cupo 1: Owner / PM / PO / Tech Lead — ven el reporte mensual del equipo
+ const isManagerial = hasPermission('manage:projects');
+
+ const monthOptions = useMemo(() => buildMonthOptions(), []);
+ const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]);
+
+ // Cupo 1 state
+ const [teamData, setTeamData] = useState<{ month: string; items: TeamMonthlyItem[] } | null>(null);
+ const [loadingTeam, setLoadingTeam] = useState(true);
+
+ // Cupo 2 state (resumen personal + tiempo personal)
  const [personalData, setPersonalData] = useState<any>(null);
  const [timeReport, setTimeReport] = useState<any>(null);
+ const [loadingPersonal, setLoadingPersonal] = useState(true);
 
+ // Load reporte mensual del equipo (solo Cupo 1)
  useEffect(() => {
- if (orgId) loadReport();
- }, [reportType, orgId]);
-
- useEffect(() => {
- loadPersonalSummary();
- loadTimeReport();
- }, []);
-
- const loadReport = async () => {
- if (!orgId) return;
- setLoading(true);
- try {
- const params = new URLSearchParams();
- if (startDate) params.set('startDate', startDate);
- if (endDate) params.set('endDate', endDate);
- const qs = params.toString() ? `?${params}` : '';
- const res = await api.get(`/organizations/${orgId}/reports/${reportType}${qs}`);
- setData(res.data);
- } catch (err) {
- setData(null);
- if (err instanceof ApiError) toast.error('Error', err.message);
- } finally {
- setLoading(false);
+ if (!orgId || !isManagerial) {
+ setLoadingTeam(false);
+ return;
  }
- };
+ setLoadingTeam(true);
+ api.get(`/organizations/${orgId}/reports/team-monthly?month=${selectedMonth}`)
+ .then((res) => setTeamData(res.data as { month: string; items: TeamMonthlyItem[] }))
+ .catch((err) => {
+ if (err instanceof ApiError) toast.error('Error', err.message);
+ setTeamData(null);
+ })
+ .finally(() => setLoadingTeam(false));
+ }, [orgId, isManagerial, selectedMonth]);
 
- const loadPersonalSummary = async () => {
- try {
- const res = await api.get('/users/me/reports/summary');
- setPersonalData(res.data);
- } catch {}
- };
+ // Load resumen personal (solo Cupo 2)
+ useEffect(() => {
+ if (isManagerial) {
+ setLoadingPersonal(false);
+ return;
+ }
+ setLoadingPersonal(true);
+ Promise.all([
+ api.get('/users/me/reports/summary').catch(() => ({ data: null })),
+ api.get('/users/me/time-report').catch(() => ({ data: null })),
+ ]).then(([summary, time]) => {
+ setPersonalData(summary.data);
+ setTimeReport(time.data);
+ }).finally(() => setLoadingPersonal(false));
+ }, [isManagerial]);
 
- const loadTimeReport = async () => {
- try {
- const res = await api.get('/users/me/time-report');
- setTimeReport(res.data);
- } catch {}
- };
-
+ // ── Render: Cupo 1 (Gerencial) ────────────────────────────────
+ if (isManagerial) {
  return (
- <div className="space-y-7">
+ <TooltipProvider delayDuration={100}>
+ <div className="space-y-6">
+ <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
  <div>
- <h1 className="text-[22px] font-semibold text-foreground">Reportes</h1>
- <p className="mt-1 text-sm text-muted-foreground">Análisis y métricas de tu organización</p>
+ <h1 className="text-[22px] font-semibold text-foreground">Reporte mensual del equipo</h1>
+ <p className="mt-1 text-sm text-muted-foreground">
+ Resumen de productividad por miembro. Cambia el mes para ver historico.
+ </p>
+ </div>
+ <select
+ value={selectedMonth}
+ onChange={(e) => setSelectedMonth(e.target.value)}
+ className="h-10 rounded-xl border border-input bg-transparent px-3 text-sm w-56"
+ >
+ {monthOptions.map((m) => (
+ <option key={m} value={m}>{formatMonthLabel(m)}</option>
+ ))}
+ </select>
  </div>
 
- {/* Personal Summary */}
+ <div className="rounded-xl border border-border bg-card overflow-hidden">
+ {loadingTeam ? (
+ <div className="p-6 space-y-3">
+ {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg"/>)}
+ </div>
+ ) : !teamData || teamData.items.length === 0 ? (
+ <div className="flex flex-col items-center py-16 text-center">
+ <BarChart3 className="mb-3 h-10 w-10 text-muted-foreground/50"/>
+ <p className="text-muted-foreground">No hay datos para {formatMonthLabel(selectedMonth)}</p>
+ </div>
+ ) : (
+ <div className="overflow-x-auto">
+ <table className="w-full text-sm">
+ <thead className="bg-muted/50 border-b border-border">
+ <tr className="text-left text-xs text-muted-foreground">
+ <th className="px-5 py-3 font-medium">Miembro</th>
+ <th className="px-5 py-3 font-medium text-right">Completadas</th>
+ <th className="px-5 py-3 font-medium text-right">Horas</th>
+ <th className="px-5 py-3 font-medium text-right">Prom. Días/Tarea</th>
+ <th className="px-5 py-3 font-medium text-right">
+ <span className="inline-flex items-center gap-1.5">
+ Rendimiento
+ <Tooltip>
+ <TooltipTrigger asChild>
+ <button type="button" className="text-muted-foreground/70 hover:text-foreground">
+ <Info className="h-3 w-3"/>
+ </button>
+ </TooltipTrigger>
+ <TooltipContent side="top" align="end" className="max-w-xs text-[11px]">
+ % de tareas entregadas a tiempo. Se calcula como tareas completadas
+ antes o en su fecha límite ÷ total de completadas en el mes.
+ </TooltipContent>
+ </Tooltip>
+ </span>
+ </th>
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-border">
+ {teamData.items.map((m) => (
+ <tr key={m.userId} className="hover:bg-muted/30 transition-colors">
+ <td className="px-5 py-3.5">
+ <div className="flex items-center gap-2.5">
+ <Avatar className="h-7 w-7">
+ <AvatarImage src={m.image} />
+ <AvatarFallback className="text-[10px] bg-primary/15 text-primary">{getInitials(m.name)}</AvatarFallback>
+ </Avatar>
+ <div className="min-w-0">
+ <p className="text-sm font-medium text-foreground truncate">{m.name}</p>
+ {m.role && <p className="text-[10px] text-muted-foreground">{m.role}</p>}
+ </div>
+ </div>
+ </td>
+ <td className="px-5 py-3.5 text-right text-foreground font-medium">{m.completedTasks}</td>
+ <td className="px-5 py-3.5 text-right text-foreground font-medium">{m.hours}h</td>
+ <td className="px-5 py-3.5 text-right text-muted-foreground">
+ {m.avgDaysPerTask > 0 ? `${m.avgDaysPerTask}d` : '—'}
+ </td>
+ <td className="px-5 py-3.5 text-right">
+ {m.performancePct !== null ? (
+ <span className={`font-semibold ${m.performancePct >= 80 ? 'text-success' : m.performancePct >= 60 ? 'text-warning' : 'text-destructive'}`}>
+ {m.performancePct}%
+ </span>
+ ) : (
+ <span className="text-muted-foreground">—</span>
+ )}
+ </td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ )}
+ </div>
+
+ <p className="text-[11px] text-muted-foreground italic px-1">
+ Vista exclusiva para roles gerenciales (Cupo 1). Los datos se actualizan en tiempo real
+ con los registros de tiempo confirmados.
+ </p>
+ </div>
+ </TooltipProvider>
+ );
+ }
+
+ // ── Render: Cupo 2 (Dev/QA/Designer) — solo resumen personal ──
+ return (
+ <div className="space-y-6">
+ <div>
+ <h1 className="text-[22px] font-semibold text-foreground">Mi resumen</h1>
+ <p className="mt-1 text-sm text-muted-foreground">Mis tareas y tiempo registrado.</p>
+ </div>
+
+ {loadingPersonal ? (
+ <div className="grid gap-4 md:grid-cols-4">
+ {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl"/>)}
+ </div>
+ ) : (
+ <>
  {personalData && (
  <div className="rounded-xl border border-border bg-card p-6">
- <h2 className="mb-5 text-lg font-semibold text-foreground">Mi Resumen Personal</h2>
+ <h2 className="mb-5 text-lg font-semibold text-foreground">Productividad</h2>
  <div className="grid gap-4 md:grid-cols-4">
  <div className="rounded-xl bg-primary/10 p-4">
- <p className="text-sm text-muted-foreground">Tareas completadas</p>
- <p className="mt-1 text-2xl font-bold text-foreground">{personalData.tasksCompleted ?? 0}</p>
+ <div className="flex items-center gap-2 mb-1">
+ <CheckCircle2 className="h-4 w-4 text-primary"/>
+ <p className="text-xs text-muted-foreground">Completadas</p>
+ </div>
+ <p className="text-2xl font-bold text-foreground">{personalData.tasksCompleted ?? 0}</p>
  </div>
  <div className="rounded-xl bg-warning/10 p-4">
- <p className="text-sm text-muted-foreground">En progreso</p>
- <p className="mt-1 text-2xl font-bold text-foreground">{personalData.tasksInProgress ?? 0}</p>
+ <div className="flex items-center gap-2 mb-1">
+ <TrendingUp className="h-4 w-4 text-warning"/>
+ <p className="text-xs text-muted-foreground">En progreso</p>
+ </div>
+ <p className="text-2xl font-bold text-foreground">{personalData.tasksInProgress ?? 0}</p>
  </div>
  <div className="rounded-xl bg-success/10 p-4">
- <p className="text-sm text-muted-foreground">Tiempo registrado</p>
- <p className="mt-1 text-2xl font-bold text-foreground">{formatDuration(personalData.totalTimeLogged ?? 0)}</p>
+ <div className="flex items-center gap-2 mb-1">
+ <Clock className="h-4 w-4 text-success"/>
+ <p className="text-xs text-muted-foreground">Tiempo registrado</p>
+ </div>
+ <p className="text-2xl font-bold text-foreground">{formatDuration(personalData.totalTimeLogged ?? 0)}</p>
  </div>
  <div className="rounded-xl bg-info/10 p-4">
- <p className="text-sm text-muted-foreground">Productividad</p>
- <p className="mt-1 text-2xl font-bold text-foreground">{personalData.productivityScore ?? personalData.completionRate ?? 0}%</p>
+ <div className="flex items-center gap-2 mb-1">
+ <BarChart3 className="h-4 w-4 text-info"/>
+ <p className="text-xs text-muted-foreground">Productividad</p>
+ </div>
+ <p className="text-2xl font-bold text-foreground">{personalData.productivityScore ?? personalData.completionRate ?? 0}%</p>
  </div>
  </div>
  </div>
  )}
 
- {/* Personal Time Report */}
- {timeReport && (
+ {timeReport && timeReport.byProject && Array.isArray(timeReport.byProject) && timeReport.byProject.length > 0 && (
  <div className="rounded-xl border border-border bg-card p-6">
- <h2 className="mb-5 text-lg font-semibold text-foreground">Mi Reporte de Tiempo</h2>
- <div className="grid gap-4 md:grid-cols-3">
- <div className="rounded-xl bg-primary/10 p-4">
- <p className="text-sm text-muted-foreground">Total registrado</p>
- <p className="mt-1 text-2xl font-bold text-foreground">{formatDuration(timeReport.totalMinutes ?? (timeReport.totalHours ? timeReport.totalHours * 60 : 0))}</p>
- </div>
- <div className="rounded-xl bg-success/10 p-4">
- <p className="text-sm text-muted-foreground">Horas facturables</p>
- <p className="mt-1 text-2xl font-bold text-foreground">{formatDuration(timeReport.billableMinutes ?? (timeReport.billableHours ? timeReport.billableHours * 60 : 0))}</p>
- </div>
- <div className="rounded-xl bg-muted p-4">
- <p className="text-sm text-muted-foreground">Entradas</p>
- <p className="mt-1 text-2xl font-bold text-foreground">{timeReport.totalEntries ?? timeReport.entries?.length ?? 0}</p>
- </div>
- </div>
- {timeReport.byProject && Array.isArray(timeReport.byProject) && timeReport.byProject.length > 0 && (
- <div className="mt-5 space-y-2">
- <p className="text-sm font-medium text-muted-foreground">Por proyecto</p>
+ <h2 className="mb-4 text-lg font-semibold text-foreground">Tiempo por proyecto</h2>
+ <div className="space-y-2">
  {timeReport.byProject.map((p: any, i: number) => (
  <div key={i} className="flex items-center justify-between rounded-xl border border-border p-3 text-sm">
- <span className="text-foreground">{p.projectName || p.name}</span>
- <span className="font-medium text-primary">{formatDuration(p.minutes ?? (p.hours ? p.hours * 60 : 0))}</span>
- </div>
- ))}
- </div>
- )}
- </div>
- )}
-
- {/* Filters */}
- <div className="rounded-xl border border-border bg-card p-5">
- <div className="flex flex-wrap items-end gap-4">
- <div className="w-56">
- <Select value={reportType} onValueChange={setReportType}>
- <SelectTrigger><SelectValue /></SelectTrigger>
- <SelectContent>
- {orgReportTypes.map((r) => (
- <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
- ))}
- </SelectContent>
- </Select>
- </div>
- <div className="space-y-1">
- <Label className="text-xs text-muted-foreground">Desde</Label>
- <Input type="date"value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-40"/>
- </div>
- <div className="space-y-1">
- <Label className="text-xs text-muted-foreground">Hasta</Label>
- <Input type="date"value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-40"/>
- </div>
- <Button variant="outline"size="sm"onClick={loadReport} className="rounded-full">Aplicar</Button>
- </div>
- </div>
-
- {loading ? (
- <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
- {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl"/>)}
- </div>
- ) : data ? (
- <>
- <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
- {data.tasksCompleted !== undefined && (
- <div className="rounded-xl border border-border bg-card p-6">
- <div className="flex items-center justify-between">
- <div>
- <p className="text-sm text-muted-foreground">Tareas Completadas</p>
- <p className="mt-1 text-3xl font-bold text-foreground">{data.tasksCompleted}</p>
- </div>
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
- <CheckCircle2 className="h-6 w-6 text-success"/>
- </div>
- </div>
- </div>
- )}
- {data.tasksInProgress !== undefined && (
- <div className="rounded-xl border border-border bg-card p-6">
- <div className="flex items-center justify-between">
- <div>
- <p className="text-sm text-muted-foreground">En Progreso</p>
- <p className="mt-1 text-3xl font-bold text-foreground">{data.tasksInProgress}</p>
- </div>
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
- <TrendingUp className="h-6 w-6 text-primary"/>
- </div>
- </div>
- </div>
- )}
- {data.totalTimeLogged !== undefined && (
- <div className="rounded-xl border border-border bg-card p-6">
- <div className="flex items-center justify-between">
- <div>
- <p className="text-sm text-muted-foreground">Tiempo Registrado</p>
- <p className="mt-1 text-3xl font-bold text-foreground">{formatDuration(data.totalTimeLogged)}</p>
- </div>
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/10">
- <Clock className="h-6 w-6 text-warning"/>
- </div>
- </div>
- </div>
- )}
- {data.completionRate !== undefined && (
- <div className="rounded-xl border border-border bg-card p-6">
- <div className="flex items-center justify-between">
- <div>
- <p className="text-sm text-muted-foreground">Tasa de Completado</p>
- <p className="mt-1 text-3xl font-bold text-foreground">{data.completionRate}%</p>
- </div>
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-info/10">
- <BarChart3 className="h-6 w-6 text-info"/>
- </div>
- </div>
- </div>
- )}
- {data.totalRevenue !== undefined && (
- <div className="rounded-xl border border-border bg-card p-6">
- <div className="flex items-center justify-between">
- <div>
- <p className="text-sm text-muted-foreground">Ingresos Totales</p>
- <p className="mt-1 text-3xl font-bold text-foreground">${data.totalRevenue}</p>
- </div>
- <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
- <DollarSign className="h-6 w-6 text-success"/>
- </div>
- </div>
- </div>
- )}
- </div>
-
- {data.members && Array.isArray(data.members) && data.members.length > 0 && (
- <div className="rounded-xl border border-border bg-card p-6">
- <h2 className="mb-5 text-lg font-semibold text-foreground">Por Miembro</h2>
- <div className="space-y-3">
- {data.members.map((m: any, i: number) => (
- <div key={i} className="flex items-center justify-between rounded-xl border border-border p-3">
- <span className="font-medium text-foreground">{m.name || m.userName || `Miembro ${i + 1}`}</span>
- <div className="flex items-center gap-4 text-sm text-muted-foreground">
- {m.tasksCompleted !== undefined && <span>{m.tasksCompleted} completadas</span>}
- {m.timeLogged !== undefined && <span>{formatDuration(m.timeLogged)}</span>}
- {m.score !== undefined && <span className="font-bold text-primary">{m.score}%</span>}
- </div>
+ <span className="text-foreground">{p.projectName || p.project?.name || p.name}</span>
+ <span className="font-medium text-primary">
+ {formatDuration(p.totalDuration ?? p.minutes ?? (p.hours ? p.hours * 60 : 0))}
+ </span>
  </div>
  ))}
  </div>
  </div>
  )}
 
- {data.projects && Array.isArray(data.projects) && data.projects.length > 0 && (
- <div className="rounded-xl border border-border bg-card p-6">
- <h2 className="mb-5 text-lg font-semibold text-foreground">Por Proyecto</h2>
- <div className="space-y-3">
- {data.projects.map((p: any, i: number) => (
- <div key={i} className="flex items-center justify-between rounded-xl border border-border p-3">
- <span className="font-medium text-foreground">{p.name || `Proyecto ${i + 1}`}</span>
- <div className="flex items-center gap-4 text-sm">
- {p.revenue !== undefined && <span className="text-success">${p.revenue}</span>}
- {p.cost !== undefined && <span className="text-destructive">-${p.cost}</span>}
- {p.profit !== undefined && <span className="font-bold text-foreground">${p.profit}</span>}
- </div>
- </div>
- ))}
- </div>
+ {!personalData && !timeReport && (
+ <div className="flex flex-col items-center rounded-xl bg-card py-16 text-center border border-border">
+ <BarChart3 className="mb-3 h-10 w-10 text-muted-foreground/50"/>
+ <p className="text-muted-foreground">No hay datos disponibles todavía</p>
  </div>
  )}
  </>
- ) : (
- <div className="flex flex-col items-center rounded-xl bg-card py-16 text-center">
- <BarChart3 className="mb-3 h-10 w-10 text-muted-foreground/50"/>
- <p className="text-muted-foreground">No hay datos disponibles para este reporte</p>
- </div>
  )}
  </div>
  );

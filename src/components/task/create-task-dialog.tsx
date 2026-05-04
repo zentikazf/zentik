@@ -75,7 +75,7 @@ export function CreateTaskDialog({
  const load = async () => {
  try {
  const [membersRes, labelsRes, rolesRes] = await Promise.all([
- api.get(`/projects/${projectId}/members`).catch(() => ({ data: [] })),
+ api.get(`/projects/${projectId}/members?excludeRole=Cliente`).catch(() => ({ data: [] })),
  api.get(`/projects/${projectId}/labels`).catch(() => ({ data: [] })),
  orgId ? api.get(`/organizations/${orgId}/roles`).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
  ]);

@@ -234,7 +234,7 @@ export default function TeamPage() {
  const loadMembers = async () => {
  if (!orgId) return;
  try {
- const res = await api.get(`/organizations/${orgId}/members`);
+ const res = await api.get(`/organizations/${orgId}/members?excludeRole=Cliente`);
  setMembers(Array.isArray(res.data) ? res.data : res.data?.data || []);
  } catch (err) {
  const message = err instanceof ApiError ? err.message : 'Error al cargar miembros';
