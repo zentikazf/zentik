@@ -137,6 +137,8 @@ export default function DashboardPage() {
   // Personal metrics state (for all roles)
   const [personalSummary, setPersonalSummary] = useState<any>(null);
   const [personalTime, setPersonalTime] = useState<any>(null);
+  // Cupo 2 cards (Dev/QA/Designer): counts reales desde endpoint, no filter local sobre myTasks
+  const [personalCards, setPersonalCards] = useState<{ assigned: number; urgent: number; dueSoon: number } | null>(null);
 
   // Managerial dashboard state (Cupo 1)
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -180,6 +182,7 @@ export default function DashboardPage() {
           api.get<any>('/users/me/tasks?limit=10').catch(() => ({ data: [] })),
           api.get<any>('/users/me/reports/summary').catch(() => ({ data: null })),
           api.get<any>('/users/me/time-report').catch(() => ({ data: null })),
+          api.get<any>('/users/me/dashboard/cards').catch(() => ({ data: null })),
         ];
 
         if (isManagerial) {
@@ -219,6 +222,9 @@ export default function DashboardPage() {
 
         const timeData = results[idx++]?.data;
         setPersonalTime(timeData);
+
+        const cardsData = results[idx++]?.data;
+        if (cardsData) setPersonalCards(cardsData);
 
         if (isManagerial) {
           const dbData = results[idx++]?.data;
@@ -919,11 +925,11 @@ export default function DashboardPage() {
               />
             </div>
           ) : (
-            /* Developer / QA / Designer / DevOps / Soporte KPIs */
+            /* Developer / QA / Designer / DevOps / Soporte KPIs — counts reales desde endpoint */
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <StatCard
                 title="Tareas Asignadas"
-                value={myTasks.length}
+                value={personalCards?.assigned ?? 0}
                 icon={ListChecks}
                 subtitle={`${personalTasksInProgress} en progreso`}
               />
@@ -935,13 +941,13 @@ export default function DashboardPage() {
               />
               <StatCard
                 title="Alta Prioridad"
-                value={urgentTasks.length}
+                value={personalCards?.urgent ?? 0}
                 icon={AlertTriangle}
-                subtitle={urgentTasks.length > 0 ? 'Requieren atención' : 'Todo en orden'}
+                subtitle={(personalCards?.urgent ?? 0) > 0 ? 'Requieren atención' : 'Todo en orden'}
               />
               <StatCard
                 title="Vencen Pronto"
-                value={dueSoonTasks.length}
+                value={personalCards?.dueSoon ?? 0}
                 icon={Clock}
                 subtitle="Próximos 3 días"
               />

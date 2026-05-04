@@ -16,12 +16,17 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatDateTime, formatDuration } from '@/lib/utils';
 
+type BillableFilter = 'all' | 'billable' | 'non-billable';
+type HoursFilter = 'all' | 'with' | 'without';
+
 export default function TimeTrackingPage() {
  const { projectId } = useParams<{ projectId: string }>();
  const [entries, setEntries] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [startDate, setStartDate] = useState('');
  const [endDate, setEndDate] = useState('');
+ const [billableFilter, setBillableFilter] = useState<BillableFilter>('all');
+ const [hoursFilter, setHoursFilter] = useState<HoursFilter>('all');
  const [dialogOpen, setDialogOpen] = useState(false);
  const [editingEntry, setEditingEntry] = useState<any>(null);
  const [report, setReport] = useState<any>(null);
@@ -72,8 +77,29 @@ export default function TimeTrackingPage() {
  setEditingEntry(null);
  };
 
- const totalSeconds = entries.reduce((sum, e) => sum + (e.duration || 0), 0);
- const billableSeconds = entries.filter((e) => e.billable).reduce((sum, e) => sum + (e.duration || 0), 0);
+ const handleToggleBillable = async (entry: any) => {
+ try {
+ await api.patch(`/time-entries/${entry.id}`, { billable: !entry.billable });
+ toast.success(entry.billable ? 'Marcada como no facturable' : 'Marcada como facturable');
+ loadEntries();
+ } catch (err) {
+ const message = err instanceof ApiError ? err.message : 'Error al actualizar facturable';
+ toast.error('Error', message);
+ }
+ };
+
+ // Aplicar filtros locales (billable + hasHours)
+ const filteredEntries = entries.filter((e) => {
+ if (billableFilter === 'billable' && !e.billable) return false;
+ if (billableFilter === 'non-billable' && e.billable) return false;
+ const hasHours = (e.duration || 0) > 0;
+ if (hoursFilter === 'with' && !hasHours) return false;
+ if (hoursFilter === 'without' && hasHours) return false;
+ return true;
+ });
+
+ const totalSeconds = filteredEntries.reduce((sum, e) => sum + (e.duration || 0), 0);
+ const billableSeconds = filteredEntries.filter((e) => e.billable).reduce((sum, e) => sum + (e.duration || 0), 0);
  const totalHours = (totalSeconds / 3600).toFixed(1);
  const billableHours = (billableSeconds / 3600).toFixed(1);
 
@@ -104,14 +130,14 @@ export default function TimeTrackingPage() {
  <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
  <div>
  <h1 className="text-2xl font-bold tracking-tight text-foreground">
- Registro de Tiempo
+ Auditoria de Tiempo
  </h1>
  <p className="mt-1 text-sm text-muted-foreground">
- Controla y factura las horas de cada tarea del proyecto
+ Revisa registros, marca facturable y filtra por estado de carga. Las horas se cargan desde la tarea.
  </p>
  </div>
- <Button className="rounded-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"onClick={() => { setEditingEntry(null); setDialogOpen(true); }}>
- <Plus className="mr-2 h-4 w-4"/> Nueva Entrada
+ <Button variant="outline" className="rounded-full" onClick={() => { setEditingEntry(null); setDialogOpen(true); }}>
+ <Plus className="mr-2 h-4 w-4"/> Carga manual
  </Button>
  </div>
 
@@ -185,11 +211,35 @@ export default function TimeTrackingPage() {
  <Label className="text-xs text-muted-foreground">Hasta</Label>
  <Input type="date"value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-40 rounded-xl"/>
  </div>
+ <div className="space-y-1">
+ <Label className="text-xs text-muted-foreground">Facturable</Label>
+ <select
+ value={billableFilter}
+ onChange={(e) => setBillableFilter(e.target.value as BillableFilter)}
+ className="h-10 w-40 rounded-xl border border-input bg-transparent px-3 text-sm"
+ >
+ <option value="all">Todos</option>
+ <option value="billable">Si facturable</option>
+ <option value="non-billable">No facturable</option>
+ </select>
+ </div>
+ <div className="space-y-1">
+ <Label className="text-xs text-muted-foreground">Estado horas</Label>
+ <select
+ value={hoursFilter}
+ onChange={(e) => setHoursFilter(e.target.value as HoursFilter)}
+ className="h-10 w-40 rounded-xl border border-input bg-transparent px-3 text-sm"
+ >
+ <option value="all">Todos</option>
+ <option value="with">Con horas</option>
+ <option value="without">Sin horas</option>
+ </select>
+ </div>
  <Button variant="outline"size="sm"className="rounded-full"onClick={() => loadEntries()}>
- Filtrar
+ Aplicar fechas
  </Button>
- {(startDate || endDate) && (
- <button onClick={() => { setStartDate(''); setEndDate(''); }} className="text-xs text-primary hover:underline">
+ {(startDate || endDate || billableFilter !== 'all' || hoursFilter !== 'all') && (
+ <button onClick={() => { setStartDate(''); setEndDate(''); setBillableFilter('all'); setHoursFilter('all'); }} className="text-xs text-primary hover:underline">
  Limpiar
  </button>
  )}
@@ -202,17 +252,17 @@ export default function TimeTrackingPage() {
  <div className="lg:col-span-2 space-y-3">
  <h2 className="text-lg font-bold text-foreground px-1">Entradas de Tiempo</h2>
 
- {entries.length === 0 ? (
+ {filteredEntries.length === 0 ? (
  <div className="flex flex-col items-center rounded-[24px] bg-card py-16 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border">
  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
  <Clock className="h-6 w-6 text-primary"/>
  </div>
- <p className="font-medium text-foreground">No hay registros de tiempo</p>
- <p className="mt-1 text-sm text-muted-foreground">Selecciona una tarea para registrar horas</p>
+ <p className="font-medium text-foreground">{entries.length === 0 ? 'No hay registros de tiempo' : 'No hay resultados con los filtros aplicados'}</p>
+ <p className="mt-1 text-sm text-muted-foreground">{entries.length === 0 ? 'Las horas se cargan desde la tarea (estimacion o tracker)' : 'Probá ajustando los filtros arriba'}</p>
  </div>
  ) : (
  <div className="space-y-3">
- {entries.map((entry) => (
+ {filteredEntries.map((entry) => (
  <div key={entry.id} className="group rounded-xl bg-card p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-border transition-all hover:shadow-lg hover:border-primary/30 ">
  <div className="flex items-start justify-between gap-3">
  <div className="min-w-0 flex-1 space-y-1.5">
@@ -222,6 +272,12 @@ export default function TimeTrackingPage() {
  </p>
  {entry.task?.identifier && (
  <Badge className="bg-primary/10 text-primary text-[10px]">{entry.task.identifier}</Badge>
+ )}
+ {entry.status === 'DRAFT' && (
+ <Badge className="bg-warning/15 text-warning text-[10px]">Borrador</Badge>
+ )}
+ {entry.legacyMigration && (
+ <Badge className="bg-muted text-muted-foreground text-[10px]">Historico</Badge>
  )}
  </div>
  {entry.description && (
@@ -242,11 +298,15 @@ export default function TimeTrackingPage() {
  <p className="font-mono text-lg font-bold text-foreground">
  {formatDuration(entry.duration || 0)}
  </p>
- {entry.billable && (
- <Badge className="bg-success/15 text-success text-[10px]">
- Facturable
+ <button
+ onClick={() => handleToggleBillable(entry)}
+ className="mt-1 rounded-full transition-colors hover:opacity-80"
+ title="Click para alternar facturable"
+ >
+ <Badge className={entry.billable ? 'bg-success/15 text-success text-[10px] cursor-pointer' : 'bg-muted text-muted-foreground text-[10px] cursor-pointer'}>
+ {entry.billable ? 'Facturable' : 'No facturable'}
  </Badge>
- )}
+ </button>
  </div>
  <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
  <button

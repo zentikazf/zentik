@@ -455,6 +455,24 @@ export function TaskSheet({ taskId, projectId, open, onOpenChange, onTaskUpdated
  </button>
  )}
  </div>
+
+ {/* Badge: Pre-registradas (TimeEntry DRAFT activo) */}
+ {(() => {
+ const draft = (task.timeEntries || []).find((te: any) => te.status === 'DRAFT');
+ if (!draft || !draft.duration || draft.duration <= 0) return null;
+ const hoursPre = (draft.duration / 3600).toFixed(1);
+ const hasAssignee = (task.assignments || []).length > 0;
+ const isOrphan = !hasAssignee;
+ return (
+ <div className="flex justify-end -mt-2">
+ <Badge className={`text-[10px] ${isOrphan ? 'bg-warning/15 text-warning' : 'bg-info/10 text-info'}`}>
+ <Clock className="h-3 w-3 mr-1"/>
+ Pre-registradas: {hoursPre}h
+ {isOrphan && ' — sin asignee'}
+ </Badge>
+ </div>
+ );
+ })()}
  <Separator />
 
  {/* Labels */}

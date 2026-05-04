@@ -9,6 +9,7 @@ import { PhaseBadge } from '@/components/ui/phase-badge';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
+import { TaskApprovalOtpModal } from '@/components/task/task-approval-otp-modal';
 import {
  CheckCircle2,
  XCircle,
@@ -44,6 +45,7 @@ export default function ApprovalsPage() {
  const [actioningId, setActioningId] = useState<string | null>(null);
  const [rejectingId, setRejectingId] = useState<string | null>(null);
  const [rejectReason, setRejectReason] = useState('');
+ const [otpTaskId, setOtpTaskId] = useState<string | null>(null);
 
  useEffect(() => {
  if (orgId) loadApprovals();
@@ -64,20 +66,16 @@ export default function ApprovalsPage() {
  }
  };
 
- const handleApprove = async (taskId: string) => {
- if (!orgId) return;
- setActioningId(taskId);
- try {
- await api.post(`/tasks/${taskId}/approve`);
- toast.success('Aprobada', 'La tarea fue aprobada exitosamente');
- setTasks((prev) => prev.filter((t) => t.id !== taskId));
- } catch (err) {
- const message =
- err instanceof ApiError ? err.message : 'Error al aprobar la tarea';
- toast.error('Error', message);
- } finally {
- setActioningId(null);
+ // Aprobar abre el modal OTP — la confirmacion final ocurre adentro del modal.
+ const handleApprove = (taskId: string) => {
+ setOtpTaskId(taskId);
+ };
+
+ const handleApproved = () => {
+ if (otpTaskId) {
+ setTasks((prev) => prev.filter((t) => t.id !== otpTaskId));
  }
+ setOtpTaskId(null);
  };
 
  const handleReject = async (taskId: string) => {
@@ -155,7 +153,7 @@ export default function ApprovalsPage() {
  const priority = task.priority
  ? priorityConfig[task.priority]
  : null;
- const isActioning = actioningId === task.id;
+ const isActioning = actioningId === task.id || otpTaskId === task.id;
 
  return (
  <div
@@ -278,6 +276,14 @@ export default function ApprovalsPage() {
  );
  })}
  </div>
+
+ {/* Modal OTP de aprobacion */}
+ <TaskApprovalOtpModal
+ taskId={otpTaskId}
+ open={!!otpTaskId}
+ onOpenChange={(o) => { if (!o) setOtpTaskId(null); }}
+ onApproved={handleApproved}
+ />
  </div>
  );
 }
