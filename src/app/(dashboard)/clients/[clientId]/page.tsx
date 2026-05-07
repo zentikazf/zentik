@@ -35,6 +35,8 @@ import {
  Copy,
  CheckCircle2,
  DollarSign,
+ ChevronLeft,
+ ChevronRight,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
@@ -73,7 +75,12 @@ interface HoursSummary {
  currency: string;
  totalAmount: number;
  transactions: HoursTransaction[];
+ transactionsTotal: number;
+ page: number;
+ limit: number;
 }
+
+const HOURS_PAGE_SIZE = 20;
 
 interface ClientDetail {
  id: string;
@@ -99,6 +106,8 @@ export default function ClientDetailPage() {
  const [client, setClient] = useState<ClientDetail | null>(null);
  const [hours, setHours] = useState<HoursSummary | null>(null);
  const [loading, setLoading] = useState(true);
+ const [hoursPage, setHoursPage] = useState(1);
+ const [loadingHours, setLoadingHours] = useState(false);
 
  // Add sub-user dialog
  const [showAddUser, setShowAddUser] = useState(false);
@@ -123,17 +132,39 @@ export default function ClientDetailPage() {
 
  useEffect(() => {
  if (orgId && clientId) loadData();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [orgId, clientId]);
+
+ useEffect(() => {
+ if (orgId && clientId && !loading) loadHours(hoursPage);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [hoursPage]);
+
+ const loadHours = async (page = 1) => {
+ if (!orgId) return;
+ setLoadingHours(true);
+ try {
+ const hoursRes = await api.get<any>(
+ `/organizations/${orgId}/clients/${clientId}/hours?page=${page}&limit=${HOURS_PAGE_SIZE}`,
+ );
+ setHours(hoursRes.data);
+ } catch {
+ toast.error('Error', 'No se pudieron cargar las horas');
+ } finally {
+ setLoadingHours(false);
+ }
+ };
 
  const loadData = async () => {
  if (!orgId) return;
  try {
  const [clientRes, hoursRes] = await Promise.all([
  api.get<any>(`/organizations/${orgId}/clients/${clientId}`),
- api.get<any>(`/organizations/${orgId}/clients/${clientId}/hours`),
+ api.get<any>(`/organizations/${orgId}/clients/${clientId}/hours?page=1&limit=${HOURS_PAGE_SIZE}`),
  ]);
  setClient(clientRes.data);
  setHours(hoursRes.data);
+ setHoursPage(1);
  } catch {
  toast.error('Error', 'No se pudo cargar el cliente');
  } finally {
@@ -379,7 +410,7 @@ export default function ClientDetailPage() {
  )}
 
  {/* Transactions detalle */}
- {hours && hours.transactions.length > 0 && (
+ {hours && (hours.transactionsTotal ?? 0) > 0 && (
  <div>
  <Separator className="mb-4"/>
  <div className="flex items-center justify-between mb-3">
@@ -387,12 +418,12 @@ export default function ClientDetailPage() {
  Historial detallado de horas
  </p>
  <p className="text-[11px] text-muted-foreground">
- {hours.transactions.filter((t) => t.priceAmount !== null).length} con costo · {' '}
- {hours.transactions.filter((t) => t.priceAmount === null).length} sin costo · {' '}
- {hours.transactions.length} total
+ Mostrando {hours.transactions.length === 0 ? 0 : (hours.page - 1) * hours.limit + 1}
+ –{(hours.page - 1) * hours.limit + hours.transactions.length} de{' '}
+ <span className="font-semibold text-foreground">{hours.transactionsTotal}</span> transacciones
  </p>
  </div>
- <div className="rounded-xl border border-border overflow-hidden">
+ <div className={`rounded-xl border border-border overflow-hidden ${loadingHours ? 'opacity-60' : ''}`}>
  <div className="overflow-x-auto">
  <table className="w-full text-sm">
  <thead className="bg-muted/30 text-xs">
@@ -478,6 +509,40 @@ export default function ClientDetailPage() {
  </table>
  </div>
  </div>
+
+ {/* Pagination */}
+ {hours.transactionsTotal > hours.limit && (
+ <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+ <span className="text-xs text-muted-foreground">
+ Página {hours.page} de {Math.max(1, Math.ceil(hours.transactionsTotal / hours.limit))}
+ </span>
+ <div className="flex gap-2">
+ <Button
+ variant="outline"
+ size="sm"
+ className="rounded-full"
+ onClick={() => setHoursPage((p) => Math.max(1, p - 1))}
+ disabled={hours.page <= 1 || loadingHours}
+ >
+ <ChevronLeft className="mr-1 h-4 w-4" /> Anterior
+ </Button>
+ <Button
+ variant="outline"
+ size="sm"
+ className="rounded-full"
+ onClick={() =>
+ setHoursPage((p) =>
+ Math.min(Math.ceil(hours.transactionsTotal / hours.limit), p + 1),
+ )
+ }
+ disabled={hours.page >= Math.ceil(hours.transactionsTotal / hours.limit) || loadingHours}
+ >
+ Siguiente <ChevronRight className="ml-1 h-4 w-4" />
+ </Button>
+ </div>
+ </div>
+ )}
+
  <p className="mt-2 text-[11px] text-muted-foreground italic">
  El total facturable suma solo los descuentos consumidos (USAGE/LOAN) con tarifa configurada.
  Las cargas (PURCHASE) y reembolsos (REFUND) no se contabilizan en costo.
