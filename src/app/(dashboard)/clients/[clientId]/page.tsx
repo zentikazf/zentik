@@ -410,7 +410,7 @@ export default function ClientDetailPage() {
  )}
 
  {/* Transactions detalle */}
- {hours && (hours.transactionsTotal ?? 0) > 0 && (
+ {hours && (hours.transactionsTotal ?? hours.transactions?.length ?? 0) > 0 && (
  <div>
  <Separator className="mb-4"/>
  <div className="flex items-center justify-between mb-3">
@@ -418,9 +418,19 @@ export default function ClientDetailPage() {
  Historial detallado de horas
  </p>
  <p className="text-[11px] text-muted-foreground">
- Mostrando {hours.transactions.length === 0 ? 0 : (hours.page - 1) * hours.limit + 1}
- –{(hours.page - 1) * hours.limit + hours.transactions.length} de{' '}
- <span className="font-semibold text-foreground">{hours.transactionsTotal}</span> transacciones
+ {(() => {
+ const total = hours.transactionsTotal ?? hours.transactions.length;
+ const page = hours.page ?? 1;
+ const limit = hours.limit ?? hours.transactions.length;
+ const from = hours.transactions.length === 0 ? 0 : (page - 1) * limit + 1;
+ const to = (page - 1) * limit + hours.transactions.length;
+ return (
+ <>
+ Mostrando {from}–{to} de{' '}
+ <span className="font-semibold text-foreground">{total}</span> transacciones
+ </>
+ );
+ })()}
  </p>
  </div>
  <div className={`rounded-xl border border-border overflow-hidden ${loadingHours ? 'opacity-60' : ''}`}>
@@ -510,8 +520,8 @@ export default function ClientDetailPage() {
  </div>
  </div>
 
- {/* Pagination */}
- {hours.transactionsTotal > hours.limit && (
+ {/* Pagination — solo si el backend devuelve datos paginados */}
+ {hours.transactionsTotal != null && hours.limit != null && hours.transactionsTotal > hours.limit && (
  <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
  <span className="text-xs text-muted-foreground">
  Página {hours.page} de {Math.max(1, Math.ceil(hours.transactionsTotal / hours.limit))}
