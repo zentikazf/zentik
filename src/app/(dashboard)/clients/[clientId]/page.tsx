@@ -34,6 +34,7 @@ import {
  EyeOff,
  Copy,
  CheckCircle2,
+ DollarSign,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
@@ -70,6 +71,7 @@ interface HoursSummary {
  developmentHourlyRate: number | null;
  supportHourlyRate: number | null;
  currency: string;
+ totalAmount: number;
  transactions: HoursTransaction[];
 }
 
@@ -304,7 +306,7 @@ export default function ClientDetailPage() {
  </Button>
  </div>
 
- <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-5">
+ <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 mb-5">
  <div className="rounded-xl bg-primary/10 p-4">
  <p className="text-xs text-primary font-medium">Contratadas</p>
  <p className="text-2xl font-bold text-primary">{hours?.contractedHours ?? 0}h</p>
@@ -320,6 +322,14 @@ export default function ClientDetailPage() {
  <div className="rounded-xl bg-warning/10 p-4">
  <p className="text-xs text-warning font-medium">Prestamo</p>
  <p className="text-2xl font-bold text-warning">{(hours?.loanedHours ?? 0).toFixed(1)}h</p>
+ </div>
+ <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 col-span-2 lg:col-span-1">
+ <p className="text-xs text-primary font-medium flex items-center gap-1">
+ <DollarSign className="h-3 w-3"/> Total facturable
+ </p>
+ <p className="text-2xl font-bold text-primary">
+ {formatCurrency(hours?.totalAmount ?? 0, hours?.currency ?? 'PYG')}
+ </p>
  </div>
  </div>
 
@@ -368,48 +378,110 @@ export default function ClientDetailPage() {
  </div>
  )}
 
- {/* Transactions */}
+ {/* Transactions detalle */}
  {hours && hours.transactions.length > 0 && (
  <div>
  <Separator className="mb-4"/>
- <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Historial reciente</p>
- <div className="space-y-2 max-h-64 overflow-y-auto">
+ <div className="flex items-center justify-between mb-3">
+ <p className="text-xs font-semibold text-muted-foreground uppercase">
+ Historial detallado de horas
+ </p>
+ <p className="text-[11px] text-muted-foreground">
+ {hours.transactions.filter((t) => t.priceAmount !== null).length} con costo · {' '}
+ {hours.transactions.filter((t) => t.priceAmount === null).length} sin costo · {' '}
+ {hours.transactions.length} total
+ </p>
+ </div>
+ <div className="rounded-xl border border-border overflow-hidden">
+ <div className="overflow-x-auto">
+ <table className="w-full text-sm">
+ <thead className="bg-muted/30 text-xs">
+ <tr>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Fecha</th>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Concepto</th>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Proyecto</th>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Movimiento</th>
+ <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">Horas</th>
+ <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">Tarifa</th>
+ <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">Costo</th>
+ <th className="px-3 py-2.5 w-10"></th>
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-border">
  {hours.transactions.map((tx) => {
  const conf = TYPE_LABELS[tx.type] || TYPE_LABELS.USAGE;
  const Icon = conf.icon;
+ const isCredit = tx.type === 'PURCHASE' || tx.type === 'REFUND';
  return (
- <div key={tx.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted transition-colors">
- <Icon className={`h-4 w-4 shrink-0 ${conf.color}`} />
- <div className="flex-1 min-w-0">
- <p className="text-sm text-foreground truncate">
- {tx.note || tx.task?.title || tx.type}
+ <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
+ <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+ {new Date(tx.createdAt).toLocaleDateString('es-PY', {
+ day: '2-digit',
+ month: 'short',
+ year: 'numeric',
+ })}
+ </td>
+ <td className="px-3 py-2.5">
+ <p className="text-sm text-foreground truncate max-w-[220px]">
+ {tx.task?.title ?? tx.note ?? conf.label}
  </p>
- {tx.task?.project && (
- <p className="text-[11px] text-muted-foreground">{tx.task.project.name}</p>
+ {tx.task && tx.note && tx.note !== tx.task.title && (
+ <p className="text-[11px] text-muted-foreground truncate max-w-[220px]">{tx.note}</p>
  )}
- </div>
- <span className={`text-sm font-semibold ${tx.type === 'PURCHASE' || tx.type === 'REFUND' ? 'text-success' : conf.color}`}>
- {tx.type === 'PURCHASE' || tx.type === 'REFUND' ? '+' : '-'}{tx.hours.toFixed(2)}h
+ </td>
+ <td className="px-3 py-2.5 text-xs text-muted-foreground truncate max-w-[140px]">
+ {tx.task?.project?.name ?? '—'}
+ </td>
+ <td className="px-3 py-2.5">
+ <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+ tx.type === 'PURCHASE' ? 'bg-success/15 text-success' :
+ tx.type === 'REFUND' ? 'bg-info/15 text-info' :
+ tx.type === 'LOAN' ? 'bg-warning/15 text-warning' :
+ tx.task?.type === 'SUPPORT' ? 'bg-warning/15 text-warning' :
+ tx.task?.type === 'PROJECT' ? 'bg-info/15 text-info' :
+ 'bg-primary/15 text-primary'
+ }`}>
+ <Icon className="h-3 w-3"/>
+ {tx.type === 'USAGE' && tx.task?.type === 'SUPPORT' ? 'Soporte' :
+ tx.type === 'USAGE' && tx.task?.type === 'PROJECT' ? 'Desarrollo' :
+ conf.label}
  </span>
- {tx.priceAmount && (
- <span className="text-xs font-mono font-semibold text-foreground whitespace-nowrap">
- {formatCurrency(tx.priceAmount, tx.priceCurrency ?? hours.currency)}
- </span>
- )}
- <span className="text-[10px] text-muted-foreground whitespace-nowrap">
- {new Date(tx.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
- </span>
+ </td>
+ <td className={`px-3 py-2.5 text-right font-mono text-sm font-semibold whitespace-nowrap ${
+ isCredit ? 'text-success' : conf.color
+ }`}>
+ {isCredit ? '+' : '−'}{tx.hours.toFixed(2)}h
+ </td>
+ <td className="px-3 py-2.5 text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
+ {tx.priceRate
+ ? formatCurrency(tx.priceRate, tx.priceCurrency ?? hours.currency)
+ : '—'}
+ </td>
+ <td className="px-3 py-2.5 text-right font-mono text-sm font-semibold text-foreground whitespace-nowrap">
+ {tx.priceAmount
+ ? formatCurrency(tx.priceAmount, tx.priceCurrency ?? hours.currency)
+ : '—'}
+ </td>
+ <td className="px-3 py-2.5">
  <button
  onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note })}
- className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+ className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
  title="Eliminar transacción"
  >
  <Trash2 className="h-3.5 w-3.5"/>
  </button>
- </div>
+ </td>
+ </tr>
  );
  })}
+ </tbody>
+ </table>
  </div>
+ </div>
+ <p className="mt-2 text-[11px] text-muted-foreground italic">
+ El total facturable suma solo los descuentos consumidos (USAGE/LOAN) con tarifa configurada.
+ Las cargas (PURCHASE) y reembolsos (REFUND) no se contabilizan en costo.
+ </p>
  </div>
  )}
  </div>
