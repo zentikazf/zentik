@@ -40,6 +40,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
 import { ClientDocumentsSection } from '@/components/clients/client-documents-section';
 
 interface SubUser {
@@ -55,7 +56,10 @@ interface HoursTransaction {
  hours: number;
  note: string | null;
  createdAt: string;
- task?: { id: string; title: string; project?: { id: string; name: string } } | null;
+ priceAmount: string | null;
+ priceRate: string | null;
+ priceCurrency: string | null;
+ task?: { id: string; title: string; type?: 'SUPPORT' | 'PROJECT' | null; project?: { id: string; name: string } } | null;
 }
 
 interface HoursSummary {
@@ -387,6 +391,11 @@ export default function ClientDetailPage() {
  <span className={`text-sm font-semibold ${tx.type === 'PURCHASE' || tx.type === 'REFUND' ? 'text-success' : conf.color}`}>
  {tx.type === 'PURCHASE' || tx.type === 'REFUND' ? '+' : '-'}{tx.hours.toFixed(2)}h
  </span>
+ {tx.priceAmount && (
+ <span className="text-xs font-mono font-semibold text-foreground whitespace-nowrap">
+ {formatCurrency(tx.priceAmount, tx.priceCurrency ?? hours.currency)}
+ </span>
+ )}
  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
  {new Date(tx.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
  </span>
