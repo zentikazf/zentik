@@ -7,6 +7,7 @@ import type { FormEvent } from 'react';
 import { registerSchema, type RegisterInput } from '@/lib/validations';
 import { api, ApiError } from '@/lib/api-client';
 import { PasswordToggle } from '@/components/ui/password-input';
+import { refreshSession } from '@/hooks/use-auth';
 
 export default function RegisterPage() {
  const router = useRouter();
@@ -43,6 +44,8 @@ export default function RegisterPage() {
  setIsLoading(true);
  try {
  await api.post('/auth/register', result.data);
+ // Refrescar el store de sesion antes de navegar — sin esto el guard rebota.
+ await refreshSession();
  router.push('/dashboard');
  } catch (error) {
  if (error instanceof ApiError) {

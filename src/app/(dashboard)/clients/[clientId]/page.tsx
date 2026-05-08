@@ -34,12 +34,16 @@ import {
  EyeOff,
  Copy,
  CheckCircle2,
+ DollarSign,
+ ChevronLeft,
+ ChevronRight,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
 import { ClientDocumentsSection } from '@/components/clients/client-documents-section';
 
 interface SubUser {
@@ -55,7 +59,10 @@ interface HoursTransaction {
  hours: number;
  note: string | null;
  createdAt: string;
- task?: { id: string; title: string; project?: { id: string; name: string } } | null;
+ priceAmount: string | null;
+ priceRate: string | null;
+ priceCurrency: string | null;
+ task?: { id: string; title: string; type?: 'SUPPORT' | 'PROJECT' | null; project?: { id: string; name: string } } | null;
 }
 
 interface HoursSummary {
@@ -66,8 +73,14 @@ interface HoursSummary {
  developmentHourlyRate: number | null;
  supportHourlyRate: number | null;
  currency: string;
+ totalAmount: number;
  transactions: HoursTransaction[];
+ transactionsTotal: number;
+ page: number;
+ limit: number;
 }
+
+const HOURS_PAGE_SIZE = 20;
 
 interface ClientDetail {
  id: string;
@@ -93,6 +106,8 @@ export default function ClientDetailPage() {
  const [client, setClient] = useState<ClientDetail | null>(null);
  const [hours, setHours] = useState<HoursSummary | null>(null);
  const [loading, setLoading] = useState(true);
+ const [hoursPage, setHoursPage] = useState(1);
+ const [loadingHours, setLoadingHours] = useState(false);
 
  // Add sub-user dialog
  const [showAddUser, setShowAddUser] = useState(false);
@@ -117,17 +132,39 @@ export default function ClientDetailPage() {
 
  useEffect(() => {
  if (orgId && clientId) loadData();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [orgId, clientId]);
+
+ useEffect(() => {
+ if (orgId && clientId && !loading) loadHours(hoursPage);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [hoursPage]);
+
+ const loadHours = async (page = 1) => {
+ if (!orgId) return;
+ setLoadingHours(true);
+ try {
+ const hoursRes = await api.get<any>(
+ `/organizations/${orgId}/clients/${clientId}/hours?page=${page}&limit=${HOURS_PAGE_SIZE}`,
+ );
+ setHours(hoursRes.data);
+ } catch {
+ toast.error('Error', 'No se pudieron cargar las horas');
+ } finally {
+ setLoadingHours(false);
+ }
+ };
 
  const loadData = async () => {
  if (!orgId) return;
  try {
  const [clientRes, hoursRes] = await Promise.all([
  api.get<any>(`/organizations/${orgId}/clients/${clientId}`),
- api.get<any>(`/organizations/${orgId}/clients/${clientId}/hours`),
+ api.get<any>(`/organizations/${orgId}/clients/${clientId}/hours?page=1&limit=${HOURS_PAGE_SIZE}`),
  ]);
  setClient(clientRes.data);
  setHours(hoursRes.data);
+ setHoursPage(1);
  } catch {
  toast.error('Error', 'No se pudo cargar el cliente');
  } finally {
@@ -300,7 +337,7 @@ export default function ClientDetailPage() {
  </Button>
  </div>
 
- <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-5">
+ <div className="grid grid-cols-2 gap-4 lg:grid-cols-5 mb-5">
  <div className="rounded-xl bg-primary/10 p-4">
  <p className="text-xs text-primary font-medium">Contratadas</p>
  <p className="text-2xl font-bold text-primary">{hours?.contractedHours ?? 0}h</p>
@@ -316,6 +353,14 @@ export default function ClientDetailPage() {
  <div className="rounded-xl bg-warning/10 p-4">
  <p className="text-xs text-warning font-medium">Prestamo</p>
  <p className="text-2xl font-bold text-warning">{(hours?.loanedHours ?? 0).toFixed(1)}h</p>
+ </div>
+ <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 col-span-2 lg:col-span-1">
+ <p className="text-xs text-primary font-medium flex items-center gap-1">
+ <DollarSign className="h-3 w-3"/> Total facturable
+ </p>
+ <p className="text-2xl font-bold text-primary">
+ {formatCurrency(hours?.totalAmount ?? 0, hours?.currency ?? 'PYG')}
+ </p>
  </div>
  </div>
 
@@ -364,43 +409,154 @@ export default function ClientDetailPage() {
  </div>
  )}
 
- {/* Transactions */}
- {hours && hours.transactions.length > 0 && (
+ {/* Transactions detalle */}
+ {hours && (hours.transactionsTotal ?? hours.transactions?.length ?? 0) > 0 && (
  <div>
  <Separator className="mb-4"/>
- <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Historial reciente</p>
- <div className="space-y-2 max-h-64 overflow-y-auto">
+ <div className="flex items-center justify-between mb-3">
+ <p className="text-xs font-semibold text-muted-foreground uppercase">
+ Historial detallado de horas
+ </p>
+ <p className="text-[11px] text-muted-foreground">
+ {(() => {
+ const total = hours.transactionsTotal ?? hours.transactions.length;
+ const page = hours.page ?? 1;
+ const limit = hours.limit ?? hours.transactions.length;
+ const from = hours.transactions.length === 0 ? 0 : (page - 1) * limit + 1;
+ const to = (page - 1) * limit + hours.transactions.length;
+ return (
+ <>
+ Mostrando {from}–{to} de{' '}
+ <span className="font-semibold text-foreground">{total}</span> transacciones
+ </>
+ );
+ })()}
+ </p>
+ </div>
+ <div className={`rounded-xl border border-border overflow-hidden ${loadingHours ? 'opacity-60' : ''}`}>
+ <div className="overflow-x-auto">
+ <table className="w-full text-sm">
+ <thead className="bg-muted/30 text-xs">
+ <tr>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Fecha</th>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Concepto</th>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Proyecto</th>
+ <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Movimiento</th>
+ <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">Horas</th>
+ <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">Tarifa</th>
+ <th className="text-right px-3 py-2.5 font-medium text-muted-foreground">Costo</th>
+ <th className="px-3 py-2.5 w-10"></th>
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-border">
  {hours.transactions.map((tx) => {
  const conf = TYPE_LABELS[tx.type] || TYPE_LABELS.USAGE;
  const Icon = conf.icon;
+ const isCredit = tx.type === 'PURCHASE' || tx.type === 'REFUND';
  return (
- <div key={tx.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted transition-colors">
- <Icon className={`h-4 w-4 shrink-0 ${conf.color}`} />
- <div className="flex-1 min-w-0">
- <p className="text-sm text-foreground truncate">
- {tx.note || tx.task?.title || tx.type}
+ <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
+ <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+ {new Date(tx.createdAt).toLocaleDateString('es-PY', {
+ day: '2-digit',
+ month: 'short',
+ year: 'numeric',
+ })}
+ </td>
+ <td className="px-3 py-2.5">
+ <p className="text-sm text-foreground truncate max-w-[220px]">
+ {tx.task?.title ?? tx.note ?? conf.label}
  </p>
- {tx.task?.project && (
- <p className="text-[11px] text-muted-foreground">{tx.task.project.name}</p>
+ {tx.task && tx.note && tx.note !== tx.task.title && (
+ <p className="text-[11px] text-muted-foreground truncate max-w-[220px]">{tx.note}</p>
  )}
- </div>
- <span className={`text-sm font-semibold ${tx.type === 'PURCHASE' || tx.type === 'REFUND' ? 'text-success' : conf.color}`}>
- {tx.type === 'PURCHASE' || tx.type === 'REFUND' ? '+' : '-'}{tx.hours.toFixed(2)}h
+ </td>
+ <td className="px-3 py-2.5 text-xs text-muted-foreground truncate max-w-[140px]">
+ {tx.task?.project?.name ?? '—'}
+ </td>
+ <td className="px-3 py-2.5">
+ <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+ tx.type === 'PURCHASE' ? 'bg-success/15 text-success' :
+ tx.type === 'REFUND' ? 'bg-info/15 text-info' :
+ tx.type === 'LOAN' ? 'bg-warning/15 text-warning' :
+ tx.task?.type === 'SUPPORT' ? 'bg-warning/15 text-warning' :
+ tx.task?.type === 'PROJECT' ? 'bg-info/15 text-info' :
+ 'bg-primary/15 text-primary'
+ }`}>
+ <Icon className="h-3 w-3"/>
+ {tx.type === 'USAGE' && tx.task?.type === 'SUPPORT' ? 'Soporte' :
+ tx.type === 'USAGE' && tx.task?.type === 'PROJECT' ? 'Desarrollo' :
+ conf.label}
  </span>
- <span className="text-[10px] text-muted-foreground whitespace-nowrap">
- {new Date(tx.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
- </span>
+ </td>
+ <td className={`px-3 py-2.5 text-right font-mono text-sm font-semibold whitespace-nowrap ${
+ isCredit ? 'text-success' : conf.color
+ }`}>
+ {isCredit ? '+' : '−'}{tx.hours.toFixed(2)}h
+ </td>
+ <td className="px-3 py-2.5 text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
+ {tx.priceRate
+ ? formatCurrency(tx.priceRate, tx.priceCurrency ?? hours.currency)
+ : '—'}
+ </td>
+ <td className="px-3 py-2.5 text-right font-mono text-sm font-semibold text-foreground whitespace-nowrap">
+ {tx.priceAmount
+ ? formatCurrency(tx.priceAmount, tx.priceCurrency ?? hours.currency)
+ : '—'}
+ </td>
+ <td className="px-3 py-2.5">
  <button
  onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note })}
- className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+ className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
  title="Eliminar transacción"
  >
  <Trash2 className="h-3.5 w-3.5"/>
  </button>
- </div>
+ </td>
+ </tr>
  );
  })}
+ </tbody>
+ </table>
  </div>
+ </div>
+
+ {/* Pagination — solo si el backend devuelve datos paginados */}
+ {hours.transactionsTotal != null && hours.limit != null && hours.transactionsTotal > hours.limit && (
+ <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+ <span className="text-xs text-muted-foreground">
+ Página {hours.page} de {Math.max(1, Math.ceil(hours.transactionsTotal / hours.limit))}
+ </span>
+ <div className="flex gap-2">
+ <Button
+ variant="outline"
+ size="sm"
+ className="rounded-full"
+ onClick={() => setHoursPage((p) => Math.max(1, p - 1))}
+ disabled={hours.page <= 1 || loadingHours}
+ >
+ <ChevronLeft className="mr-1 h-4 w-4" /> Anterior
+ </Button>
+ <Button
+ variant="outline"
+ size="sm"
+ className="rounded-full"
+ onClick={() =>
+ setHoursPage((p) =>
+ Math.min(Math.ceil(hours.transactionsTotal / hours.limit), p + 1),
+ )
+ }
+ disabled={hours.page >= Math.ceil(hours.transactionsTotal / hours.limit) || loadingHours}
+ >
+ Siguiente <ChevronRight className="ml-1 h-4 w-4" />
+ </Button>
+ </div>
+ </div>
+ )}
+
+ <p className="mt-2 text-[11px] text-muted-foreground italic">
+ El monto facturable refleja únicamente el tiempo trabajado con tarifa vigente al momento del descuento.
+ Las recargas y reembolsos de horas no suman al costo.
+ </p>
  </div>
  )}
  </div>

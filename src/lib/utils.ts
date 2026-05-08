@@ -33,13 +33,20 @@ export function formatDuration(seconds: number): string {
   return `${secs}s`;
 }
 
-export function formatCurrency(amount: number, currency = 'PYG'): string {
+export function formatCurrency(
+  amount: number | string | null | undefined,
+  currency: string | null | undefined = 'PYG',
+): string {
+  if (amount === null || amount === undefined) return '—';
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (Number.isNaN(num)) return '—';
+
   return new Intl.NumberFormat('es-PY', {
     style: 'currency',
-    currency,
+    currency: currency || 'PYG',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(num);
 }
 
 export function generateSlug(name: string): string {

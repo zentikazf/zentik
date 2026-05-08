@@ -7,6 +7,7 @@ import type { FormEvent } from 'react';
 import { loginSchema, type LoginInput } from '@/lib/validations';
 import { api, ApiError } from '@/lib/api-client';
 import { PasswordToggle } from '@/components/ui/password-input';
+import { refreshSession } from '@/hooks/use-auth';
 
 export default function LoginPage() {
  const router = useRouter();
@@ -43,6 +44,9 @@ export default function LoginPage() {
  setIsLoading(true);
  try {
  await api.post('/auth/login', result.data);
+ // Refrescar el store de sesion antes de navegar — sin esto el state
+ // cacheado durante /login queda con user=null y el guard rebota.
+ await refreshSession();
  router.push('/dashboard');
  } catch (error) {
  if (error instanceof ApiError) {

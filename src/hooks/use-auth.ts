@@ -97,6 +97,16 @@ function fetchSession(): Promise<void> {
   return fetchPromise;
 }
 
+// Forzar un refetch despues de cambios externos en la sesion (login/register/reset).
+// El store es module-level: sin esto, el state cacheado durante /login queda con
+// user=null incluso despues del POST /auth/login, y la navegacion a /dashboard
+// te rebota a /login (solo Ctrl+Shift+R lo arreglaba porque resetea el modulo).
+export async function refreshSession(): Promise<void> {
+  fetchPromise = null;
+  setState({ user: null, organizations: [], loading: true });
+  await fetchSession();
+}
+
 export function useAuth() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const router = useRouter();
