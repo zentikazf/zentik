@@ -185,8 +185,8 @@ export default function PortalHoursPage() {
    </div>
 
    <p className="text-[11px] text-muted-foreground italic">
-    Solo se muestran descuentos consumidos. Las transacciones sin costo asociado son anteriores
-    a la facturación automática o no tienen tarifa configurada para su tipo.
+    Acá podés ver el detalle del tiempo que el equipo dedicó a tus proyectos. Si alguna entrada
+    aparece sin costo, es porque no tenía tarifa configurada cuando se realizó el trabajo.
    </p>
   </div>
  );

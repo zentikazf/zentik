@@ -554,8 +554,8 @@ export default function ClientDetailPage() {
  )}
 
  <p className="mt-2 text-[11px] text-muted-foreground italic">
- El total facturable suma solo los descuentos consumidos (USAGE/LOAN) con tarifa configurada.
- Las cargas (PURCHASE) y reembolsos (REFUND) no se contabilizan en costo.
+ El monto facturable refleja únicamente el tiempo trabajado con tarifa vigente al momento del descuento.
+ Las recargas y reembolsos de horas no suman al costo.
  </p>
  </div>
  )}
