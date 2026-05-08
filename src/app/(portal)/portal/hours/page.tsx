@@ -185,8 +185,7 @@ export default function PortalHoursPage() {
    </div>
 
    <p className="text-[11px] text-muted-foreground italic">
-    Acá podés ver el detalle del tiempo que el equipo dedicó a tus proyectos. Si alguna entrada
-    aparece sin costo, es porque no tenía tarifa configurada cuando se realizó el trabajo.
+    Acá podés ver el detalle del tiempo que el equipo dedicó a tus proyectos.
    </p>
   </div>
  );
