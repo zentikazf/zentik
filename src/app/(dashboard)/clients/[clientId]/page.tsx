@@ -113,7 +113,12 @@ export default function ClientDetailPage() {
  const [showAddUser, setShowAddUser] = useState(false);
  const [userForm, setUserForm] = useState({ name: '', email: '' });
  const [savingUser, setSavingUser] = useState(false);
- const [userResult, setUserResult] = useState<{ temporaryPassword?: string; email?: string } | null>(null);
+ const [userResult, setUserResult] = useState<{
+		 temporaryPassword?: string;
+		 activationMode?: 'email-sent' | 'temp-password';
+		 email?: string;
+		 name?: string;
+	 } | null>(null);
  const [showUserPassword, setShowUserPassword] = useState(false);
 
  // Add hours dialog
@@ -180,10 +185,17 @@ export default function ClientDetailPage() {
  name: userForm.name.trim(),
  email: userForm.email.trim(),
  });
- toast.success('Usuario creado', 'El usuario fue creado exitosamente');
+ const mode = res.data?.activationMode as 'email-sent' | 'temp-password' | undefined;
+ if (mode === 'email-sent') {
+		 toast.success('Invitación enviada', `${userForm.name.trim()} va a recibir un email para activar su cuenta`);
+ } else {
+		 toast.success('Usuario creado', 'Compartile la contraseña temporal por un canal seguro');
+ }
  setUserResult({
  temporaryPassword: res.data?.temporaryPassword,
+ activationMode: mode,
  email: userForm.email.trim(),
+ name: userForm.name.trim(),
  });
  loadData();
  } catch (err) {
@@ -673,30 +685,57 @@ export default function ClientDetailPage() {
  <DialogHeader>
  <DialogTitle className="flex items-center gap-2">
  <CheckCircle2 className="h-5 w-5 text-success" />
- Usuario creado
+		 {userResult.activationMode === 'email-sent' ? '¡Invitación enviada!' : 'Usuario creado'}
  </DialogTitle>
  </DialogHeader>
- <p className="text-sm text-muted-foreground">
- Guardá esta contraseña temporal y compartila con el usuario <strong>{userResult.email}</strong>. No la podrás ver de nuevo.
- </p>
- <div className="space-y-3 py-2">
- <div className="space-y-2">
- <Label>Contraseña temporal</Label>
- <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
- <code className="flex-1 text-sm font-mono text-foreground">
- {showUserPassword ? userResult.temporaryPassword : '•'.repeat(userResult.temporaryPassword?.length ?? 12)}
- </code>
- <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowUserPassword((v) => !v)}>
- {showUserPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
- </Button>
- <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={copyUserPassword}>
- <Copy className="h-4 w-4" />
- </Button>
- </div>
- </div>
- </div>
+
+		 {userResult.activationMode === 'email-sent' ? (
+			 <div className="space-y-3">
+				 <div className="rounded-md border border-success/30 bg-success/10 p-4">
+					 <p className="text-sm font-medium text-foreground">
+						 Email enviado a <strong>{userResult.email}</strong>
+					 </p>
+					 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+						 {userResult.name ?? 'El usuario'} va a recibir un correo con un link único para activar su cuenta y elegir su propia contraseña.
+						 El link expira en <strong>48 horas</strong>.
+					 </p>
+				 </div>
+				 <div className="rounded-md border border-info/30 bg-info/5 p-3">
+					 <p className="text-xs text-muted-foreground leading-relaxed">
+						 <strong className="text-foreground">¿No le llega?</strong> Pedile que mire carpeta de spam o promociones.
+						 Cuentas corporativas pueden tardar más en aceptar dominios nuevos.
+					 </p>
+				 </div>
+			 </div>
+		 ) : (
+			 <>
+				 <div className="rounded-md border border-warning/30 bg-warning/10 p-3">
+					 <p className="text-sm text-foreground">
+						 No pudimos enviar el correo automáticamente. Compartile la contraseña a <strong>{userResult.email}</strong> por un canal seguro.
+					 </p>
+				 </div>
+				 <div className="space-y-3 py-2">
+					 <div className="space-y-2">
+						 <Label>Contraseña temporal</Label>
+						 <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
+							 <code className="flex-1 text-sm font-mono text-foreground select-all">
+								 {showUserPassword ? userResult.temporaryPassword : '•'.repeat(userResult.temporaryPassword?.length ?? 12)}
+							 </code>
+							 <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowUserPassword((v) => !v)}>
+								 {showUserPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+							 </Button>
+							 <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={copyUserPassword}>
+								 <Copy className="h-4 w-4" />
+							 </Button>
+						 </div>
+						 <p className="text-xs text-warning">No se va a volver a mostrar — copiala antes de cerrar.</p>
+					 </div>
+				 </div>
+			 </>
+		 )}
+
  <DialogFooter>
- <Button onClick={closeAddUserDialog}>Entendido</Button>
+ <Button onClick={closeAddUserDialog}>Listo</Button>
  </DialogFooter>
  </>
  )}

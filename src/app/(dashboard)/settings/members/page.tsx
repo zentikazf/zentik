@@ -43,7 +43,11 @@ function CreateMemberDialog({
  const [email, setEmail] = useState('');
  const [roleId, setRoleId] = useState('');
  const [saving, setSaving] = useState(false);
- const [result, setResult] = useState<{ temporaryPassword?: string; member?: any } | null>(null);
+ const [result, setResult] = useState<{
+		 temporaryPassword?: string;
+		 activationMode?: 'email-sent' | 'temp-password';
+		 member?: any;
+	 } | null>(null);
  const [showPassword, setShowPassword] = useState(false);
 
  const assignableRoles = roles.filter((r) => r.name !== 'Owner');
@@ -56,7 +60,11 @@ function CreateMemberDialog({
  try {
  const res = await api.post(`/organizations/${orgId}/members`, { name, email, roleId });
  setResult(res.data);
- toast.success('Miembro creado', `${name} ha sido agregado a la organización`);
+ if (res.data?.activationMode === 'email-sent') {
+		 toast.success('Invitación enviada', `${name} va a recibir un email para activar su cuenta`);
+ } else {
+		 toast.success('Miembro creado', `${name} fue agregado. Compartile la contraseña temporal.`);
+ }
  onCreated();
  } catch (err) {
  const message = err instanceof ApiError ? err.message : 'Error al crear miembro';
@@ -89,7 +97,11 @@ function CreateMemberDialog({
  <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
  <div className="mb-5 flex items-center justify-between">
  <h2 className="text-lg font-semibold text-foreground">
- {result ? 'Miembro Creado' : 'Agregar Miembro'}
+ {result
+		 ? result.activationMode === 'email-sent'
+			 ? '¡Invitación enviada!'
+			 : 'Miembro creado'
+		 : 'Agregar Miembro'}
  </h2>
  <button onClick={handleClose} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted">
  <X className="h-4 w-4"/>
@@ -98,46 +110,72 @@ function CreateMemberDialog({
 
  {result ? (
  <div className="space-y-4">
- <div className="rounded-xl bg-success/10 p-4">
- <p className="text-sm font-medium text-success">
- Usuario creado exitosamente
- </p>
- <p className="mt-1 text-xs text-success">
- El usuario deberá cambiar su contraseña en el primer inicio de sesión
- </p>
- </div>
+		 {result.activationMode === 'email-sent' ? (
+			 <>
+				 <div className="rounded-xl bg-success/10 border border-success/30 p-4">
+					 <p className="text-sm font-semibold text-success">
+						 Email de activación enviado a {email}
+					 </p>
+					 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+						 El usuario recibirá un correo con un link único para activar su cuenta y definir su propia contraseña.
+						 El link expira en 48 horas.
+					 </p>
+				 </div>
 
- {result.temporaryPassword && (
- <div className="space-y-2">
- <label className="text-xs font-medium text-muted-foreground">Contraseña temporal</label>
- <div className="flex items-center gap-2 rounded-xl bg-muted p-3">
- <code className="flex-1 text-sm font-mono text-foreground">
- {showPassword ? result.temporaryPassword : '••••••••••'}
- </code>
- <button
- onClick={() => setShowPassword(!showPassword)}
- className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
- >
- {showPassword ? <EyeOff className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}
- </button>
- <button
- onClick={copyPassword}
- className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
- >
- <Copy className="h-4 w-4"/>
- </button>
- </div>
- <p className="text-xs text-warning">
- Guarda esta contraseña. No se mostrará de nuevo.
- </p>
- </div>
- )}
+				 <div className="rounded-xl bg-info/5 border border-info/30 p-3">
+					 <p className="text-xs text-muted-foreground leading-relaxed">
+						 <strong className="text-foreground">¿No le llegó?</strong> Pedile que revise carpeta de spam,
+						 o reenviá la invitación desde la lista de miembros. Cuentas corporativas pueden tardar más.
+					 </p>
+				 </div>
+			 </>
+		 ) : (
+			 <>
+				 <div className="rounded-xl bg-warning/10 border border-warning/30 p-4">
+					 <p className="text-sm font-semibold text-warning">
+						 Cuenta creada en modo manual
+					 </p>
+					 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+						 No pudimos enviar el correo de activación. Compartile la contraseña temporal
+						 a <strong className="text-foreground">{email}</strong> por un canal seguro. Deberá cambiarla en el primer inicio de sesión.
+					 </p>
+				 </div>
+
+				 {result.temporaryPassword && (
+					 <div className="space-y-2">
+						 <label className="text-xs font-medium text-muted-foreground">Contraseña temporal</label>
+						 <div className="flex items-center gap-2 rounded-xl bg-muted p-3">
+							 <code className="flex-1 text-sm font-mono text-foreground select-all">
+								 {showPassword ? result.temporaryPassword : '••••••••••'}
+							 </code>
+							 <button
+								 onClick={() => setShowPassword(!showPassword)}
+								 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+								 type="button"
+							 >
+								 {showPassword ? <EyeOff className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}
+							 </button>
+							 <button
+								 onClick={copyPassword}
+								 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+								 type="button"
+							 >
+								 <Copy className="h-4 w-4"/>
+							 </button>
+						 </div>
+						 <p className="text-xs text-warning">
+							 No se va a volver a mostrar — copiala antes de cerrar.
+						 </p>
+					 </div>
+				 )}
+			 </>
+		 )}
 
  <button
  onClick={handleClose}
  className="w-full rounded-xl bg-primary py-2.5 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
  >
- Cerrar
+		 Listo
  </button>
  </div>
  ) : (

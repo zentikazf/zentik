@@ -81,7 +81,10 @@ export default function ClientsPage() {
   const [portalEmail, setPortalEmail] = useState('');
   const [portalName, setPortalName] = useState('');
   const [savingPortal, setSavingPortal] = useState(false);
-  const [portalResult, setPortalResult] = useState<{ temporaryPassword?: string } | null>(null);
+  const [portalResult, setPortalResult] = useState<{
+		 temporaryPassword?: string;
+		 activationMode?: 'email-sent' | 'temp-password';
+	 } | null>(null);
   const [showPortalPassword, setShowPortalPassword] = useState(false);
 
   // Form state
@@ -227,7 +230,11 @@ export default function ClientsPage() {
         name: portalName.trim(),
       });
       setPortalResult(res.data);
-      toast.success('Acceso portal creado', `${portalName.trim()} ha sido agregado al portal`);
+      if (res.data?.activationMode === 'email-sent') {
+		   toast.success('Invitación enviada', `${portalName.trim()} va a recibir un email para activar su acceso`);
+      } else {
+		   toast.success('Acceso creado', `Compartile la contraseña temporal a ${portalName.trim()} por un canal seguro`);
+      }
       loadClients();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Error al crear acceso portal';
@@ -534,7 +541,11 @@ export default function ClientsPage() {
           <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-foreground">
-                {portalResult ? 'Acceso Creado' : 'Crear Acceso al Portal'}
+                {portalResult
+				   ? portalResult.activationMode === 'email-sent'
+					   ? '¡Invitación enviada!'
+					   : 'Acceso creado'
+				   : 'Crear Acceso al Portal'}
               </h2>
               <button onClick={closePortalDialog} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted">
                 <X className="h-4 w-4"/>
@@ -543,46 +554,70 @@ export default function ClientsPage() {
 
             {portalResult ? (
               <div className="space-y-4">
-                <div className="rounded-xl bg-success/10 p-4">
-                  <p className="text-sm font-medium text-success">
-                    Usuario creado exitosamente
-                  </p>
-                  <p className="mt-1 text-xs text-success">
-                    El usuario podrá acceder al portal con estas credenciales
-                  </p>
-                </div>
+				 {portalResult.activationMode === 'email-sent' ? (
+					 <>
+						 <div className="rounded-xl border border-success/30 bg-success/10 p-4">
+							 <p className="text-sm font-semibold text-foreground">
+								 Email de activación enviado a <span className="text-primary">{portalEmail}</span>
+							 </p>
+							 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+								 {portalName} va a recibir un correo con un link único para activar su acceso al portal y definir su propia contraseña.
+								 El link expira en <strong className="text-foreground">48 horas</strong>.
+							 </p>
+						 </div>
+						 <div className="rounded-xl border border-info/30 bg-info/5 p-3">
+							 <p className="text-xs text-muted-foreground leading-relaxed">
+								 <strong className="text-foreground">¿No le llega?</strong> Pedile que revise spam o promociones.
+								 Las cuentas corporativas pueden tardar más mientras se calienta el dominio.
+							 </p>
+						 </div>
+					 </>
+				 ) : (
+					 <>
+						 <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
+							 <p className="text-sm font-semibold text-foreground">
+								 Acceso creado en modo manual
+							 </p>
+							 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+								 No pudimos enviar el correo automáticamente. Compartile la contraseña a <strong className="text-foreground">{portalEmail}</strong> por un canal seguro.
+							 </p>
+						 </div>
 
-                {portalResult.temporaryPassword && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Contraseña temporal</label>
-                    <div className="flex items-center gap-2 rounded-xl bg-muted p-3">
-                      <code className="flex-1 text-sm font-mono text-foreground">
-                        {showPortalPassword ? portalResult.temporaryPassword : '••••••••••'}
-                      </code>
-                      <button
-                        onClick={() => setShowPortalPassword(!showPortalPassword)}
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
-                      >
-                        {showPortalPassword ? <EyeOff className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}
-                      </button>
-                      <button
-                        onClick={copyPortalPassword}
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
-                      >
-                        <Copy className="h-4 w-4"/>
-                      </button>
-                    </div>
-                    <p className="text-xs text-warning">
-                      Guarda esta contraseña. No se mostrará de nuevo.
-                    </p>
-                  </div>
-                )}
+						 {portalResult.temporaryPassword && (
+							 <div className="space-y-2">
+								 <label className="text-xs font-medium text-muted-foreground">Contraseña temporal</label>
+								 <div className="flex items-center gap-2 rounded-xl bg-muted p-3">
+									 <code className="flex-1 text-sm font-mono text-foreground select-all">
+										 {showPortalPassword ? portalResult.temporaryPassword : '••••••••••'}
+									 </code>
+									 <button
+										 onClick={() => setShowPortalPassword(!showPortalPassword)}
+										 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+										 type="button"
+									 >
+										 {showPortalPassword ? <EyeOff className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}
+									 </button>
+									 <button
+										 onClick={copyPortalPassword}
+										 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+										 type="button"
+									 >
+										 <Copy className="h-4 w-4"/>
+									 </button>
+								 </div>
+								 <p className="text-xs text-warning">
+									 No se va a volver a mostrar — copiala antes de cerrar.
+								 </p>
+							 </div>
+						 )}
+					 </>
+				 )}
 
                 <button
                   onClick={closePortalDialog}
                   className="w-full rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
-                  Cerrar
+                  Listo
                 </button>
               </div>
             ) : (
