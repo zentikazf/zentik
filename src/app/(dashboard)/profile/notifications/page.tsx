@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Bell, BellOff, AlertCircle, CheckCircle2, Mail } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bell, BellOff, AlertCircle, CheckCircle2, Mail, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import {
+  getBrowserSupportInfo,
+  getPermissionDeniedInstructions,
+  type BrowserSupportInfo,
+} from '@/lib/push-utils';
 
 type Channel = 'PUSH' | 'EMAIL';
 
@@ -25,6 +30,11 @@ export default function NotificationsPage() {
   const [preferences, setPreferences] = useState<PreferenceItem[]>([]);
   const [loadingPrefs, setLoadingPrefs] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [browserInfo, setBrowserInfo] = useState<BrowserSupportInfo | null>(null);
+
+  useEffect(() => {
+    setBrowserInfo(getBrowserSupportInfo());
+  }, []);
 
   useEffect(() => {
     api
@@ -119,17 +129,22 @@ export default function NotificationsPage() {
   };
 
   if (!push.supported) {
+    const hint =
+      browserInfo?.hint ??
+      'Para push en el navegador, usá Chrome, Firefox o Edge desde una pestaña en HTTPS. En iOS Safari requiere instalar la app como PWA (iOS 16.4+).';
     return (
       <div className="space-y-6">
         <div className="rounded-xl border border-warning/30 bg-warning/5 p-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-0.5 h-5 w-5 text-warning shrink-0" />
             <div>
-              <h2 className="font-semibold text-foreground">Tu navegador no soporta notificaciones push</h2>
+              <h2 className="font-semibold text-foreground">
+                Tu navegador no soporta notificaciones push
+              </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Igual podés activar notificaciones por email abajo. Para push en el navegador, usá Chrome,
-                Firefox o Edge desde una pestaña en HTTPS. En iOS Safari requiere instalar la app como PWA (iOS 16.4+).
+                Igual podés activar notificaciones por email abajo.
               </p>
+              <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
             </div>
           </div>
         </div>
@@ -184,6 +199,25 @@ export default function NotificationsPage() {
               {push.loading ? 'Activando...' : 'Activar push'}
             </Button>
           )}
+        </div>
+
+        {push.permission === 'denied' && browserInfo && (
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+            <div>
+              <p className="font-medium text-destructive">El navegador tiene bloqueadas las notificaciones</p>
+              <p className="mt-1">{getPermissionDeniedInstructions(browserInfo.browser)}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex items-start gap-2 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
+          <span>
+            Las notificaciones del navegador requieren tener el navegador abierto (al menos en background).
+            Si lo cerrás completamente, podrías perder notificaciones. Para no perderte nada importante,
+            activá también el email en cada tipo de evento.
+          </span>
         </div>
       </div>
 
