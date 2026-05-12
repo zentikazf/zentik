@@ -47,7 +47,9 @@ export default function LoginPage() {
  // Refrescar el store de sesion antes de navegar — sin esto el state
  // cacheado durante /login queda con user=null y el guard rebota.
  await refreshSession();
- router.push('/dashboard');
+ // replace en vez de push: evita que el back del navegador vuelva a /login
+ // y elimina el flash de re-mount que parecia un "refresh visible".
+ router.replace('/dashboard');
  } catch (error) {
  if (error instanceof ApiError) {
  if (error.statusCode === 401) {

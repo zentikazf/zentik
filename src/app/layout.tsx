@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { AppVersionChecker } from '@/components/app-version-checker';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
  <html lang="es"suppressHydrationWarning>
  <body className="font-sans antialiased">
  <ThemeProvider>
+ <AppVersionChecker />
  {children}
  <Toaster />
  </ThemeProvider>

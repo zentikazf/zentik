@@ -1,12 +1,27 @@
 // Service Worker para Web Push Notifications
 // Recibe pushes del servidor, muestra notificaciones del SO, y maneja clicks.
+//
+// Versionado: subir SW_VERSION cuando se haga cambio significativo del SW o
+// se quiera forzar limpieza de caches viejas en clientes (ej. mobile cacheado).
+const SW_VERSION = 'zentikk-sw-2026-05-12-1';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      // Limpieza de caches viejas asociadas a SWs previos
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(keys.filter((k) => k !== SW_VERSION).map((k) => caches.delete(k))),
+        )
+        .catch(() => {}),
+    ]),
+  );
 });
 
 self.addEventListener('push', (event) => {

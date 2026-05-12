@@ -101,9 +101,13 @@ function fetchSession(): Promise<void> {
 // El store es module-level: sin esto, el state cacheado durante /login queda con
 // user=null incluso despues del POST /auth/login, y la navegacion a /dashboard
 // te rebota a /login (solo Ctrl+Shift+R lo arreglaba porque resetea el modulo).
+//
+// IMPORTANTE: NO resetear el state a null/loading=true antes del fetch — eso
+// hace que cualquier layout protegido muestre flash de loading durante el
+// redirect post-login (efecto "refresh visible" que el user reporto). En vez
+// de eso, hacemos fetch en background y updateamos cuando llega.
 export async function refreshSession(): Promise<void> {
   fetchPromise = null;
-  setState({ user: null, organizations: [], loading: true });
   await fetchSession();
 }
 
