@@ -6,7 +6,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { MailCheck } from 'lucide-react';
 import { registerSchema, type RegisterInput } from '@/lib/validations';
-import { api, ApiError } from '@/lib/api-client';
+import { api, ApiError, setToken } from '@/lib/api-client';
 import { PasswordToggle } from '@/components/ui/password-input';
 import { refreshSession } from '@/hooks/use-auth';
 
@@ -51,6 +51,8 @@ export default function RegisterPage() {
  setIsLoading(true);
  try {
  const res = await api.post<RegisterResponse>('/auth/register', result.data);
+ // Guardar token en localStorage para mobile cross-domain (third-party cookies bloqueadas).
+ if (res.data?.session?.token) setToken(res.data.session.token);
  // Refrescar el store de sesion antes de navegar — sin esto el guard rebota.
  await refreshSession();
  // Si Resend esta configurado, el backend deja emailVerified=false y manda

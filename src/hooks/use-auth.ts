@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api-client';
+import { api, clearToken } from '@/lib/api-client';
 
 interface AuthUser {
   id: string;
@@ -127,6 +127,8 @@ export function useAuth() {
     try {
       await api.post('/auth/logout');
     } finally {
+      // Limpiar Bearer token de localStorage (auth mobile cross-domain).
+      clearToken();
       // Reset completo del store para que la siguiente sesion arranque limpia
       fetchPromise = null;
       setState({
