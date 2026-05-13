@@ -4,10 +4,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { MailCheck } from 'lucide-react';
 import { registerSchema, type RegisterInput } from '@/lib/validations';
-import { api, ApiError } from '@/lib/api-client';
+import { api, ApiError, setToken } from '@/lib/api-client';
 import { PasswordToggle } from '@/components/ui/password-input';
 import { refreshSession } from '@/hooks/use-auth';
+
+interface RegisterResponse {
+ user: { id: string; email: string; name: string; emailVerified: boolean };
+ session: { token: string; expiresAt: string };
+}
 
 export default function RegisterPage() {
  const router = useRouter();
@@ -16,6 +22,7 @@ export default function RegisterPage() {
  const [generalError, setGeneralError] = useState('');
  const [isLoading, setIsLoading] = useState(false);
  const [showPassword, setShowPassword] = useState(false);
+ const [verificationPending, setVerificationPending] = useState<{ email: string } | null>(null);
 
  function handleChange(field: keyof RegisterInput, value: string) {
  setFormData((prev) => ({ ...prev, [field]: value }));
@@ -43,10 +50,18 @@ export default function RegisterPage() {
 
  setIsLoading(true);
  try {
- await api.post('/auth/register', result.data);
+ const res = await api.post<RegisterResponse>('/auth/register', result.data);
+ // Guardar token en localStorage para mobile cross-domain (third-party cookies bloqueadas).
+ if (res.data?.session?.token) setToken(res.data.session.token);
  // Refrescar el store de sesion antes de navegar — sin esto el guard rebota.
  await refreshSession();
- router.push('/dashboard');
+ // Si Resend esta configurado, el backend deja emailVerified=false y manda
+ // email de verificacion. Mostramos modal antes de redirigir.
+ if (res.data?.user?.emailVerified === false) {
+		 setVerificationPending({ email: res.data.user.email });
+ } else {
+		 router.push('/dashboard');
+ }
  } catch (error) {
  if (error instanceof ApiError) {
  if (error.statusCode === 409 || error.code === 'USER_ALREADY_EXISTS') {
@@ -70,6 +85,39 @@ export default function RegisterPage() {
  ? 'border-destructive/30 bg-destructive/10 focus:border-destructive focus:ring-destructive/20'
  : 'border-border bg-muted focus:border-ring focus:ring-ring/20'
  }`;
+
+ if (verificationPending) {
+		 return (
+			 <div className="rounded-xl border border-success/30 bg-card p-8 shadow-sm">
+				 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-success/10">
+					 <MailCheck className="h-7 w-7 text-success" />
+				 </div>
+				 <h1 className="text-center text-[22px] font-semibold text-foreground">
+					 Confirmá tu correo
+				 </h1>
+				 <p className="mt-2 text-center text-sm text-muted-foreground">
+					 Te enviamos un email de verificación a{' '}
+					 <strong className="text-foreground">{verificationPending.email}</strong>.
+				 </p>
+				 <p className="mt-1 text-center text-xs text-muted-foreground">
+					 El link expira en 24 horas. Si no lo encontrás, revisá la carpeta de spam o promociones.
+				 </p>
+
+				 <div className="mt-6 flex flex-col gap-2">
+					 <button
+						 type="button"
+						 onClick={() => router.push('/dashboard')}
+						 className="w-full rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+					 >
+						 Continuar al dashboard
+					 </button>
+					 <p className="text-center text-xs text-muted-foreground">
+						 Vas a poder usar la plataforma, pero te recomendamos verificar tu correo cuanto antes.
+					 </p>
+				 </div>
+			 </div>
+		 );
+ }
 
  return (
  <div className="rounded-xl border border-border bg-card p-8 shadow-sm">

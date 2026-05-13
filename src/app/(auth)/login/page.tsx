@@ -5,9 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { loginSchema, type LoginInput } from '@/lib/validations';
-import { api, ApiError } from '@/lib/api-client';
+import { api, ApiError, setToken } from '@/lib/api-client';
 import { PasswordToggle } from '@/components/ui/password-input';
 import { refreshSession } from '@/hooks/use-auth';
+
+interface LoginResponse {
+ session: { token: string; expiresAt: string };
+}
 
 export default function LoginPage() {
  const router = useRouter();
@@ -43,7 +47,10 @@ export default function LoginPage() {
 
  setIsLoading(true);
  try {
- await api.post('/auth/login', result.data);
+ const res = await api.post<LoginResponse>('/auth/login', result.data);
+ // Guardar el token tambien en localStorage para soportar mobile cross-domain
+ // (cookies de third-party bloqueadas en Safari/Chrome mobile).
+ if (res.data?.session?.token) setToken(res.data.session.token);
  // Refrescar el store de sesion antes de navegar — sin esto el state
  // cacheado durante /login queda con user=null y el guard rebota.
  await refreshSession();
