@@ -294,47 +294,6 @@ export default function PortalBillingPage() {
     </div>
    </section>
 
-   {/* Uso sin cargo */}
-   {view.zeroProducts.length > 0 && (
-    <section className="rounded-xl border border-border bg-card">
-     <header className="border-b border-border px-5 py-4">
-      <h2 className="text-sm font-medium uppercase tracking-wider text-foreground">Uso sin cargo</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-       Productos consumidos incluidos en el plan
-      </p>
-     </header>
-     <table className="w-full text-sm">
-      <tbody>
-       {view.zeroProducts.map((p) => (
-        <tr key={p.productId} className="border-b border-border/50 last:border-0">
-         <td className="px-5 py-3 font-mono text-xs">{productLabel(p.productId)}</td>
-         <td className="px-5 py-3 text-right font-mono text-xs text-muted-foreground">
-          {fmtCompact(p.usage)}
-         </td>
-         <td className="px-5 py-3 text-right font-mono text-xs text-muted-foreground">$0.00</td>
-        </tr>
-       ))}
-      </tbody>
-     </table>
-    </section>
-   )}
-
-   {/* Proyecto */}
-   <section className="rounded-xl border border-border bg-card">
-    <header className="border-b border-border px-5 py-4">
-     <h2 className="text-sm font-medium uppercase tracking-wider text-foreground">Proyecto</h2>
-    </header>
-    <div className="p-5">
-     <p className="mb-3 font-medium">{data.project.name}</p>
-     <div className="grid grid-cols-2 gap-3 text-xs md:grid-cols-5">
-      <Stat k="Mensajes" v={fmtNum(data.project.messages)} />
-      <Stat k="Sesiones" v={fmtNum(data.project.sessions)} />
-      <Stat k="B. actions" v={fmtNum(data.project.billableActions)} />
-      <Stat k="WA convs" v={fmtNum(data.project.waConvs)} />
-      <Stat k="Tokens gen." v={fmtCompact(data.project.tokens)} />
-     </div>
-    </div>
-   </section>
   </div>
  );
 }
