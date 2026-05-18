@@ -309,6 +309,7 @@ export default function ClientDetailPage() {
  USAGE: { label: 'Uso', color: 'text-primary', icon: ArrowDownRight },
  LOAN: { label: 'Prestamo', color: 'text-warning', icon: AlertTriangle },
  REFUND: { label: 'Reembolso', color: 'text-info', icon: ArrowUpRight },
+ INTERNAL: { label: 'Interno', color: 'text-muted-foreground', icon: Clock },
  };
 
  return (
@@ -490,6 +491,7 @@ export default function ClientDetailPage() {
  tx.type === 'PURCHASE' ? 'bg-success/15 text-success' :
  tx.type === 'REFUND' ? 'bg-info/15 text-info' :
  tx.type === 'LOAN' ? 'bg-warning/15 text-warning' :
+ tx.type === 'INTERNAL' ? 'bg-muted text-muted-foreground' :
  tx.task?.type === 'SUPPORT' ? 'bg-warning/15 text-warning' :
  tx.task?.type === 'PROJECT' ? 'bg-info/15 text-info' :
  'bg-primary/15 text-primary'

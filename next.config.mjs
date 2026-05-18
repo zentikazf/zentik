@@ -23,12 +23,20 @@ const apiHost = (() => {
 // WebSocket origin (mismo host, distinto protocolo)
 const wsHost = apiHost.replace(/^http/, 'ws');
 
+const isDev = process.env.NODE_ENV !== 'production';
+
+// En dev Next.js hot-reload usa eval() para inyectar modulos actualizados,
+// por eso 'unsafe-eval' SOLO en development. En prod queda bloqueado.
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline'";
+
 const cspDirectives = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
+  scriptSrc,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   `img-src 'self' data: blob: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://onnix.com.py`,
-  "font-src 'self' data:",
+  "font-src 'self' data: https://fonts.gstatic.com",
   `connect-src 'self' ${apiHost} ${wsHost}`,
   "frame-ancestors 'none'",
   "form-action 'self'",

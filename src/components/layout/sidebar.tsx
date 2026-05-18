@@ -40,7 +40,7 @@ const navItems: NavItem[] = [
  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
  { name: 'Clientes', href: '/clients', icon: Users, permission: 'manage:members' },
  { name: 'Proyectos', href: '/projects', icon: FolderKanban, permission: 'read:projects' },
- { name: 'Aprobaciones', href: '/approvals', icon: ClipboardCheck, permission: 'read:projects' },
+ { name: 'Aprobaciones', href: '/approvals', icon: ClipboardCheck, permission: 'manage:projects' },
  { name: 'Soporte', href: '/tickets', icon: TicketCheck, permission: 'read:projects' },
  { name: 'Configuracion', href: '/settings', icon: Settings, permission: 'manage:members' },
 ];
@@ -69,12 +69,15 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  api.get(`/organizations/${orgId}/projects/pending-count`)
  .then((res) => setPendingProjectsCount(res.data?.count ?? 0))
  .catch(() => {});
+ if (hasPermission('manage:projects')) {
  api.get(`/organizations/${orgId}/approvals/count`)
  .then((res) => setPendingApprovalsCount(res.data?.count ?? 0))
  .catch(() => {});
+ }
  api.get(`/organizations/${orgId}/tickets/open-count`)
  .then((res) => setOpenTicketsCount(res.data?.count ?? 0))
  .catch(() => {});
+ // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [orgId]);
 
  const isActive = (href: string) => {

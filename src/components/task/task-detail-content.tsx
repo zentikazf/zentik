@@ -17,12 +17,17 @@ import { LabelSelector } from '@/components/labels/label-selector';
 import {
  ArrowLeft, Calendar, Tag, User, Clock, CheckCircle2, Paperclip,
  Download, File as FileIcon, Image, FileText, Plus, Send, MessageSquare,
- Upload, Shield, Eye, EyeOff, AlertTriangle,
+ Upload, Shield, Eye, EyeOff, AlertTriangle, DollarSign, XCircle,
 } from 'lucide-react';
+import {
+ Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatRelative, getInitials, cn } from '@/lib/utils';
 import { TASK_TYPE_OPTIONS } from '@/lib/task-utils';
+import { usePermissions } from '@/hooks/use-permissions';
+import { TaskApprovalOtpModal } from '@/components/task/task-approval-otp-modal';
 
 // ── Constant maps ──────────────────────────────────────────────────
 const STATUS_OPTIONS = [
@@ -83,6 +88,13 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  const [tab, setTab] = useState<'comments' | 'activity'>('comments');
  const [showRejections, setShowRejections] = useState(false);
  const [confirmDelete, setConfirmDelete] = useState(false);
+
+ // Approval panel (visible cuando IN_REVIEW + permission manage:projects)
+ const { hasPermission } = usePermissions();
+ const [approvalOtpOpen, setApprovalOtpOpen] = useState(false);
+ const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+ const [rejectReason, setRejectReason] = useState('');
+ const [rejecting, setRejecting] = useState(false);
 
  // Project members for assignee picker (excluyendo Cliente)
  const [projectMembers, setProjectMembers] = useState<any[]>([]);
@@ -173,6 +185,26 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  await patchTask({ estimatedHours: parsed ?? 0 });
  } finally {
  setSavingHours(false);
+ }
+ };
+
+ // ── Approval / Rejection handlers (panel inline cuando IN_REVIEW) ─────
+ const canApprove = hasPermission('manage:projects');
+ const isInReview = task?.status === 'IN_REVIEW';
+
+ const handleRejectTask = async () => {
+ setRejecting(true);
+ try {
+ await api.post(`/tasks/${taskId}/reject`, { reason: rejectReason || undefined });
+ toast.success('Tarea rechazada', 'La tarea volvió a Desarrollo');
+ setRejectDialogOpen(false);
+ setRejectReason('');
+ await loadTask();
+ } catch (err) {
+ const msg = err instanceof ApiError ? err.message : 'No se pudo rechazar la tarea';
+ toast.error('Error', msg);
+ } finally {
+ setRejecting(false);
  }
  };
 
@@ -322,6 +354,36 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  <div className={isSheet ? 'space-y-4' : 'grid gap-6 lg:grid-cols-3'}>
  {/* ── LEFT PANEL ──────────────────────────────────── */}
  <div className={isSheet ? 'space-y-4' : 'space-y-5 lg:col-span-2'}>
+ {/* Approval panel — visible cuando IN_REVIEW + manage:projects */}
+ {isInReview && canApprove && (
+ <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-3">
+ <div className="flex items-center gap-2">
+ <AlertTriangle className="h-4 w-4 text-warning"/>
+ <p className="text-sm font-semibold text-foreground">Esta tarea está pendiente de aprobación</p>
+ </div>
+ <p className="text-xs text-muted-foreground">
+ Podés aprobar o rechazar desde acá o desde la sección de Aprobaciones.
+ </p>
+ <div className="flex gap-2">
+ <Button
+ size="sm"
+ className="bg-phase-produccion text-white hover:bg-phase-produccion/90"
+ onClick={() => setApprovalOtpOpen(true)}
+ >
+ <CheckCircle2 className="mr-1.5 h-4 w-4"/> Aprobar
+ </Button>
+ <Button
+ size="sm"
+ variant="outline"
+ className="text-destructive border-destructive/30 hover:bg-destructive/10"
+ onClick={() => setRejectDialogOpen(true)}
+ >
+ <XCircle className="mr-1.5 h-4 w-4"/> Rechazar
+ </Button>
+ </div>
+ </div>
+ )}
+
  {/* Title & Description */}
  <div className={isSheet ? '' : 'rounded-xl border border-border bg-card p-6'}>
  {editTitle ? (
@@ -645,6 +707,27 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </div>
  <Separator />
 
+ {/* Billable — si false, las horas no descuentan del cupo del cliente */}
+ <div className="flex items-center justify-between">
+ <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+ <DollarSign className="h-3 w-3"/> Cobrar al cliente
+ </span>
+ <button
+ onClick={() => patchTask({ billable: !(task.billable ?? true) })}
+ className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+ (task.billable ?? true)
+ ? 'bg-success/10 text-success'
+ : 'bg-warning/15 text-warning'
+ }`}
+ title={(task.billable ?? true)
+ ? 'Las horas descuentan del cupo del cliente'
+ : 'Trabajo interno — las horas se registran pero no descuentan del cupo'}
+ >
+ {(task.billable ?? true) ? 'Si' : 'Interna'}
+ </button>
+ </div>
+ <Separator />
+
  {/* Review attempts */}
  {task.reviewAttempts > 0 && (
  <>
@@ -787,6 +870,40 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </div>
  </div>
  </div>
+
+ {/* Modal OTP de aprobación */}
+ <TaskApprovalOtpModal
+ taskId={approvalOtpOpen ? taskId : null}
+ open={approvalOtpOpen}
+ onOpenChange={(o) => setApprovalOtpOpen(o)}
+ onApproved={() => { setApprovalOtpOpen(false); loadTask(); }}
+ />
+
+ {/* Modal rechazo */}
+ <Dialog open={rejectDialogOpen} onOpenChange={(o) => { if (!o) { setRejectDialogOpen(false); setRejectReason(''); } }}>
+ <DialogContent className="max-w-md">
+ <DialogHeader>
+ <DialogTitle>Rechazar tarea</DialogTitle>
+ </DialogHeader>
+ <p className="text-sm text-muted-foreground">
+ La tarea volverá a Desarrollo. Podés agregar un motivo para que el equipo lo vea.
+ </p>
+ <Textarea
+ value={rejectReason}
+ onChange={(e) => setRejectReason(e.target.value)}
+ placeholder="Motivo del rechazo (opcional)"
+ rows={3}
+ />
+ <DialogFooter>
+ <Button variant="outline" onClick={() => { setRejectDialogOpen(false); setRejectReason(''); }} disabled={rejecting}>
+ Cancelar
+ </Button>
+ <Button variant="destructive" onClick={handleRejectTask} disabled={rejecting}>
+ {rejecting ? 'Rechazando...' : 'Rechazar tarea'}
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
  </div>
  );
 }
