@@ -14,7 +14,6 @@ import {
  DialogTitle,
  DialogFooter,
 } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
 import { CheckCircle2, AlertTriangle, Clock, Pencil } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
@@ -331,13 +330,6 @@ export function TimeEntryDialog({
  rows={2}
  />
  </div>
- <div className="flex items-center justify-between rounded-lg border border-border p-3">
- <div>
- <Label className="text-sm font-medium">Facturable</Label>
- <p className="text-[11px] text-muted-foreground">¿Esta entrada se factura al cliente?</p>
- </div>
- <Switch checked={billable} onCheckedChange={setBillable} />
- </div>
  </>
  )}
  </div>
@@ -351,7 +343,7 @@ export function TimeEntryDialog({
  disabled={saving || !taskId || (!confirmed && !editing && !isEdit)}
  className="bg-primary hover:bg-primary/90"
  >
- {saving ? 'Guardando...' : isEdit ? 'Guardar Cambios' : billable ? 'Registrar y Facturar' : 'Registrar Entrada'}
+ {saving ? 'Guardando...' : isEdit ? 'Guardar Cambios' : 'Confirmar registro'}
  </Button>
  </DialogFooter>
  </DialogContent>
