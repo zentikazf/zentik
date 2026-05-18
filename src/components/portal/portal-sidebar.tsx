@@ -46,14 +46,6 @@ const baseNavItems: NavItem[] = [
 
 const billingItem: NavItem = { name: 'Facturacion', href: '/portal/billing', icon: Receipt };
 
-function isFortalezaOrg(orgs: { name: string; slug: string; roleName: string }[]): boolean {
- return orgs.some(
-  (o) =>
-   o.roleName === 'Cliente' &&
-   (o.slug?.toLowerCase().includes('fortaleza') || o.name?.toLowerCase().includes('fortaleza')),
- );
-}
-
 interface PortalSidebarProps {
  isOpen?: boolean;
  onClose?: () => void;
@@ -64,8 +56,10 @@ export function PortalSidebar({ isOpen, onClose, onToggle }: PortalSidebarProps)
  const [collapsed, setCollapsed] = useState(false);
  const [notifOpen, setNotifOpen] = useState(false);
  const pathname = usePathname();
- const { user, logout, organizations } = useAuth();
- const navItems: NavItem[] = isFortalezaOrg(organizations)
+ const { user, logout } = useAuth();
+ // Item "Facturacion" se muestra solo si el cliente tiene el feature flag activo.
+ // Multitenant: el admin lo activa por cliente desde /clients/[id], sin tocar codigo.
+ const navItems: NavItem[] = user?.client?.portalBillingEnabled
   ? [...baseNavItems, billingItem]
   : baseNavItems;
  const { theme, setTheme } = useTheme();

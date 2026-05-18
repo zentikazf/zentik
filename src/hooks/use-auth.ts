@@ -4,6 +4,13 @@ import { useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, clearToken } from '@/lib/api-client';
 
+interface AuthClient {
+  id: string;
+  name: string;
+  portalEnabled: boolean;
+  portalBillingEnabled: boolean;
+}
+
 interface AuthUser {
   id: string;
   email: string;
@@ -13,6 +20,10 @@ interface AuthUser {
   onboardingCompleted?: boolean;
   mustChangePassword?: boolean;
   createdAt?: string;
+  // Cliente al que pertenece (solo cuando el usuario es portal-user de un Client).
+  // Null para usuarios internos (staff de la organizacion). Expone feature flags
+  // por cliente para gating multitenant (portalBillingEnabled, etc).
+  client?: AuthClient | null;
 }
 
 interface Organization {

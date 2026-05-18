@@ -90,6 +90,7 @@ interface ClientDetail {
  notes?: string;
  userId?: string;
  portalEnabled?: boolean;
+ portalBillingEnabled?: boolean;
  contractedHours: number;
  usedHours: number;
  loanedHours: number;
@@ -586,6 +587,45 @@ export default function ClientDetailPage() {
  <Button size="sm"variant="outline"onClick={() => setShowAddUser(true)}>
  <Plus className="mr-1 h-3 w-3"/> Agregar
  </Button>
+ </div>
+
+ {/* Feature flag: facturacion en portal */}
+ <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+ <div className="flex-1">
+ <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+ <DollarSign className="h-3.5 w-3.5 text-primary"/> Facturacion visible al cliente
+ </p>
+ <p className="text-[11px] text-muted-foreground mt-0.5">
+ Cuando esta activo, los usuarios del portal de este cliente ven la pagina /portal/billing.
+ </p>
+ </div>
+ <button
+ onClick={async () => {
+ if (!orgId) return;
+ const newValue = !(client.portalBillingEnabled ?? false);
+ try {
+ await api.patch(`/organizations/${orgId}/clients/${clientId}`, {
+ portalBillingEnabled: newValue,
+ });
+ toast.success(
+ newValue ? 'Facturacion habilitada' : 'Facturacion deshabilitada',
+ newValue
+ ? 'Los usuarios del portal van a ver la seccion de facturacion'
+ : 'La seccion de facturacion quedo oculta para los usuarios del portal',
+ );
+ loadData();
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo actualizar');
+ }
+ }}
+ className={`shrink-0 ml-3 flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${
+ client.portalBillingEnabled
+ ? 'bg-success/10 text-success'
+ : 'bg-muted text-muted-foreground'
+ }`}
+ >
+ {client.portalBillingEnabled ? 'Activa' : 'Inactiva'}
+ </button>
  </div>
 
  {/* Owner */}
