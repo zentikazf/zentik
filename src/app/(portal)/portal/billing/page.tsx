@@ -157,27 +157,21 @@ function buildClientView(data: BillingPeriodData) {
 
 export default function PortalBillingPage() {
  const router = useRouter();
- const { organizations, loading } = useAuth();
+ const { user, loading } = useAuth();
  const [data] = useState<BillingPeriodData>(FORTALEZA_DATA);
 
- const isFortaleza = useMemo(
-  () =>
-   organizations.some(
-    (o) =>
-     o.roleName === 'Cliente' &&
-     (o.slug?.toLowerCase().includes('fortaleza') ||
-      o.name?.toLowerCase().includes('fortaleza')),
-   ),
-  [organizations],
- );
+ // Multitenant gate: el cliente debe tener portalBillingEnabled=true en su Client.
+ // Esto reemplaza el matching frágil de slug/name por "fortaleza". Cuando otros
+ // clientes activen el feature, no requiere cambio de código — solo flip del flag.
+ const canSeeBilling = user?.client?.portalBillingEnabled === true;
 
  useEffect(() => {
-  if (!loading && !isFortaleza) router.replace('/portal');
- }, [loading, isFortaleza, router]);
+  if (!loading && !canSeeBilling) router.replace('/portal');
+ }, [loading, canSeeBilling, router]);
 
  const view = useMemo(() => buildClientView(data), [data]);
 
- if (loading || !isFortaleza) {
+ if (loading || !canSeeBilling) {
   return (
    <div className="space-y-6">
     <Skeleton className="h-8 w-64" />
