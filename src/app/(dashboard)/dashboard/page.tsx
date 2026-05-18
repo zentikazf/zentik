@@ -29,6 +29,7 @@ import {
   CircleDot,
   Filter,
   ChevronRight,
+  TicketCheck,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/hooks/use-auth';
@@ -412,8 +413,8 @@ export default function DashboardPage() {
           ═══════════════════════════════════════════════════════════════ */}
       {isManagerial ? (
         !dashboardData ? (
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-[120px] rounded-xl" />
             ))}
           </div>
@@ -485,7 +486,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ── KPI Cards (clickables) ───────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
             <button onClick={() => setActiveModal('projects')} className="text-left">
               <StatCard
                 title="Proyectos Activos"
@@ -533,6 +534,15 @@ export default function DashboardPage() {
                 className="hover:border-primary/40 transition-colors cursor-pointer"
               />
             </button>
+            <Link href="/tickets" className="text-left">
+              <StatCard
+                title="Tickets Abiertos"
+                value={dashboardData.openTickets?.count ?? 0}
+                icon={TicketCheck}
+                subtitle="Click para ver detalle"
+                className="hover:border-primary/40 transition-colors cursor-pointer"
+              />
+            </Link>
           </div>
 
           {/* ── Mini Mis Tareas + Entregas ────────────────────────────── */}

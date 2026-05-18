@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,6 +18,7 @@ import {
  User,
  FolderKanban,
  AlertTriangle,
+ ExternalLink,
 } from 'lucide-react';
 
 interface ApprovalTask {
@@ -249,6 +251,19 @@ export default function ApprovalsPage() {
  </div>
  ) : (
  <>
+ {task.project?.id && (
+ <Link href={`/projects/${task.project.id}/tasks/${task.id}`}>
+ <Button
+ size="sm"
+ variant="outline"
+ className="rounded-full"
+ disabled={isActioning}
+ >
+ <ExternalLink className="mr-1.5 h-4 w-4"/>
+ Ver tarea
+ </Button>
+ </Link>
+ )}
  <Button
  size="sm"
  className="bg-phase-produccion text-white hover:bg-phase-produccion/90"
