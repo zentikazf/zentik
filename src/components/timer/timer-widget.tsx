@@ -145,16 +145,7 @@ export function TimerWidget({ taskId, taskTitle, className }: TimerWidgetProps) 
  className="flex-1 h-8 text-xs bg-primary hover:bg-primary/90"
  >
  <Check className="h-3 w-3 mr-1"/>
- {saving ? 'Guardando...' : 'Facturar'}
- </Button>
- <Button
- variant="outline"
- size="sm"
- onClick={() => handleConfirm(false)}
- disabled={saving}
- className="flex-1 h-8 text-xs"
- >
- Solo registrar
+ {saving ? 'Guardando...' : 'Confirmar registro'}
  </Button>
  </div>
 
