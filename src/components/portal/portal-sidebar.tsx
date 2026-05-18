@@ -17,6 +17,7 @@ import {
  Menu,
  X,
  LogOut,
+ Receipt,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { cn, getInitials } from '@/lib/utils';
@@ -34,7 +35,7 @@ interface NavItem {
  icon: typeof LayoutDashboard;
 }
 
-const navItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
  { name: 'Dashboard', href: '/portal', icon: LayoutDashboard },
  { name: 'Proyectos', href: '/portal/projects', icon: FolderKanban },
  { name: 'Tickets', href: '/portal/tickets', icon: Ticket },
@@ -42,6 +43,16 @@ const navItems: NavItem[] = [
  { name: 'Documentos', href: '/portal/documents', icon: FileText },
  { name: 'Guia de uso', href: '/portal/guide', icon: BookOpen },
 ];
+
+const billingItem: NavItem = { name: 'Facturacion', href: '/portal/billing', icon: Receipt };
+
+function isFortalezaOrg(orgs: { name: string; slug: string; roleName: string }[]): boolean {
+ return orgs.some(
+  (o) =>
+   o.roleName === 'Cliente' &&
+   (o.slug?.toLowerCase().includes('fortaleza') || o.name?.toLowerCase().includes('fortaleza')),
+ );
+}
 
 interface PortalSidebarProps {
  isOpen?: boolean;
@@ -53,7 +64,10 @@ export function PortalSidebar({ isOpen, onClose, onToggle }: PortalSidebarProps)
  const [collapsed, setCollapsed] = useState(false);
  const [notifOpen, setNotifOpen] = useState(false);
  const pathname = usePathname();
- const { user, logout } = useAuth();
+ const { user, logout, organizations } = useAuth();
+ const navItems: NavItem[] = isFortalezaOrg(organizations)
+  ? [...baseNavItems, billingItem]
+  : baseNavItems;
  const { theme, setTheme } = useTheme();
  const { unreadCount, setUnreadCount } = useNotificationStore();
 
