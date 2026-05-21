@@ -501,7 +501,7 @@ export default function DashboardPage() {
                 title="Tareas Pendientes"
                 value={dashboardData.pendingTasks?.count ?? 0}
                 icon={Target}
-                subtitle="En progreso o por hacer"
+                subtitle="Pendiente, en desarrollo o en revisión"
                 className="hover:border-primary/40 transition-colors cursor-pointer"
               />
             </button>
