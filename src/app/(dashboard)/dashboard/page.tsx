@@ -545,6 +545,41 @@ export default function DashboardPage() {
             </Link>
           </div>
 
+          {/* ── Pendientes de Aprobación (destacado, debajo de KPIs) ── */}
+          {approvals.length > 0 && (
+            <div className="rounded-xl border-2 border-warning/40 bg-gradient-to-r from-warning/10 to-warning/5 p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-warning/20">
+                    <ClipboardCheck className="h-5 w-5 text-warning" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-card-foreground">Pendientes de Aprobación</h2>
+                    <p className="text-xs text-muted-foreground">Tareas esperando tu revisión</p>
+                  </div>
+                </div>
+                <Badge variant="warning" className="text-xs px-2.5 py-1">
+                  {approvals.length} pendientes
+                </Badge>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {approvals.slice(0, 6).map((task: any) => (
+                  <Link key={task.id} href={`/projects/${task.projectId}/approvals`} className="block">
+                    <div className="rounded-xl border border-warning/30 bg-card p-4 transition-all hover:border-warning hover:shadow-md hover:-translate-y-0.5">
+                      <p className="truncate text-sm font-medium text-card-foreground">{task.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{task.project?.name}</p>
+                      {task.assignments?.[0]?.user && (
+                        <p className="mt-2 text-xs text-warning font-medium">
+                          por {task.assignments[0].user.name}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── Mini Mis Tareas + Entregas ────────────────────────────── */}
           <div className="grid gap-6 lg:grid-cols-3">
             {(() => {
@@ -717,36 +752,6 @@ export default function DashboardPage() {
               </div>
             );
           })()}
-
-          {/* ── Approvals ─────────────────────────────────────────────── */}
-          {approvals.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ClipboardCheck className="h-5 w-5 text-warning" />
-                  <h2 className="text-base font-semibold text-card-foreground">Pendientes de Aprobación</h2>
-                </div>
-                <Badge variant="warning" className="text-[10px]">
-                  {approvals.length} pendientes
-                </Badge>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {approvals.slice(0, 6).map((task: any) => (
-                  <Link key={task.id} href={`/projects/${task.projectId}/approvals`} className="block">
-                    <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 transition-all hover:bg-warning/10 hover:shadow-sm">
-                      <p className="truncate text-sm font-medium text-card-foreground">{task.title}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{task.project?.name}</p>
-                      {task.assignments?.[0]?.user && (
-                        <p className="mt-2 text-xs text-warning">
-                          por {task.assignments[0].user.name}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* ── KPI Modal ─────────────────────────────────────────────── */}
           <Dialog open={!!activeModal} onOpenChange={(open) => { if (!open) setActiveModal(null); }}>
