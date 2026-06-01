@@ -37,11 +37,13 @@ import {
  DollarSign,
  ChevronLeft,
  ChevronRight,
+ Pencil,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { useAuth } from '@/hooks/use-auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import { ClientDocumentsSection } from '@/components/clients/client-documents-section';
@@ -104,6 +106,8 @@ export default function ClientDetailPage() {
  const { clientId } = useParams<{ clientId: string }>();
  const { orgId } = useOrg();
  const { user: authUser } = useAuth();
+ const { hasPermission } = usePermissions();
+ const canEditHours = hasPermission('manage:projects');
  const [client, setClient] = useState<ClientDetail | null>(null);
  const [hours, setHours] = useState<HoursSummary | null>(null);
  const [loading, setLoading] = useState(true);
@@ -135,6 +139,12 @@ export default function ClientDetailPage() {
  const [deleteTxConfirm, setDeleteTxConfirm] = useState<{ id: string; type: string; hours: number; note: string | null } | null>(null);
  const [deleteTxReason, setDeleteTxReason] = useState('');
  const [deletingTx, setDeletingTx] = useState(false);
+
+ // Edit hours transaction (solo USAGE/LOAN, gateado por manage:projects)
+ const [editTxConfirm, setEditTxConfirm] = useState<HoursTransaction | null>(null);
+ const [editTxHours, setEditTxHours] = useState('');
+ const [editTxRate, setEditTxRate] = useState('');
+ const [editingTx, setEditingTx] = useState(false);
 
  useEffect(() => {
  if (orgId && clientId) loadData();
@@ -251,6 +261,38 @@ export default function ClientDetailPage() {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al eliminar transacción');
  } finally {
  setDeletingTx(false);
+ }
+ };
+
+ const handleEditTransaction = async () => {
+ if (!orgId || !editTxConfirm) return;
+ const newHours = Number(editTxHours);
+ const newRate = editTxRate.trim() === '' ? null : Number(editTxRate);
+
+ if (Number.isNaN(newHours) || newHours <= 0) {
+ toast.error('Error', 'Las horas deben ser un número mayor a 0');
+ return;
+ }
+ if (newRate !== null && (Number.isNaN(newRate) || newRate < 0)) {
+ toast.error('Error', 'La tarifa debe ser un número mayor o igual a 0');
+ return;
+ }
+
+ setEditingTx(true);
+ try {
+ await api.post(`/organizations/${orgId}/clients/${clientId}/hours/${editTxConfirm.id}/edit`, {
+ hours: newHours,
+ priceRate: newRate,
+ });
+ toast.success('Transacción editada', 'Datos actualizados y cupo del cliente ajustado');
+ setEditTxConfirm(null);
+ setEditTxHours('');
+ setEditTxRate('');
+ loadHours(hoursPage);
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'Error al editar transacción');
+ } finally {
+ setEditingTx(false);
  }
  };
 
@@ -519,6 +561,20 @@ export default function ClientDetailPage() {
  : '—'}
  </td>
  <td className="px-3 py-2.5">
+ <div className="flex items-center gap-1 justify-end">
+ {canEditHours && (tx.type === 'USAGE' || tx.type === 'LOAN') && (
+ <button
+ onClick={() => {
+ setEditTxConfirm(tx);
+ setEditTxHours(String(tx.hours));
+ setEditTxRate(tx.priceRate ? String(tx.priceRate) : '');
+ }}
+ className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-primary/10 hover:text-primary transition-colors"
+ title="Editar horas / tarifa"
+ >
+ <Pencil className="h-3.5 w-3.5"/>
+ </button>
+ )}
  <button
  onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note })}
  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -526,6 +582,7 @@ export default function ClientDetailPage() {
  >
  <Trash2 className="h-3.5 w-3.5"/>
  </button>
+ </div>
  </td>
  </tr>
  );
@@ -850,6 +907,69 @@ export default function ClientDetailPage() {
  <Button variant="outline" onClick={() => { setDeleteTxConfirm(null); setDeleteTxReason(''); }} disabled={deletingTx}>Cancelar</Button>
  <Button variant="destructive" onClick={handleDeleteTransaction} disabled={deletingTx || !deleteTxReason.trim()}>
  {deletingTx ? 'Eliminando...' : 'Eliminar'}
+ </Button>
+ </DialogFooter>
+ </DialogContent>
+ </Dialog>
+
+ {/* Edit Hours Transaction Dialog (solo PO/PM/Owner, solo USAGE/LOAN) */}
+ <Dialog open={!!editTxConfirm} onOpenChange={(open) => { if (!open) { setEditTxConfirm(null); setEditTxHours(''); setEditTxRate(''); } }}>
+ <DialogContent className="max-w-md">
+ <DialogHeader>
+ <DialogTitle>Editar transacción de horas</DialogTitle>
+ </DialogHeader>
+ <p className="text-sm text-muted-foreground">
+ Editás <strong>{editTxConfirm?.task?.title ?? editTxConfirm?.note ?? editTxConfirm?.type}</strong>.
+ El costo se recalcula como Horas × Tarifa y el cupo del cliente se ajusta atómicamente.
+ </p>
+ <div className="space-y-3 py-2">
+ <div className="space-y-1.5">
+ <Label>Horas *</Label>
+ <Input
+ type="number"
+ step="0.01"
+ min="0.01"
+ value={editTxHours}
+ onChange={(e) => setEditTxHours(e.target.value)}
+ />
+ {editTxConfirm && editTxHours !== '' && !Number.isNaN(Number(editTxHours)) && Number(editTxHours) !== editTxConfirm.hours && (
+ <p className="text-[11px] text-warning">
+ Delta: {(Number(editTxHours) - editTxConfirm.hours).toFixed(2)}h se {Number(editTxHours) > editTxConfirm.hours ? 'descontarán del' : 'devolverán al'} cupo disponible del cliente.
+ </p>
+ )}
+ </div>
+ <div className="space-y-1.5">
+ <Label>Tarifa por hora ({editTxConfirm?.priceCurrency ?? hours?.currency ?? 'PYG'})</Label>
+ <Input
+ type="number"
+ step="1"
+ min="0"
+ placeholder="0 = sin tarifa"
+ value={editTxRate}
+ onChange={(e) => setEditTxRate(e.target.value)}
+ />
+ <p className="text-[11px] text-muted-foreground">
+ Dejar vacío o 0 para limpiar la tarifa (el costo quedará como —).
+ </p>
+ </div>
+ <div className="rounded-lg bg-muted/30 p-3">
+ <p className="text-xs text-muted-foreground mb-1">Nuevo costo calculado</p>
+ <p className="font-mono font-semibold text-foreground">
+ {(() => {
+ const h = Number(editTxHours);
+ const r = Number(editTxRate);
+ if (Number.isNaN(h) || h <= 0 || Number.isNaN(r) || r <= 0) return '—';
+ return formatCurrency(h * r, editTxConfirm?.priceCurrency ?? hours?.currency ?? 'PYG');
+ })()}
+ </p>
+ </div>
+ </div>
+ <DialogFooter>
+ <Button variant="outline" onClick={() => { setEditTxConfirm(null); setEditTxHours(''); setEditTxRate(''); }} disabled={editingTx}>
+ Cancelar
+ </Button>
+ <Button onClick={handleEditTransaction} disabled={editingTx}>
+ {editingTx ? 'Guardando...' : 'Guardar cambios'}
  </Button>
  </DialogFooter>
  </DialogContent>
