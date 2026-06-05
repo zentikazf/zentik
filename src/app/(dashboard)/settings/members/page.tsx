@@ -1,31 +1,30 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Trash2, Users, UserPlus, X, Copy, Eye, EyeOff } from 'lucide-react';
+import { X, Copy, Eye, EyeOff } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
+import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
-import { getInitials } from '@/lib/utils';
+import { useMembersData } from './_hooks/use-members-data';
+import { useCollapsedSections } from './_hooks/use-collapsed-sections';
+import { MembersHeader } from './_components/members-header';
+import { MembersGroupSection } from './_components/members-group';
+import { MemberCardTeam } from './_components/member-card-team';
+import { MemberCardClient } from './_components/member-card-client';
+import { EmptyState } from './_components/empty-state';
+import { MembersSkeleton } from './_components/members-skeleton';
+import type { MemberCard, MembersFilter } from '@/types/members-view';
 
-const roleColorMap: Record<string, string> = {
- 'Owner': 'bg-info/10 text-info ',
- 'Product Owner': 'bg-info/10 text-info',
- 'Project Manager': 'bg-primary/10 text-primary',
- 'Tech Lead': 'bg-info/10 text-info',
- 'Developer': 'bg-success/10 text-success',
- 'QA Engineer': 'bg-warning/10 text-warning',
- 'Designer': 'bg-destructive/10 text-destructive',
- 'DevOps': 'bg-warning/10 text-warning ',
- 'Soporte': 'bg-muted text-muted-foreground',
- 'Cliente': 'bg-muted text-muted-foreground',
-};
+const ALLOWED_ROLES = ['Owner', 'Project Manager'];
 
-const defaultBadgeColor = 'bg-muted text-muted-foreground';
-
+// ─────────────────────────────────────────────────────────────────────
+// Modal "Agregar miembro" — CONSERVADO TAL CUAL del codigo anterior.
+// Spec del harness (Feature #7) explicita: NO se rediseña este modal.
+// ─────────────────────────────────────────────────────────────────────
 function CreateMemberDialog({
  open,
  onClose,
@@ -121,7 +120,6 @@ function CreateMemberDialog({
 						 El link expira en 48 horas.
 					 </p>
 				 </div>
-
 				 <div className="rounded-xl bg-info/5 border border-info/30 p-3">
 					 <p className="text-xs text-muted-foreground leading-relaxed">
 						 <strong className="text-foreground">¿No le llegó?</strong> Pedile que revise carpeta de spam,
@@ -140,7 +138,6 @@ function CreateMemberDialog({
 						 a <strong className="text-foreground">{email}</strong> por un canal seguro. Deberá cambiarla en el primer inicio de sesión.
 					 </p>
 				 </div>
-
 				 {result.temporaryPassword && (
 					 <div className="space-y-2">
 						 <label className="text-xs font-medium text-muted-foreground">Contraseña temporal</label>
@@ -191,7 +188,6 @@ function CreateMemberDialog({
  className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
  />
  </div>
-
  <div>
  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Correo electrónico</label>
  <input
@@ -203,7 +199,6 @@ function CreateMemberDialog({
  className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
  />
  </div>
-
  <div>
  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Rol</label>
  <Select value={roleId} onValueChange={setRoleId}>
@@ -217,24 +212,14 @@ function CreateMemberDialog({
  </SelectContent>
  </Select>
  </div>
-
  <p className="text-xs text-muted-foreground">
  Se generará una contraseña temporal automáticamente. El usuario deberá cambiarla al iniciar sesión por primera vez.
  </p>
-
  <div className="flex gap-3 pt-1">
- <button
- type="button"
- onClick={handleClose}
- className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
- >
+ <button type="button" onClick={handleClose} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
  Cancelar
  </button>
- <button
- type="submit"
- disabled={saving || !name || !email || !roleId}
- className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
- >
+ <button type="submit" disabled={saving || !name || !email || !roleId} className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 transition-colors">
  {saving ? 'Creando...' : 'Crear Usuario'}
  </button>
  </div>
@@ -245,161 +230,234 @@ function CreateMemberDialog({
  );
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Pagina principal — Variante A "Library" del rediseño (Feature #7)
+// ─────────────────────────────────────────────────────────────────────
 export default function MembersSettingsPage() {
- const { orgId } = useOrg();
- const [members, setMembers] = useState<any[]>([]);
- const [roles, setRoles] = useState<any[]>([]);
- const [loading, setLoading] = useState(true);
- const [showCreate, setShowCreate] = useState(false);
+  const router = useRouter();
+  const { orgId } = useOrg();
+  const { organizations, loading: authLoading } = useAuth();
+  const [roles, setRoles] = useState<any[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<MembersFilter>('all');
 
- useEffect(() => {
- if (orgId) {
- loadMembers();
- loadRoles();
- }
- }, [orgId]);
+  const currentOrgRole = organizations?.find((o) => o.id === orgId)?.roleName;
+  const hasAccess = !!currentOrgRole && ALLOWED_ROLES.includes(currentOrgRole);
 
- const loadMembers = async () => {
- if (!orgId) return;
- try {
- const res = await api.get(`/organizations/${orgId}/members`);
- setMembers(Array.isArray(res.data) ? res.data : res.data?.data || []);
- } catch (err) {
- const message = err instanceof ApiError ? err.message : 'Error al cargar miembros';
- toast.error('Error', message);
- } finally {
- setLoading(false);
- }
- };
+  // Guard de rol: solo Owner y Project Manager
+  useEffect(() => {
+    if (authLoading) return;
+    if (currentOrgRole === undefined) return; // todavia sin orgId resuelto
+    if (!hasAccess) {
+      toast.error('Sin acceso', 'No tenés acceso a esta sección.');
+      router.replace('/dashboard');
+    }
+  }, [authLoading, currentOrgRole, hasAccess, router]);
 
- const loadRoles = async () => {
- if (!orgId) return;
- try {
- const res = await api.get(`/organizations/${orgId}/roles`);
- const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
- setRoles(list);
- } catch {
- // silent
- }
- };
+  // Cargar roles (para el modal de agregar miembro)
+  useEffect(() => {
+    if (!orgId || !hasAccess) return;
+    api
+      .get(`/organizations/${orgId}/roles`)
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+        setRoles(list);
+      })
+      .catch(() => {});
+  }, [orgId, hasAccess]);
 
- const handleRoleChange = async (memberId: string, roleId: string) => {
- if (!orgId) return;
- try {
- await api.patch(`/organizations/${orgId}/members/${memberId}`, { roleId });
- toast.success('Rol actualizado', 'El rol del miembro ha sido actualizado');
- loadMembers();
- } catch (err) {
- const message = err instanceof ApiError ? err.message : 'Error al actualizar rol';
- toast.error('Error', message);
- }
- };
+  const { groups, isLoading, error, refetch } = useMembersData(
+    hasAccess ? orgId ?? undefined : undefined,
+  );
 
- const handleRemove = async (memberId: string) => {
- if (!confirm('¿Eliminar este miembro?')) return;
- if (!orgId) return;
- try {
- await api.delete(`/organizations/${orgId}/members/${memberId}`);
- toast.success('Miembro eliminado', 'El miembro ha sido removido de la organización');
- setMembers(members.filter((m) => m.id !== memberId));
- } catch (err) {
- const message = err instanceof ApiError ? err.message : 'Error al eliminar miembro';
- toast.error('Error', message);
- }
- };
+  // Lista de ids de clientes para inicialmente colapsados (team queda expandido)
+  const clientIds = useMemo(
+    () => groups.filter((g) => g.type === 'client').map((g) => g.id),
+    [groups],
+  );
 
- if (loading) {
- return (
- <div className="space-y-3">
- {Array.from({ length: 5 }).map((_, i) => (
- <Skeleton key={i} className="h-20 rounded-xl"/>
- ))}
- </div>
- );
- }
+  const { isCollapsed, toggle, reconcile } = useCollapsedSections(clientIds);
 
- const assignableRoles = roles.filter((r) => r.name !== 'Owner');
+  // Sincronizar el set de colapsados con los ids vigentes (limpieza de basura)
+  useEffect(() => {
+    if (groups.length === 0) return;
+    reconcile(groups.map((g) => g.id));
+  }, [groups, reconcile]);
 
- return (
- <div className="space-y-7">
- <div className="flex items-center justify-between">
- <div>
- <h1 className="text-[22px] font-semibold text-foreground">Miembros</h1>
- <p className="mt-1 text-sm text-muted-foreground">Gestiona los miembros de tu organización</p>
- </div>
- <div className="flex items-center gap-3">
- <Badge className="bg-primary/10 text-primary">
- <Users className="mr-1.5 h-3.5 w-3.5"/>
- {members.length} miembros
- </Badge>
- <button
- onClick={() => setShowCreate(true)}
- className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
- >
- <UserPlus className="h-4 w-4"/>
- Agregar Miembro
- </button>
- </div>
- </div>
+  const trimmedQuery = query.trim().toLowerCase();
+  const hasActiveSearch = trimmedQuery.length >= 3;
 
- <div className="space-y-3">
- {members.map((member) => {
- const roleName = member.role?.name || 'Sin rol';
- const roleId = member.role?.id || '';
- const isOwner = roleName === 'Owner';
- const badgeColor = roleColorMap[roleName] || defaultBadgeColor;
+  // Filtrado en memoria
+  const filteredGroups = useMemo(() => {
+    return groups
+      .map((group) => ({
+        ...group,
+        members: group.members.filter((member) => {
+          if (filter === 'team' && group.type !== 'team') return false;
+          if (filter === 'pending' && member.emailVerified) return false;
+          if (filter === 'active' && !member.emailVerified) return false;
+          if (hasActiveSearch) {
+            return (
+              member.name.toLowerCase().includes(trimmedQuery) ||
+              member.email.toLowerCase().includes(trimmedQuery)
+            );
+          }
+          return true;
+        }),
+      }))
+      .filter((group) => {
+        if (filter === 'team' && group.type !== 'team') return false;
+        return true;
+      });
+  }, [groups, filter, hasActiveSearch, trimmedQuery]);
 
- return (
- <div key={member.id} className="flex items-center gap-4 rounded-xl border border-border bg-card p-5">
- <Avatar className="h-11 w-11">
- <AvatarImage src={member.user?.image} />
- <AvatarFallback className="bg-primary/15 text-sm font-semibold text-primary">
- {getInitials(member.user?.name || '')}
- </AvatarFallback>
- </Avatar>
- <div className="min-w-0 flex-1">
- <p className="text-[15px] font-medium text-foreground">{member.user?.name}</p>
- <p className="text-[13px] text-muted-foreground">{member.user?.email}</p>
- </div>
- {isOwner ? (
- <Badge className={badgeColor}>{roleName}</Badge>
- ) : (
- <Select value={roleId} onValueChange={(v) => handleRoleChange(member.id, v)}>
- <SelectTrigger className="w-40 rounded-full"><SelectValue /></SelectTrigger>
- <SelectContent>
- {assignableRoles.map((r) => (
- <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
- ))}
- </SelectContent>
- </Select>
- )}
- {!isOwner && (
- <button
- onClick={() => handleRemove(member.id)}
- className="flex h-9 w-9 items-center justify-center rounded-full text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
- >
- <Trash2 className="h-4 w-4"/>
- </button>
- )}
- </div>
- );
- })}
+  const totalCount = groups.reduce((acc, g) => acc + g.count, 0);
+  const pendingCount = groups.reduce(
+    (acc, g) => acc + g.members.filter((m) => !m.emailVerified).length,
+    0,
+  );
 
- {members.length === 0 && (
- <div className="flex flex-col items-center rounded-xl bg-card py-16 text-center">
- <Users className="mb-3 h-10 w-10 text-muted-foreground/50"/>
- <p className="text-muted-foreground">No hay miembros en la organización</p>
- </div>
- )}
- </div>
+  const handleResendInvitation = async (member: MemberCard) => {
+    try {
+      await api.post('/auth/resend-verification', { userId: member.id });
+      toast.success('Email reenviado', `Revisá la bandeja de ${member.email}`);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'No se pudo reenviar';
+      toast.error('Error', msg);
+    }
+  };
 
- <CreateMemberDialog
- open={showCreate}
- onClose={() => setShowCreate(false)}
- orgId={orgId || ''}
- roles={roles}
- onCreated={loadMembers}
- />
- </div>
- );
+  const handleRemove = async (member: MemberCard) => {
+    if (!orgId || !member.membershipId) return;
+    if (!window.confirm(`¿Quitar a ${member.name} de la organización?`)) return;
+    try {
+      await api.delete(`/organizations/${orgId}/members/${member.membershipId}`);
+      toast.success('Miembro eliminado', `${member.name} fue removido`);
+      refetch();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Error al eliminar';
+      toast.error('Error', msg);
+    }
+  };
+
+  // ── Renders ──────────────────────────────────────────────────────
+
+  if (!hasAccess) {
+    return (
+      <div className="p-6">
+        <MembersSkeleton />
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <MembersSkeleton />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div className="flex-1">
+              <h2 className="font-semibold text-foreground">No pudimos cargar los miembros</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="mt-4 rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground hover:bg-muted"
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (totalCount === 0) {
+    return (
+      <div className="p-6">
+        <EmptyState variant="no-members" onAddMember={() => setShowCreate(true)} />
+        <CreateMemberDialog
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
+          orgId={orgId!}
+          roles={roles}
+          onCreated={() => {
+            setShowCreate(false);
+            refetch();
+          }}
+        />
+      </div>
+    );
+  }
+
+  const allFilteredEmpty = filteredGroups.every((g) => g.members.length === 0);
+
+  return (
+    <div className="p-6">
+      <MembersHeader
+        query={query}
+        onQueryChange={setQuery}
+        filter={filter}
+        onFilterChange={setFilter}
+        totalCount={totalCount}
+        pendingCount={pendingCount}
+        onAddMember={() => setShowCreate(true)}
+      />
+
+      {allFilteredEmpty && hasActiveSearch ? (
+        <EmptyState variant="no-search-results" onClearSearch={() => setQuery('')} />
+      ) : allFilteredEmpty ? (
+        <EmptyState variant="no-filter-results" />
+      ) : (
+        filteredGroups.map((group) => {
+          // Si hay busqueda activa, todas las secciones se auto-expanden
+          const collapsed = hasActiveSearch ? false : isCollapsed(group.id);
+          return (
+            <MembersGroupSection
+              key={group.id}
+              group={group}
+              visibleMembersCount={group.members.length}
+              isCollapsed={collapsed}
+              onToggle={() => toggle(group.id)}
+              hasActiveSearch={hasActiveSearch}
+            >
+              {group.members.map((member) =>
+                member.source === 'team' ? (
+                  <MemberCardTeam
+                    key={member.id}
+                    member={member}
+                    onResendInvitation={handleResendInvitation}
+                    onRemove={handleRemove}
+                  />
+                ) : (
+                  <MemberCardClient key={`${member.clientId}-${member.id}`} member={member} />
+                ),
+              )}
+            </MembersGroupSection>
+          );
+        })
+      )}
+
+      <CreateMemberDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        orgId={orgId!}
+        roles={roles}
+        onCreated={() => {
+          setShowCreate(false);
+          refetch();
+        }}
+      />
+    </div>
+  );
 }
