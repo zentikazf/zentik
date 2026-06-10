@@ -664,8 +664,25 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Equipo con Cumplimiento de Horas ─────────────────────── */}
-          {dashboardData.teamMembers?.items && dashboardData.teamMembers.items.length > 0 && (() => {
-            const team = dashboardData.teamMembers.items as any[];
+          {dashboardData.teamMembers && (() => {
+            const team = (dashboardData.teamMembers.items as any[]) || [];
+            // Empty-state: si no hay miembros internos, mostramos card con CTA
+            // en vez de ocultar el bloque (antes desaparecia y parecia bug).
+            if (team.length === 0) {
+              return (
+                <div className="rounded-xl border border-border bg-card p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    <h2 className="text-base font-semibold text-card-foreground">Equipo</h2>
+                  </div>
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    Sin miembros internos asignados aún. Invitá colaboradores
+                    (Owner / PM / Developer / QA / Designer) desde Configuración
+                    {' › '}Miembros para monitorear el cumplimiento de horas mensual.
+                  </p>
+                </div>
+              );
+            }
             const thresholds = dashboardData.teamMembers.thresholds || { green: 120, orange: 100 };
             const greenMin = thresholds.green;
             const orangeMin = thresholds.orange;
