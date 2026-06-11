@@ -124,8 +124,20 @@ export interface ListTicketsQuery {
   cursor?: string;
   limit?: number;
   clientId?: string;
+  projectId?: string;
   search?: string;
   assigneeId?: string;
   createdByUserId?: string;
   categoryConfigId?: string;
+
+  // Feature #10: facets extendidos para tab RESOLVED + panel "Mas filtros".
+  // El backend (zentik-backend) los acepta como CSV / single value.
+  criticality?: string;        // "HIGH,MEDIUM,LOW"
+  category?: string;           // "SUPPORT_REQUEST,NEW_DEVELOPMENT"
+  slaOutcome?: string;         // "COMPLIED" | "BREACHED_RESPONSE" | "BREACHED_RESOLUTION" | "BREACHED_BOTH" | "NO_SLA" (csv)
+  overshootBucket?: string;    // "LT_1H" | "BETWEEN_1_4H" | "BETWEEN_4_24H" | "GT_24H"
+  resolvedFrom?: string;       // ISO date YYYY-MM-DD
+  resolvedTo?: string;         // ISO date YYYY-MM-DD
+  sortBy?: string;             // "resolvedAt" | "overshoot" | "createdAt"
+  sortOrder?: string;          // "asc" | "desc"
 }
