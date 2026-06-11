@@ -40,13 +40,18 @@ export const STATUS_ORDER: TicketStatus[] = [
  * State machine de transiciones validas.
  * IMPORTANTE: debe coincidir EXACTAMENTE con ALLOWED_TRANSITIONS del backend.
  * El backend tambien valida — esto es solo para UX (filtrar el dropdown).
+ *
+ * Feature #10: CLOSED queda como estado deprecated (solo tickets historicos).
+ * No se permite transicionar a CLOSED desde ningun estado. RESOLVED es el
+ * unico estado terminal. La entrada CLOSED: [] se mantiene para tipos pero
+ * un ticket historico en CLOSED no puede salir desde la UI (read-only).
  */
 const ALLOWED: Record<TicketStatus, TicketStatus[]> = {
-  OPEN: ['IN_PROGRESS', 'IN_REVIEW', 'RESOLVED', 'CLOSED'],
-  IN_PROGRESS: ['IN_REVIEW', 'RESOLVED', 'OPEN', 'CLOSED'],
-  IN_REVIEW: ['IN_PROGRESS', 'RESOLVED', 'CLOSED'],
-  RESOLVED: ['CLOSED', 'IN_PROGRESS'],
-  CLOSED: ['IN_PROGRESS'],
+  OPEN: ['IN_PROGRESS'],
+  IN_PROGRESS: ['IN_REVIEW', 'RESOLVED', 'OPEN'],
+  IN_REVIEW: ['IN_PROGRESS', 'RESOLVED'],
+  RESOLVED: ['IN_PROGRESS'],
+  CLOSED: [],
 };
 
 export function getValidTransitions(current: TicketStatus): TicketStatus[] {

@@ -39,7 +39,6 @@ import { ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { ticketService } from '@/services/ticket.service';
 import { TicketActionBar } from './ticket-action-bar';
-import { TicketCloseForm } from './ticket-close-form';
 import { TicketEventTimeline } from './ticket-event-timeline';
 import { TicketChat } from './ticket-chat';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from './ticket-status-machine';
@@ -69,7 +68,6 @@ export function TicketSidePanel({
 }: TicketSidePanelProps) {
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showCloseForm, setShowCloseForm] = useState(false);
   const [eventsKey, setEventsKey] = useState(0);
   const [expanded, setExpanded] = useState(false);
 
@@ -104,7 +102,6 @@ export function TicketSidePanel({
   useEffect(() => {
     if (!ticketId || !open) {
       setTicket(null);
-      setShowCloseForm(false);
       setAdminNotes('');
       return;
     }
@@ -134,11 +131,6 @@ export function TicketSidePanel({
     setAdminNotes(updated.adminNotes ?? '');
     setEventsKey((k) => k + 1);
     onTicketUpdated?.(updated);
-  };
-
-  const handleClosed = (updated: TicketDetail) => {
-    setShowCloseForm(false);
-    handleUpdated(updated);
   };
 
   const handleSaveNotes = async () => {
@@ -263,20 +255,12 @@ export function TicketSidePanel({
                 'flex flex-col gap-3 min-h-0 overflow-y-auto',
                 !expanded && 'border-t border-border pt-3',
               )}>
-                {/* 1) Action bar / Close form */}
-                {showCloseForm ? (
-                  <TicketCloseForm
-                    ticketId={ticket.id}
-                    onClosed={handleClosed}
-                    onCancel={() => setShowCloseForm(false)}
-                  />
-                ) : (
-                  <TicketActionBar
-                    ticket={ticket}
-                    onUpdated={handleUpdated}
-                    onCloseRequested={() => setShowCloseForm(true)}
-                  />
-                )}
+                {/* 1) Action bar */}
+                <TicketActionBar
+                  ticket={ticket}
+                  onUpdated={handleUpdated}
+                />
+
 
                 {/* 2) Estado en Kanban — educativo + link al board */}
                 {ticket.task?.boardColumn && (

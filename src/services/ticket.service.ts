@@ -5,7 +5,6 @@ import type {
   TicketsListResponse,
   TicketStats,
   UpdateTicketInput,
-  CloseTicketInput,
   ListTicketsQuery,
 } from '@/types/ticket.types';
 
@@ -38,9 +37,6 @@ export const ticketService = {
 
   update: (ticketId: string, input: UpdateTicketInput) =>
     api.patch<TicketDetail>(`/tickets/${ticketId}`, input),
-
-  close: (ticketId: string, input: CloseTicketInput) =>
-    api.post<TicketDetail>(`/tickets/${ticketId}/close`, input),
 
   create: (
     orgId: string,
