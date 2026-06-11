@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -165,12 +165,18 @@ export default function DashboardPage() {
 
   // Filtros del breakdown — mismos del dashboard managerial. ISO para
   // el contrato del backend (consistente con loadDashboard).
-  const ticketsBreakdownFilters = {
-    startDate: filterStartDate ? new Date(filterStartDate).toISOString() : undefined,
-    endDate: filterEndDate ? new Date(filterEndDate + 'T23:59:59').toISOString() : undefined,
-    clientId: filterClientId || undefined,
-    memberId: filterMemberId || undefined,
-  };
+  // useMemo evita reconstruir el objeto en cada render: sin esto, el hook
+  // useTicketsBreakdown ve nueva referencia cada vez y disparaba 3 calls
+  // duplicados al endpoint en milisegundos.
+  const ticketsBreakdownFilters = useMemo(
+    () => ({
+      startDate: filterStartDate ? new Date(filterStartDate).toISOString() : undefined,
+      endDate: filterEndDate ? new Date(filterEndDate + 'T23:59:59').toISOString() : undefined,
+      clientId: filterClientId || undefined,
+      memberId: filterMemberId || undefined,
+    }),
+    [filterStartDate, filterEndDate, filterClientId, filterMemberId],
+  );
   // Lazy fetch: solo dispara mientras el drill-down esta abierto. Compartido
   // por ambos modales (Modal B no refetchea, lee del mismo data).
   const ticketsBreakdown = useTicketsBreakdown(
