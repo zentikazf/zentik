@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api-client';
 import type {
   TicketsBreakdownFilters,
@@ -11,6 +11,8 @@ interface UseTicketsBreakdownResult {
   data: TicketsBreakdownResponse | null;
   loading: boolean;
   error: ApiError | Error | null;
+  /** Re-fetch manual (usado por el boton "Reintentar" del modal). */
+  refetch: () => void;
 }
 
 /**
@@ -34,6 +36,12 @@ export function useTicketsBreakdown(
   const [data, setData] = useState<TicketsBreakdownResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ApiError | Error | null>(null);
+  // refetchToken bump = nuevo ciclo del effect sin cambiar filters (retry).
+  const [refetchToken, setRefetchToken] = useState(0);
+
+  const refetch = useCallback(() => {
+    setRefetchToken((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     if (!enabled || !orgId) return;
@@ -75,7 +83,8 @@ export function useTicketsBreakdown(
     filters.endDate,
     filters.clientId,
     filters.memberId,
+    refetchToken,
   ]);
 
-  return { data, loading, error };
+  return { data, loading, error, refetch };
 }

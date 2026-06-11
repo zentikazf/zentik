@@ -18,17 +18,22 @@ import {
   TicketCheck,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { useTicketsBreakdown } from '../_hooks/use-tickets-breakdown';
 import type {
   TicketCategoryActive,
   TicketsBreakdownFilters,
+  TicketsBreakdownResponse,
 } from '@/types/tickets-breakdown';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  orgId: string | undefined;
   filters: TicketsBreakdownFilters;
+  /** Data del breakdown. El parent es responsable del fetch (controlled). */
+  data: TicketsBreakdownResponse | null;
+  loading: boolean;
+  error: Error | null;
+  /** Reintento (re-fetch) cuando el usuario clickea retry en el error state. */
+  onRetry: () => void;
   onTypeSelect: (category: TicketCategoryActive) => void;
 }
 
@@ -74,14 +79,15 @@ function formatOvershoot(minutes: number | null): string {
 export function TicketsByTypeModal({
   open,
   onOpenChange,
-  orgId,
   filters,
+  data,
+  loading,
+  error,
+  onRetry,
   onTypeSelect,
 }: Props) {
-  const { data, loading, error } = useTicketsBreakdown(orgId, filters, open);
-
-  // El hook ya hace setError; mostramos toast la primera vez que vemos el
-  // error (efecto separado para evitar disparar dentro del render).
+  // El hook (en el parent) ya hace setError; mostramos toast la primera vez
+  // que vemos el error (efecto separado para evitar disparar dentro del render).
   useEffect(() => {
     if (!error || !open) return;
     toast.error(
@@ -127,15 +133,7 @@ export function TicketsByTypeModal({
             <p className="text-xs text-muted-foreground">
               {error.message || 'Reintentá en unos segundos.'}
             </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                // Reabrir fuerza un nuevo ciclo del hook (cambia `enabled`).
-                onOpenChange(false);
-                setTimeout(() => onOpenChange(true), 0);
-              }}
-            >
+            <Button size="sm" variant="outline" onClick={onRetry}>
               Reintentar
             </Button>
           </div>
