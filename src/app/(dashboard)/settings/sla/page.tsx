@@ -118,10 +118,22 @@ export default function SlaSettingsPage() {
         })));
       }
 
-      const bh = slaRes.data && !Array.isArray(bhRes.data) ? bhRes.data : bhRes.data?.data || bhRes.data;
+      // Bug previo: el ternario validaba slaRes.data en lugar de bhRes.data,
+      // y nunca poblaba bhForm cuando el backend devolvia el objeto directo.
+      const bhRaw = bhRes.data;
+      const bh = Array.isArray(bhRaw)
+        ? bhRaw[0]
+        : (bhRaw && typeof bhRaw === 'object' && 'data' in (bhRaw as object))
+        ? (bhRaw as any).data
+        : bhRaw;
       if (bh?.businessHoursStart) {
         setBusinessHours(bh);
-        setBhForm(bh);
+        setBhForm({
+          businessHoursStart: bh.businessHoursStart,
+          businessHoursEnd: bh.businessHoursEnd,
+          businessDays: bh.businessDays,
+          timezone: bh.timezone ?? 'America/Asuncion',
+        });
       }
 
       const hols = Array.isArray(holRes.data) ? holRes.data : holRes.data?.data || [];
@@ -184,7 +196,14 @@ export default function SlaSettingsPage() {
       toast.success('Guardado', 'Configuración de SLA actualizada');
       await loadAll();
     } catch (err) {
-      toast.error('Error', err instanceof ApiError ? err.message : 'Error al guardar SLA');
+      let detail = 'Error al guardar SLA';
+      if (err instanceof ApiError) {
+        const body = (err as any).body ?? (err as any).response;
+        if (Array.isArray(body?.message)) detail = body.message.join(' · ');
+        else if (typeof body?.message === 'string') detail = body.message;
+        else detail = err.message;
+      }
+      toast.error('Error', detail);
     } finally {
       setSavingSla(false);
     }
@@ -221,13 +240,43 @@ export default function SlaSettingsPage() {
 
   // Business hours save
   const saveBh = async () => {
+    // Validacion previa client-side para evitar 400 silencioso del backend
+    // y dar feedback claro al usuario sobre que campo esta mal.
+    const errors: string[] = [];
+    const timeRegex = /^\d{2}:\d{2}$/;
+    if (!timeRegex.test(bhForm.businessHoursStart)) errors.push('Hora de inicio debe tener formato HH:MM (ej. 08:30)');
+    if (!timeRegex.test(bhForm.businessHoursEnd)) errors.push('Hora de fin debe tener formato HH:MM (ej. 17:30)');
+    if (!/^[1-7](,[1-7])*$/.test(bhForm.businessDays)) errors.push('Debes seleccionar al menos un dia laboral');
+    if (bhForm.businessHoursStart >= bhForm.businessHoursEnd) errors.push('La hora de inicio debe ser anterior a la de fin');
+    if (errors.length > 0) {
+      toast.error('Datos invalidos', errors.join(' · '));
+      return;
+    }
     setSavingBh(true);
     try {
-      await api.patch(`/organizations/${orgId}/business-hours`, bhForm);
+      // Mandamos solo los campos del DTO para evitar que forbidNonWhitelisted
+      // del ValidationPipe rechace con 400 si el form arrastra propiedades extra.
+      const payload = {
+        businessHoursStart: bhForm.businessHoursStart,
+        businessHoursEnd: bhForm.businessHoursEnd,
+        businessDays: bhForm.businessDays,
+        timezone: bhForm.timezone || 'America/Asuncion',
+      };
+      await api.patch(`/organizations/${orgId}/business-hours`, payload);
       toast.success('Guardado', 'Horario hábil actualizado');
       await loadAll();
     } catch (err) {
-      toast.error('Error', err instanceof ApiError ? err.message : 'Error al guardar horario');
+      // Mejor mensaje de error: si el backend devuelve detalles de validacion
+      // (NestJS ValidationPipe los manda en err.body.message como array),
+      // los mostramos en el toast para que el usuario sepa que arreglar.
+      let detail = 'Error al guardar horario';
+      if (err instanceof ApiError) {
+        const body = (err as any).body ?? (err as any).response;
+        if (Array.isArray(body?.message)) detail = body.message.join(' · ');
+        else if (typeof body?.message === 'string') detail = body.message;
+        else detail = err.message;
+      }
+      toast.error('Error', detail);
     } finally {
       setSavingBh(false);
     }
