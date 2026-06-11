@@ -21,11 +21,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  AlertCircle,
   AlertTriangle,
   CheckCircle2,
   CircleDot,
   Clock,
+  Download,
   Filter,
   Loader2,
   MessageSquare,
@@ -36,20 +36,25 @@ import {
   TicketIcon,
   Wifi,
   WifiOff,
-  XCircle,
   Eye,
 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { api, ApiError, getToken } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ticketService } from '@/services/ticket.service';
 import { useTicketsSocket } from '@/hooks/use-tickets-socket';
 import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
+import { TicketsFacetsPanel, countActiveFacets } from '@/components/tickets/tickets-facets-panel';
+import { SlaBadge, CriticalityBadge } from '@/components/tickets/ticket-resolved-badges';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
-import type { TicketListItem, TicketStats, TicketStatus } from '@/types/ticket.types';
-
-type StatusTab = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED' | 'all';
+import {
+  useTicketsFilters,
+  buildBackendQuery,
+  type StatusTab,
+} from '@/hooks/use-tickets-filters';
+import { humanizeDelta, diffMin } from '@/lib/format/humanize-delta';
+import type { TicketListItem, TicketStats } from '@/types/ticket.types';
 
 interface CategoryConfig {
   id: string;
@@ -58,11 +63,10 @@ interface CategoryConfig {
 }
 
 const tabConfig: { value: StatusTab; label: string; icon: React.ElementType; dotColor: string }[] = [
-  { value: 'OPEN', label: 'Abiertos', icon: CircleDot, dotColor: 'bg-destructive' },
+  { value: 'OPEN', label: 'Abierto', icon: CircleDot, dotColor: 'bg-destructive' },
   { value: 'IN_PROGRESS', label: 'En progreso', icon: Loader2, dotColor: 'bg-warning' },
   { value: 'IN_REVIEW', label: 'En revision', icon: Eye, dotColor: 'bg-info' },
-  { value: 'RESOLVED', label: 'Resueltos', icon: CheckCircle2, dotColor: 'bg-success' },
-  { value: 'CLOSED', label: 'Cerrados', icon: XCircle, dotColor: 'bg-muted-foreground' },
+  { value: 'RESOLVED', label: 'Resuelto', icon: CheckCircle2, dotColor: 'bg-success' },
 ];
 
 const categoryLabelMap: Record<string, string> = {
@@ -79,27 +83,31 @@ const criticalityConfig: Record<string, { label: string; className: string; bg: 
 const PAGE_LIMIT = 20;
 const POLL_INTERVAL_MS = 60000;
 
+// API base URL para el endpoint de export CSV (necesario para construir
+// la URL absoluta + auth headers fuera del json client).
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
 export default function TicketsPage() {
   const { orgId } = useOrg();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Vista por defecto: Abiertos (NO Todos)
-  const initialTab = (searchParams.get('status') as StatusTab) || 'OPEN';
+  // ─── Filtros (URL source of truth + cookie restore) ──────────
+  const { filters, applyFilters, resetFilters } = useTicketsFilters();
+  const activeTab = filters.status;
+
   const initialTicketParam = searchParams.get('ticket');
   const initialPanelOpen = searchParams.get('panel') === 'open';
 
+  // ─── State local de la lista ─────────────────────────────────
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [stats, setStats] = useState<TicketStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<StatusTab>(initialTab);
-  const [filterPriority, setFilterPriority] = useState<string | null>(null);
-  const [filterCategory, setFilterCategory] = useState<string | null>(null);
-  const [filterClient, setFilterClient] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
+  // ─── Crear ticket modal ──────────────────────────────────────
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [clients, setClients] = useState<{ id: string; name: string; portalEnabled?: boolean }[]>([]);
@@ -120,14 +128,10 @@ export default function TicketsPage() {
     categoryConfigId: '',
   });
 
-  // ─── Sync URL ↔ state (tab + ticket abierto) ────────────────
-  const syncUrl = useCallback(
-    (next: { status?: StatusTab; ticket?: string | null; panel?: 'open' | null }) => {
+  // ─── Sync URL para panel/ticket (independiente de filtros) ────
+  const syncPanelUrl = useCallback(
+    (next: { ticket?: string | null; panel?: 'open' | null }) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (next.status !== undefined) {
-        if (next.status === 'OPEN') params.delete('status'); // default → no param
-        else params.set('status', next.status);
-      }
       if (next.ticket !== undefined) {
         if (next.ticket) params.set('ticket', next.ticket);
         else params.delete('ticket');
@@ -142,34 +146,56 @@ export default function TicketsPage() {
   );
 
   // ─── Loaders ────────────────────────────────────────────────
-  const buildQuery = useCallback(
-    (cursor?: string) => ({
-      ...(activeTab !== 'all' && { status: activeTab as TicketStatus }),
-      ...(filterClient && { clientId: filterClient }),
-      ...(search && { search }),
-      cursor,
+  // Sort default segun tab: en RESOLVED, default = resolvedAt desc;
+  // si el usuario eligio otro, se respeta su seleccion.
+  const effectiveSort = useMemo(() => {
+    if (filters.sortBy) {
+      return { sortBy: filters.sortBy, sortOrder: filters.sortOrder ?? 'desc' };
+    }
+    if (activeTab === 'RESOLVED') {
+      return { sortBy: 'resolvedAt' as const, sortOrder: 'desc' as const };
+    }
+    return undefined;
+  }, [filters.sortBy, filters.sortOrder, activeTab]);
+
+  const backendQuery = useMemo(
+    () => ({
+      ...buildBackendQuery(filters),
+      ...(effectiveSort && { sortBy: effectiveSort.sortBy, sortOrder: effectiveSort.sortOrder }),
       limit: PAGE_LIMIT,
     }),
-    [activeTab, filterClient, search],
+    [filters, effectiveSort],
   );
 
-  const loadTickets = useCallback(async () => {
-    if (!orgId) return;
-    try {
-      const res = await ticketService.list(orgId, buildQuery());
-      setTickets(res.data.data);
-      setNextCursor(res.data.meta.nextCursor);
-    } catch (err) {
-      if (err instanceof ApiError && err.statusCode === 404) {
-        setTickets([]);
-        setNextCursor(null);
-      } else {
-        toast.error('Error', err instanceof ApiError ? err.message : 'Error al cargar tickets');
+  const loadTickets = useCallback(
+    async (cursor?: string) => {
+      if (!orgId) return;
+      try {
+        const res = await ticketService.list(orgId, {
+          ...backendQuery,
+          ...(cursor && { cursor }),
+        });
+        if (cursor) {
+          setTickets((prev) => [...prev, ...res.data.data]);
+        } else {
+          setTickets(res.data.data);
+        }
+        setNextCursor(res.data.meta.nextCursor);
+      } catch (err) {
+        if (err instanceof ApiError && err.statusCode === 404) {
+          if (!cursor) {
+            setTickets([]);
+            setNextCursor(null);
+          }
+        } else {
+          toast.error('Error', err instanceof ApiError ? err.message : 'Error al cargar tickets');
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, buildQuery]);
+    },
+    [orgId, backendQuery],
+  );
 
   const loadStats = useCallback(async () => {
     if (!orgId) return;
@@ -185,33 +211,18 @@ export default function TicketsPage() {
     if (!orgId || !nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await ticketService.list(orgId, buildQuery(nextCursor));
-      setTickets((prev) => [...prev, ...res.data.data]);
-      setNextCursor(res.data.meta.nextCursor);
-    } catch (err) {
-      toast.error('Error', err instanceof ApiError ? err.message : 'Error al cargar mas');
+      await loadTickets(nextCursor);
     } finally {
       setLoadingMore(false);
     }
-  }, [orgId, nextCursor, loadingMore, buildQuery]);
+  }, [orgId, nextCursor, loadingMore, loadTickets]);
 
-  // ─── Effects: carga inicial + cuando cambia tab/filtro/search ─
+  // Carga cada vez que cambia el query (incluye tab, search, facets, sort).
   useEffect(() => {
     if (!orgId) return;
     setLoading(true);
     loadTickets();
-  }, [orgId, activeTab, filterClient, loadTickets]);
-
-  // Debounced search
-  useEffect(() => {
-    if (!orgId) return;
-    const handler = setTimeout(() => {
-      setLoading(true);
-      loadTickets();
-    }, 300);
-    return () => clearTimeout(handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [orgId, loadTickets]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -278,23 +289,84 @@ export default function TicketsPage() {
   // ─── Handlers ───────────────────────────────────────────────
   const handleTabChange = (v: string) => {
     const next = v as StatusTab;
-    setActiveTab(next);
-    syncUrl({ status: next });
+    // Cambiar de tab → reset sort para que el default por tab tome efecto.
+    applyFilters({ status: next, sortBy: null, sortOrder: null });
+  };
+
+  const handleSearchChange = (value: string) => {
+    applyFilters({ search: value });
+  };
+
+  const handleSortChange = (value: string) => {
+    if (value === 'resolvedAt_desc') {
+      applyFilters({ sortBy: 'resolvedAt', sortOrder: 'desc' });
+    } else if (value === 'overshoot_desc') {
+      applyFilters({ sortBy: 'overshoot', sortOrder: 'desc' });
+    } else {
+      applyFilters({ sortBy: null, sortOrder: null });
+    }
   };
 
   const openPanel = (ticketId: string) => {
     setPanelTicketId(ticketId);
     setPanelOpen(true);
-    syncUrl({ ticket: ticketId, panel: 'open' });
+    syncPanelUrl({ ticket: ticketId, panel: 'open' });
   };
 
   const closePanel = (open: boolean) => {
     setPanelOpen(open);
     if (!open) {
-      syncUrl({ ticket: null, panel: null });
+      syncPanelUrl({ ticket: null, panel: null });
       setPanelTicketId(null);
     }
   };
+
+  // ─── Export CSV (T12) ────────────────────────────────────────
+  const handleExportCsv = useCallback(async () => {
+    if (!orgId || exporting) return;
+    setExporting(true);
+    try {
+      // Construye el QS con los mismos filtros del listing (sin cursor/limit).
+      const params = new URLSearchParams();
+      const q = buildBackendQuery(filters);
+      for (const [k, v] of Object.entries(q)) {
+        if (v !== undefined && v !== '') params.append(k, String(v));
+      }
+      const qs = params.toString();
+      const url = `${API_URL}/api/v1/organizations/${orgId}/tickets/export-csv${qs ? `?${qs}` : ''}`;
+
+      const token = getToken();
+      const res = await fetch(url, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!res.ok) {
+        if (res.status === 403) {
+          toast.error('Sin permisos', 'No tenés permiso para exportar tickets');
+        } else {
+          toast.error('Error', `No se pudo exportar (HTTP ${res.status})`);
+        }
+        return;
+      }
+
+      const blob = await res.blob();
+      const filename = `tickets-${new Date().toISOString().slice(0, 10)}.csv`;
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+      toast.success('Descarga iniciada', `${filename}`);
+    } catch (err) {
+      toast.error('Error', err instanceof Error ? err.message : 'No se pudo exportar');
+    } finally {
+      setExporting(false);
+    }
+  }, [orgId, filters, exporting]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -340,17 +412,31 @@ export default function TicketsPage() {
       IN_PROGRESS: stats?.IN_PROGRESS ?? 0,
       IN_REVIEW: stats?.IN_REVIEW ?? 0,
       RESOLVED: stats?.RESOLVED ?? 0,
-      CLOSED: stats?.CLOSED ?? 0,
       all: stats?.TOTAL ?? 0,
     };
   }, [stats]);
 
-  const hasActiveFilters = filterPriority !== null || filterCategory !== null || filterClient !== null;
+  // Filtros del toolbar simple (criticality basico, category basico) usan
+  // el primer item del array si esta seteado, para mantener compatibilidad
+  // con el dropdown viejo (single-select estilo). El facets panel maneja
+  // multi-select completo.
+  const filterPriority = filters.criticality[0] ?? null;
+  const filterCategory = filters.category[0] ?? null;
+  const filterClient = filters.clientId;
 
-  // Filtros client-side adicionales sobre la lista paginada
+  const hasActiveFilters =
+    filterPriority !== null ||
+    filterCategory !== null ||
+    filterClient !== null ||
+    !!filters.search;
+
+  const activeFacetsCount = countActiveFacets(filters);
+
+  // Filtros client-side adicionales sobre la lista paginada (defensivo:
+  // por si el backend no filtra todavia algun campo).
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
-      const matchesPriority = !filterPriority || t.priority === filterPriority;
+      const matchesPriority = !filterPriority || t.priority === filterPriority || t.criticality === filterPriority;
       const matchesCategory = !filterCategory || t.category === filterCategory;
       return matchesPriority && matchesCategory;
     });
@@ -375,6 +461,12 @@ export default function TicketsPage() {
     const kanbanStatus = ticket.task?.boardColumn?.mappedStatus;
     const kanbanLabel = kanbanStatus ? KANBAN_STATUS_LABEL[kanbanStatus] : null;
     const assignee = ticket.task?.assignments?.[0]?.user;
+
+    const isResolvedTab = activeTab === 'RESOLVED';
+    // Para RESOLVED: tiempo total de resolucion (createdAt → closedAt/resolvedAt).
+    const resolvedAt = ticket.closedAt; // closedAt + resolvedAt comparten semantica post-feature #10
+    const resolutionMin =
+      isResolvedTab && resolvedAt ? diffMin(ticket.createdAt, resolvedAt) : 0;
 
     return (
       <button
@@ -405,7 +497,7 @@ export default function TicketsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {breached && (
+                  {!isResolvedTab && breached && (
                     <span
                       className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive"
                       title="SLA vencido"
@@ -413,6 +505,7 @@ export default function TicketsPage() {
                       <ShieldAlert className="h-3 w-3" /> SLA
                     </span>
                   )}
+                  {isResolvedTab && <SlaBadge ticket={ticket} />}
                   <Badge className={cn(status, 'text-[10px]')}>{STATUS_LABEL[ticket.status]}</Badge>
                 </div>
               </div>
@@ -421,15 +514,19 @@ export default function TicketsPage() {
                 <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                   {catLabel}
                 </span>
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                    critStyle.bg,
-                  )}
-                >
-                  <AlertTriangle className="h-2.5 w-2.5" /> {critStyle.label}
-                </span>
-                {kanbanLabel && (
+                {isResolvedTab ? (
+                  <CriticalityBadge level={crit} />
+                ) : (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                      critStyle.bg,
+                    )}
+                  >
+                    <AlertTriangle className="h-2.5 w-2.5" /> {critStyle.label}
+                  </span>
+                )}
+                {kanbanLabel && !isResolvedTab && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-info/10 px-2 py-0.5 text-[10px] font-medium text-info"
                     title="Estado en Kanban"
@@ -445,6 +542,14 @@ export default function TicketsPage() {
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" /> {formatDate(ticket.createdAt)}
                 </span>
+                {isResolvedTab && resolutionMin > 0 && (
+                  <span
+                    className="flex items-center gap-1 font-medium text-foreground/80"
+                    title="Tiempo total de resolucion"
+                  >
+                    <CheckCircle2 className="h-3 w-3 text-success" /> Resuelto en {humanizeDelta(resolutionMin)}
+                  </span>
+                )}
                 {assignee && (
                   <span className="text-foreground/80">{assignee.name}</span>
                 )}
@@ -653,16 +758,57 @@ export default function TicketsPage() {
             ))}
           </TabsList>
 
-          <div className="flex items-center gap-2 sm:ml-auto">
+          <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
             <div className="relative flex-1 sm:w-64">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Buscar..."
                 className="pl-9 h-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={filters.search}
+                onChange={(e) => handleSearchChange(e.target.value)}
               />
             </div>
+
+            {/* Sort selector — visible solo en tab Resuelto */}
+            {activeTab === 'RESOLVED' && (
+              <Select
+                value={
+                  effectiveSort?.sortBy === 'overshoot'
+                    ? 'overshoot_desc'
+                    : 'resolvedAt_desc'
+                }
+                onValueChange={handleSortChange}
+              >
+                <SelectTrigger className="h-9 w-44 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="resolvedAt_desc">Mas recientes</SelectItem>
+                  <SelectItem value="overshoot_desc">Peor overshoot</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
+            {/* "Mas filtros" panel — siempre disponible, util sobre todo en RESOLVED */}
+            <TicketsFacetsPanel
+              filters={filters}
+              onApply={(patch) => applyFilters(patch)}
+              onClear={() => {
+                applyFilters({
+                  slaOutcome: [],
+                  criticality: filters.criticality, // mantiene el toolbar basico
+                  category: filters.category,
+                  overshootBucket: null,
+                  clientId: null,
+                  projectId: null,
+                  resolvedFrom: null,
+                  resolvedTo: null,
+                });
+              }}
+              activeCount={activeFacetsCount}
+            />
+
+            {/* Filtros toolbar basico (criticidad/tipo/cliente single-select) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -685,7 +831,9 @@ export default function TicketsPage() {
                   <DropdownMenuCheckboxItem
                     key={p}
                     checked={filterPriority === p}
-                    onCheckedChange={(checked) => setFilterPriority(checked ? p : null)}
+                    onCheckedChange={(checked) =>
+                      applyFilters({ criticality: checked ? [p] : [] })
+                    }
                   >
                     {criticalityConfig[p]?.label || p}
                   </DropdownMenuCheckboxItem>
@@ -696,7 +844,9 @@ export default function TicketsPage() {
                   <DropdownMenuCheckboxItem
                     key={t}
                     checked={filterCategory === t}
-                    onCheckedChange={(checked) => setFilterCategory(checked ? t : null)}
+                    onCheckedChange={(checked) =>
+                      applyFilters({ category: checked ? [t] : [] })
+                    }
                   >
                     {categoryLabelMap[t] || t}
                   </DropdownMenuCheckboxItem>
@@ -709,7 +859,9 @@ export default function TicketsPage() {
                       <DropdownMenuCheckboxItem
                         key={c.id}
                         checked={filterClient === c.id}
-                        onCheckedChange={(checked) => setFilterClient(checked ? c.id : null)}
+                        onCheckedChange={(checked) =>
+                          applyFilters({ clientId: checked ? c.id : null })
+                        }
                       >
                         {c.name}
                       </DropdownMenuCheckboxItem>
@@ -721,20 +873,34 @@ export default function TicketsPage() {
                     <DropdownMenuSeparator />
                     <DropdownMenuCheckboxItem
                       checked={false}
-                      onCheckedChange={() => {
-                        setFilterPriority(null);
-                        setFilterCategory(null);
-                        setFilterClient(null);
-                      }}
+                      onCheckedChange={() => resetFilters()}
                     >
-                      Limpiar filtros
+                      Limpiar todos
                     </DropdownMenuCheckboxItem>
                   </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Menu "Mas" — para acceder a Todos (admin only feel) */}
+            {/* Boton Exportar CSV — visible solo en tab Resuelto */}
+            {activeTab === 'RESOLVED' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={handleExportCsv}
+                disabled={exporting}
+              >
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">{exporting ? 'Generando...' : 'Exportar CSV'}</span>
+              </Button>
+            )}
+
+            {/* Menu "Mas" — para acceder a Todos */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-9 gap-1">
@@ -764,7 +930,7 @@ export default function TicketsPage() {
             <div className="flex flex-col items-center py-16 text-center">
               <TicketIcon className="mb-3 h-10 w-10 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">
-                {search || hasActiveFilters
+                {filters.search || hasActiveFilters || activeFacetsCount > 0
                   ? 'No se encontraron tickets con esos filtros'
                   : activeTab === 'all'
                   ? 'No hay tickets de soporte aun'

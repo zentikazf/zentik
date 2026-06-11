@@ -34,10 +34,9 @@ interface OrgMember {
 interface TicketActionBarProps {
   ticket: TicketDetail;
   onUpdated: (updated: TicketDetail) => void;
-  onCloseRequested: () => void;
 }
 
-export function TicketActionBar({ ticket, onUpdated, onCloseRequested }: TicketActionBarProps) {
+export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
   const { orgId } = useOrg();
   const currentAssignee = ticket.task?.assignments?.[0]?.user ?? null;
 
@@ -76,12 +75,6 @@ export function TicketActionBar({ ticket, onUpdated, onCloseRequested }: TicketA
 
   const handleConfirm = async () => {
     if (!hasChanges || saving) return;
-
-    // Si quiere CLOSED, abrir el form de cierre en lugar de PATCH directo
-    if (status === 'CLOSED' && ticket.status !== 'CLOSED') {
-      onCloseRequested();
-      return;
-    }
 
     setSaving(true);
     try {

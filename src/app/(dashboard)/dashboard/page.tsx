@@ -37,6 +37,10 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { TicketsByTypeModal } from './_components/tickets-by-type-modal';
+import { TicketsByStatusModal } from './_components/tickets-by-status-modal';
+import { useTicketsBreakdown } from './_hooks/use-tickets-breakdown';
+import type { TicketCategoryActive } from '@/types/tickets-breakdown';
 
 // ── Mapeos de labels ──────────────────────────────────────────────────
 
@@ -116,7 +120,10 @@ function complianceColor(status: 'GREEN' | 'ORANGE' | 'RED'): { bar: string; bad
 
 // ── Types ─────────────────────────────────────────────────────────────
 
-type ModalType = 'projects' | 'pending' | 'completed' | 'members' | 'hours' | null;
+type ModalType = 'projects' | 'completed' | 'members' | 'hours' | null;
+
+// State machine del drill-down de tickets (Modal A -> Modal B).
+type TicketsModalState = 'none' | 'byType' | 'byStatus';
 
 // ── Main Component ────────────────────────────────────────────────────
 
@@ -150,6 +157,27 @@ export default function DashboardPage() {
   const [filterClientId, setFilterClientId] = useState('');
   const [filterMemberId, setFilterMemberId] = useState('');
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+
+  // Drill-down de tickets: state machine 'none' | 'byType' | 'byStatus'.
+  // Solo un Dialog activo a la vez para evitar conflictos de focus trap de Radix.
+  const [ticketsModalState, setTicketsModalState] = useState<TicketsModalState>('none');
+  const [selectedTicketCategory, setSelectedTicketCategory] = useState<TicketCategoryActive | null>(null);
+
+  // Filtros del breakdown — mismos del dashboard managerial. ISO para
+  // el contrato del backend (consistente con loadDashboard).
+  const ticketsBreakdownFilters = {
+    startDate: filterStartDate ? new Date(filterStartDate).toISOString() : undefined,
+    endDate: filterEndDate ? new Date(filterEndDate + 'T23:59:59').toISOString() : undefined,
+    clientId: filterClientId || undefined,
+    memberId: filterMemberId || undefined,
+  };
+  // Lazy fetch: solo dispara mientras el drill-down esta abierto. Compartido
+  // por ambos modales (Modal B no refetchea, lee del mismo data).
+  const ticketsBreakdown = useTicketsBreakdown(
+    orgId ?? undefined,
+    ticketsBreakdownFilters,
+    ticketsModalState !== 'none',
+  );
 
   // Permissions
   const canSeeProjects = hasPermission('read:projects');
@@ -356,7 +384,6 @@ export default function DashboardPage() {
   const getModalTitle = (): string => {
     switch (activeModal) {
       case 'projects': return 'Proyectos Activos';
-      case 'pending': return 'Tareas Pendientes';
       case 'completed': return 'Tareas Completadas';
       case 'members': return 'Miembros del Equipo';
       case 'hours': return 'Horas por Cliente';
@@ -413,8 +440,8 @@ export default function DashboardPage() {
           ═══════════════════════════════════════════════════════════════ */}
       {isManagerial ? (
         !dashboardData ? (
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-[120px] rounded-xl" />
             ))}
           </div>
@@ -486,22 +513,13 @@ export default function DashboardPage() {
           </div>
 
           {/* ── KPI Cards (clickables) ───────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
             <button onClick={() => setActiveModal('projects')} className="text-left">
               <StatCard
                 title="Proyectos Activos"
                 value={dashboardData.activeProjects?.count ?? 0}
                 icon={FolderKanban}
                 subtitle="Click para ver detalle"
-                className="hover:border-primary/40 transition-colors cursor-pointer"
-              />
-            </button>
-            <button onClick={() => setActiveModal('pending')} className="text-left">
-              <StatCard
-                title="Tareas Pendientes"
-                value={dashboardData.pendingTasks?.count ?? 0}
-                icon={Target}
-                subtitle="Pendiente, en desarrollo o en revisión"
                 className="hover:border-primary/40 transition-colors cursor-pointer"
               />
             </button>
@@ -534,15 +552,21 @@ export default function DashboardPage() {
                 className="hover:border-primary/40 transition-colors cursor-pointer"
               />
             </button>
-            <Link href="/tickets" className="text-left">
+            <button
+              onClick={() => {
+                setSelectedTicketCategory(null);
+                setTicketsModalState('byType');
+              }}
+              className="text-left"
+            >
               <StatCard
-                title="Tickets Abiertos"
+                title="Tickets"
                 value={dashboardData.openTickets?.count ?? 0}
                 icon={TicketCheck}
                 subtitle="Click para ver detalle"
                 className="hover:border-primary/40 transition-colors cursor-pointer"
               />
-            </Link>
+            </button>
           </div>
 
           {/* ── Pendientes de Aprobación (destacado, debajo de KPIs) ── */}
@@ -664,8 +688,25 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Equipo con Cumplimiento de Horas ─────────────────────── */}
-          {dashboardData.teamMembers?.items && dashboardData.teamMembers.items.length > 0 && (() => {
-            const team = dashboardData.teamMembers.items as any[];
+          {dashboardData.teamMembers && (() => {
+            const team = (dashboardData.teamMembers.items as any[]) || [];
+            // Empty-state: si no hay miembros internos, mostramos card con CTA
+            // en vez de ocultar el bloque (antes desaparecia y parecia bug).
+            if (team.length === 0) {
+              return (
+                <div className="rounded-xl border border-border bg-card p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    <h2 className="text-base font-semibold text-card-foreground">Equipo</h2>
+                  </div>
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    Sin miembros internos asignados aún. Invitá colaboradores
+                    (Owner / PM / Developer / QA / Designer) desde Configuración
+                    {' › '}Miembros para monitorear el cumplimiento de horas mensual.
+                  </p>
+                </div>
+              );
+            }
             const thresholds = dashboardData.teamMembers.thresholds || { green: 120, orange: 100 };
             const greenMin = thresholds.green;
             const orangeMin = thresholds.orange;
@@ -753,6 +794,40 @@ export default function DashboardPage() {
             );
           })()}
 
+          {/* ── Drill-down de Tickets (Modal A -> Modal B) ───────────────
+              State machine 'none' | 'byType' | 'byStatus'. Solo un Dialog
+              activo a la vez para evitar conflictos de focus trap de Radix.
+              Hook compartido en el padre: Modal B no refetchea, lee del
+              mismo data. */}
+          <TicketsByTypeModal
+            open={ticketsModalState === 'byType'}
+            onOpenChange={(open) => {
+              if (!open) setTicketsModalState('none');
+            }}
+            filters={ticketsBreakdownFilters}
+            data={ticketsBreakdown.data}
+            loading={ticketsBreakdown.loading}
+            error={ticketsBreakdown.error}
+            onRetry={ticketsBreakdown.refetch}
+            onTypeSelect={(category) => {
+              setSelectedTicketCategory(category);
+              setTicketsModalState('byStatus');
+            }}
+          />
+          <TicketsByStatusModal
+            open={ticketsModalState === 'byStatus'}
+            onOpenChange={(open) => {
+              if (!open) {
+                setTicketsModalState('none');
+                setSelectedTicketCategory(null);
+              }
+            }}
+            category={selectedTicketCategory}
+            data={ticketsBreakdown.data}
+            filters={ticketsBreakdownFilters}
+            onBack={() => setTicketsModalState('byType')}
+          />
+
           {/* ── KPI Modal ─────────────────────────────────────────────── */}
           <Dialog open={!!activeModal} onOpenChange={(open) => { if (!open) setActiveModal(null); }}>
             <DialogContent className="max-w-lg">
@@ -774,32 +849,6 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <PhaseBadge phase={p.status} label={statusLabels[p.status] || p.status} />
-                          <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-
-                  {activeModal === 'pending' && dashboardData.pendingTasks?.items?.map((t: any) => (
-                    <Link key={t.id} href={`/projects/${t.project?.id}/board`} className="block">
-                      <div className="flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-muted/50 group">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground">{t.title}</p>
-                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                            <span>{t.project?.name}</span>
-                            <span>{STATUS_LABELS[t.status] || t.status}</span>
-                            {t.dueDate && (
-                              <span className="flex items-center gap-0.5">
-                                <CalendarDays className="h-3 w-3" />
-                                {new Date(t.dueDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={`shrink-0 border-transparent text-[10px] ${(priorityConfig[t.priority] || priorityConfig.MEDIUM).color}`}>
-                            {(priorityConfig[t.priority] || priorityConfig.MEDIUM).label}
-                          </Badge>
                           <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                       </div>
