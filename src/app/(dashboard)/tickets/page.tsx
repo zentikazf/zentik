@@ -36,7 +36,6 @@ import {
   TicketIcon,
   Wifi,
   WifiOff,
-  XCircle,
   Eye,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
@@ -49,7 +48,7 @@ import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
 import type { TicketListItem, TicketStats, TicketStatus } from '@/types/ticket.types';
 
-type StatusTab = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED' | 'all';
+type StatusTab = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'all';
 
 interface CategoryConfig {
   id: string;
@@ -58,11 +57,10 @@ interface CategoryConfig {
 }
 
 const tabConfig: { value: StatusTab; label: string; icon: React.ElementType; dotColor: string }[] = [
-  { value: 'OPEN', label: 'Abiertos', icon: CircleDot, dotColor: 'bg-destructive' },
+  { value: 'OPEN', label: 'Abierto', icon: CircleDot, dotColor: 'bg-destructive' },
   { value: 'IN_PROGRESS', label: 'En progreso', icon: Loader2, dotColor: 'bg-warning' },
   { value: 'IN_REVIEW', label: 'En revision', icon: Eye, dotColor: 'bg-info' },
-  { value: 'RESOLVED', label: 'Resueltos', icon: CheckCircle2, dotColor: 'bg-success' },
-  { value: 'CLOSED', label: 'Cerrados', icon: XCircle, dotColor: 'bg-muted-foreground' },
+  { value: 'RESOLVED', label: 'Resuelto', icon: CheckCircle2, dotColor: 'bg-success' },
 ];
 
 const categoryLabelMap: Record<string, string> = {
@@ -85,7 +83,13 @@ export default function TicketsPage() {
   const searchParams = useSearchParams();
 
   // Vista por defecto: Abiertos (NO Todos)
-  const initialTab = (searchParams.get('status') as StatusTab) || 'OPEN';
+  // Legacy: si la URL trae status=CLOSED (URL vieja o cookie antigua),
+  // degradar a OPEN. CLOSED ya no es un estado válido en UI (feature #10).
+  const rawInitialTab = searchParams.get('status') as StatusTab | 'CLOSED' | null;
+  const initialTab: StatusTab =
+    rawInitialTab && rawInitialTab !== 'CLOSED' && rawInitialTab !== null
+      ? (rawInitialTab as StatusTab)
+      : 'OPEN';
   const initialTicketParam = searchParams.get('ticket');
   const initialPanelOpen = searchParams.get('panel') === 'open';
 
@@ -340,7 +344,6 @@ export default function TicketsPage() {
       IN_PROGRESS: stats?.IN_PROGRESS ?? 0,
       IN_REVIEW: stats?.IN_REVIEW ?? 0,
       RESOLVED: stats?.RESOLVED ?? 0,
-      CLOSED: stats?.CLOSED ?? 0,
       all: stats?.TOTAL ?? 0,
     };
   }, [stats]);
