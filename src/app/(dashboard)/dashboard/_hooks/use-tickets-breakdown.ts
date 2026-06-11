@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api-client';
 import type {
   TicketsBreakdownFilters,
@@ -38,8 +38,16 @@ export function useTicketsBreakdown(
   const [error, setError] = useState<ApiError | Error | null>(null);
   // refetchToken bump = nuevo ciclo del effect sin cambiar filters (retry).
   const [refetchToken, setRefetchToken] = useState(0);
+  // Dedupe defensivo: aunque el padre memoize filters, en algunos casos React
+  // dispara el effect varias veces seguidas (StrictMode, batches de setState
+  // consecutivos). Comparamos el query serializado contra el ultimo ejecutado
+  // y salimos early si es identico — previene 2-3 calls duplicados al mismo
+  // endpoint en milisegundos sin afectar el refetch manual (que bumpea token).
+  const lastQueryRef = useRef<string | null>(null);
 
   const refetch = useCallback(() => {
+    // Limpiar ref para que el effect dispare aunque los filtros no cambien.
+    lastQueryRef.current = null;
     setRefetchToken((t) => t + 1);
   }, []);
 
@@ -47,8 +55,6 @@ export function useTicketsBreakdown(
     if (!enabled || !orgId) return;
 
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     const params = new URLSearchParams();
     if (filters.startDate) params.set('startDate', filters.startDate);
@@ -57,6 +63,13 @@ export function useTicketsBreakdown(
     if (filters.memberId) params.set('memberId', filters.memberId);
     const qs = params.toString();
     const endpoint = `/organizations/${orgId}/dashboard/tickets-breakdown${qs ? `?${qs}` : ''}`;
+
+    // Dedupe: misma query ya en flight o ya completada -> no re-fetch.
+    if (lastQueryRef.current === endpoint) return;
+    lastQueryRef.current = endpoint;
+
+    setLoading(true);
+    setError(null);
 
     api
       .get<TicketsBreakdownResponse>(endpoint)

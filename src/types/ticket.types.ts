@@ -16,7 +16,12 @@ export type TicketEventType =
   | 'KANBAN_MOVE'
   | 'CLOSED'
   | 'REOPENED'
-  | 'COMMENT_ADDED';
+  | 'COMMENT_ADDED'
+  | 'FIRST_RESPONSE'
+  | 'RESOLVED'
+  | 'SLA_WARNING'
+  | 'SLA_BREACH_RESPONSE'
+  | 'SLA_BREACH_RESOLUTION';
 
 export type TicketEventSource = 'TICKET' | 'KANBAN' | 'SYSTEM';
 

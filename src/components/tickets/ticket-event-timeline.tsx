@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowRight, GitBranch, MessageSquare, UserPlus, UserMinus, Lock, RefreshCcw } from 'lucide-react';
+import {
+  ArrowRight, GitBranch, MessageSquare, UserPlus, UserMinus, Lock, RefreshCcw,
+  Send, CheckCircle2, Clock, AlertTriangle, AlertOctagon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ticketService } from '@/services/ticket.service';
 import { STATUS_LABEL, KANBAN_STATUS_LABEL } from './ticket-status-machine';
@@ -21,6 +24,11 @@ const EVENT_ICON: Record<string, React.ElementType> = {
   CLOSED: Lock,
   REOPENED: RefreshCcw,
   COMMENT_ADDED: MessageSquare,
+  FIRST_RESPONSE: Send,
+  RESOLVED: CheckCircle2,
+  SLA_WARNING: Clock,
+  SLA_BREACH_RESPONSE: AlertTriangle,
+  SLA_BREACH_RESOLUTION: AlertOctagon,
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -53,6 +61,17 @@ function describeEvent(ev: TicketEvent): string {
     return reason ? `Cerrado (${reason})` : 'Cerrado';
   }
   if (ev.type === 'REOPENED') return 'Reabierto';
+  if (ev.type === 'FIRST_RESPONSE') return 'El equipo respondió por primera vez';
+  if (ev.type === 'RESOLVED') return 'Ticket resuelto';
+  if (ev.type === 'SLA_WARNING') {
+    const meta = ev.metadata as Record<string, unknown> | null;
+    const pct = meta?.progress ?? meta?.progressPct;
+    return typeof pct === 'number'
+      ? `Alerta SLA: ${Math.round(pct)}% del tiempo consumido`
+      : 'Alerta SLA: tiempo agotándose';
+  }
+  if (ev.type === 'SLA_BREACH_RESPONSE') return 'SLA de respuesta vencido';
+  if (ev.type === 'SLA_BREACH_RESOLUTION') return 'SLA de resolución vencido';
   return ev.type;
 }
 

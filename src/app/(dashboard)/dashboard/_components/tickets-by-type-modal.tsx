@@ -158,68 +158,30 @@ export function TicketsByTypeModal({
                 const meta = CATEGORY_META[category];
                 const block = data.byCategory[category];
                 const Icon = meta.icon;
-                const compliancePct = block.sla.compliancePct;
                 return (
                   <button
                     key={category}
                     type="button"
                     onClick={() => onTypeSelect(category)}
-                    className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="rounded-lg bg-accent p-2">
-                          <Icon className={`h-5 w-5 ${meta.accent}`} />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                            {meta.label}
-                          </p>
-                          <p className="text-3xl font-bold tracking-tight text-card-foreground">
-                            {block.total}
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-accent p-2.5">
+                        <Icon className={`h-6 w-6 ${meta.accent}`} />
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                          {meta.label}
+                        </p>
+                        <p className="text-4xl font-bold tracking-tight text-card-foreground leading-none">
+                          {block.total}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          tickets · click para desglose por estado
+                        </p>
+                      </div>
                     </div>
-
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <ShieldCheck className="h-3 w-3 text-success" />
-                          SLA cumplido
-                        </span>
-                        <span className="font-semibold text-card-foreground">
-                          {compliancePct === null ? '—' : `${compliancePct}%`}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Breach respuesta</span>
-                        <span className="font-semibold text-card-foreground">
-                          {block.sla.breachedResponse}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Breach resolución</span>
-                        <span className="font-semibold text-card-foreground">
-                          {block.sla.breachedResolution}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Overshoot prom.</span>
-                        <span className="font-semibold text-card-foreground">
-                          {formatOvershoot(block.sla.avgOvershootMin)}
-                        </span>
-                      </div>
-                      {block.sla.noSlaCount > 0 && (
-                        <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                          <span className="text-muted-foreground">Sin SLA</span>
-                          <span className="font-semibold text-card-foreground">
-                            {block.sla.noSlaCount}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </button>
                 );
               },
