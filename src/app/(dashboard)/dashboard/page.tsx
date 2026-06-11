@@ -519,7 +519,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ── KPI Cards (clickables) ───────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <button onClick={() => setActiveModal('projects')} className="text-left">
               <StatCard
                 title="Proyectos Activos"
@@ -540,24 +540,6 @@ export default function DashboardPage() {
                 className="hover:border-primary/40 transition-colors cursor-pointer"
               />
             </button>
-            <button onClick={() => setActiveModal('members')} className="text-left">
-              <StatCard
-                title="Equipo"
-                value={dashboardData.teamMembers?.count ?? 0}
-                icon={Users}
-                subtitle="Colaboradores activos"
-                className="hover:border-primary/40 transition-colors cursor-pointer"
-              />
-            </button>
-            <button onClick={() => setActiveModal('hours')} className="text-left">
-              <StatCard
-                title="Horas Equipo"
-                value={`${dashboardData.hours?.totalHours ?? 0}h`}
-                icon={Timer}
-                subtitle={dashboardData.hours?.billableHours ? `${dashboardData.hours.billableHours}h facturables` : 'Total registradas'}
-                className="hover:border-primary/40 transition-colors cursor-pointer"
-              />
-            </button>
             <button
               onClick={() => {
                 setSelectedTicketCategory(null);
@@ -573,6 +555,27 @@ export default function DashboardPage() {
                 className="hover:border-primary/40 transition-colors cursor-pointer"
               />
             </button>
+            <button onClick={() => setActiveModal('members')} className="text-left">
+              <StatCard
+                title="Equipo"
+                value={dashboardData.teamMembers?.count ?? 0}
+                icon={Users}
+                subtitle="Colaboradores activos"
+                className="hover:border-primary/40 transition-colors cursor-pointer"
+              />
+            </button>
+            {/* Card "Horas Equipo" oculto temporalmente — el modal "Horas por Cliente"
+                que abre tampoco se usa ahora. Reactivar quitando este comentario.
+            <button onClick={() => setActiveModal('hours')} className="text-left">
+              <StatCard
+                title="Horas Equipo"
+                value={`${dashboardData.hours?.totalHours ?? 0}h`}
+                icon={Timer}
+                subtitle={dashboardData.hours?.billableHours ? `${dashboardData.hours.billableHours}h facturables` : 'Total registradas'}
+                className="hover:border-primary/40 transition-colors cursor-pointer"
+              />
+            </button>
+            */}
           </div>
 
           {/* ── Pendientes de Aprobación (destacado, debajo de KPIs) ── */}
