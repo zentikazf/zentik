@@ -147,61 +147,14 @@ export function TicketsByStatusModal({
                     </div>
                   </div>
 
-                  <p className="text-3xl font-bold tracking-tight text-card-foreground">
+                  <p className="text-4xl font-bold tracking-tight text-card-foreground leading-none">
                     {bucket.count}
                   </p>
-
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <ShieldCheck className="h-3 w-3 text-success" />
-                        OK
-                      </span>
-                      <span className="font-semibold text-card-foreground">
-                        {bucket.complied}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="h-3 w-3 text-warning" />
-                        B. respuesta
-                      </span>
-                      <span className="font-semibold text-card-foreground">
-                        {bucket.breachedResponse}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <ShieldAlert className="h-3 w-3 text-destructive" />
-                        B. resolución
-                      </span>
-                      <span className="font-semibold text-card-foreground">
-                        {bucket.breachedResolution}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <Timer className="h-3 w-3 text-muted-foreground" />
-                        Overshoot
-                      </span>
-                      <span className="font-semibold text-card-foreground">
-                        {formatOvershoot(bucket.avgOvershootMin)}
-                      </span>
-                    </div>
-                    {bucket.noSla > 0 && (
-                      <div className="flex items-center justify-between pt-1 border-t border-border/50">
-                        <span className="text-muted-foreground">Sin SLA</span>
-                        <span className="font-semibold text-card-foreground">
-                          {bucket.noSla}
-                        </span>
-                      </div>
-                    )}
-                  </div>
 
                   <Button
                     size="sm"
                     variant="outline"
-                    className="mt-1 gap-1.5"
+                    className="mt-auto gap-1.5"
                     onClick={() => handleViewList(key)}
                     disabled={bucket.count === 0}
                   >
