@@ -46,6 +46,7 @@ import { ticketService } from '@/services/ticket.service';
 import { useTicketsSocket } from '@/hooks/use-tickets-socket';
 import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
 import { TicketsFacetsPanel, countActiveFacets } from '@/components/tickets/tickets-facets-panel';
+import { OnnixSyncButton } from '@/components/tickets/onnix-sync-button';
 import { SlaBadge, CriticalityBadge } from '@/components/tickets/ticket-resolved-badges';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
 import {
@@ -611,6 +612,8 @@ export default function TicketsPage() {
               <CircleDot className="h-3 w-3" /> {counts.OPEN} abiertos
             </div>
           )}
+          {/* Sincronizar a Onnix — solo roles internos (feature #13) */}
+          <OnnixSyncButton />
           <Dialog open={showCreate} onOpenChange={setShowCreate}>
             <DialogTrigger asChild>
               <Button>
