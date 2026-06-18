@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -75,8 +76,22 @@ interface BusinessHours {
  timezone: string;
 }
 
+const EMPTY_FORM = {
+ projectId: '',
+ title: '',
+ description: '',
+ category: '',
+ priority: 'MEDIUM',
+ projectName: '',
+ projectDescription: '',
+ relatedTicketId: '',
+};
+
 export default function PortalTicketsPage() {
  const { user } = useAuth();
+ const router = useRouter();
+ const pathname = usePathname();
+ const searchParams = useSearchParams();
  const [tickets, setTickets] = useState<TicketItem[]>([]);
  const [projects, setProjects] = useState<ProjectOption[]>([]);
  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
@@ -89,19 +104,53 @@ export default function PortalTicketsPage() {
  const [showCreate, setShowCreate] = useState(false);
  const [creating, setCreating] = useState(false);
  const [attachFile, setAttachFile] = useState<File | null>(null);
- const [form, setForm] = useState({
- projectId: '',
- title: '',
- description: '',
- category: '',
- priority: 'MEDIUM',
- projectName: '',
- projectDescription: '',
- });
+ const [form, setForm] = useState({ ...EMPTY_FORM });
 
  useEffect(() => {
  loadData();
  }, [onlyMine]);
+
+ // Flujo "Crear nueva consulta" desde un ticket RESOLVED: el modal "¿mismo tema?"
+ // navega aca con ?related=<id>&same=1|0. Pre-rellenamos el form y abrimos el
+ // modal de creacion; si same=1 traemos title/description del ticket relacionado.
+ // Limpiamos los query params al consumirlos para que un reload no re-dispare esto.
+ useEffect(() => {
+ const relatedTicketId = searchParams.get('related');
+ if (!relatedTicketId) return;
+ const sameTopic = searchParams.get('same') === '1';
+
+ const prefillFromRelated = async () => {
+ // category SUPPORT_REQUEST porque el flujo arranca desde un ticket de soporte
+ // del portal; el cliente puede ajustar el tipo antes de enviar.
+ setForm({ ...EMPTY_FORM, relatedTicketId, category: 'SUPPORT_REQUEST' });
+
+ if (sameTopic) {
+ try {
+ const res = await api.get<any>(`/portal/tickets/${relatedTicketId}`);
+ const related = res.data;
+ if (related) {
+ setForm((prev) => ({
+ ...prev,
+ title: related.title || '',
+ description: related.description || '',
+ projectId: related.project?.id || '',
+ }));
+ }
+ } catch {
+ // Si no se puede traer el ticket relacionado, abrimos el form vacio igual
+ // (relatedTicketId queda seteado para preservar la trazabilidad).
+ toast.error('Aviso', 'No se pudo precargar el ticket anterior. Completa los datos manualmente.');
+ }
+ }
+
+ setShowCreate(true);
+ // Limpiar los query params consumidos (evita re-disparo en reload).
+ router.replace(pathname);
+ };
+
+ prefillFromRelated();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [searchParams]);
 
  const loadData = async () => {
  try {
@@ -142,7 +191,7 @@ export default function PortalTicketsPage() {
  });
  toast.success('Solicitud enviada', 'Tu solicitud de nuevo proyecto fue enviada al equipo');
  setShowCreate(false);
- setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', projectName: '', projectDescription: '' });
+ setForm({ ...EMPTY_FORM });
  await loadData();
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al enviar la solicitud');
@@ -169,6 +218,7 @@ export default function PortalTicketsPage() {
  description: form.description.trim() || undefined,
  category: form.category,
  priority: form.priority,
+ relatedTicketId: form.relatedTicketId || undefined,
  });
 
  // Upload optional attachment to the ticket channel
@@ -187,7 +237,7 @@ export default function PortalTicketsPage() {
  toast.success('Ticket creado', `Tu ticket #${ticketNum} fue enviado al equipo`);
  setShowCreate(false);
  setAttachFile(null);
- setForm({ projectId: '', title: '', description: '', category: '', priority: 'MEDIUM', projectName: '', projectDescription: '' });
+ setForm({ ...EMPTY_FORM });
  await loadData();
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear el ticket');
