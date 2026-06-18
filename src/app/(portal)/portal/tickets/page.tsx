@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -17,14 +17,9 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
-
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
- OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
- IN_PROGRESS: { label: 'En Proceso', color: 'bg-warning/10 text-warning' },
- IN_REVIEW: { label: 'En Revision', color: 'bg-info/10 text-info' },
- RESOLVED: { label: 'Resuelto', color: 'bg-success/10 text-success' },
- CLOSED: { label: 'Cerrado', color: 'bg-muted text-muted-foreground' },
-};
+import { TicketsPagination } from '@/components/tickets/tickets-pagination';
+import { STATUS_BADGE, STATUS_DOT, STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
+import type { TicketStatus } from '@/types/ticket.types';
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
  SUPPORT_REQUEST: { label: 'Soporte', color: 'bg-warning/10 text-warning' },
@@ -32,15 +27,17 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
  NEW_PROJECT: { label: 'Nuevo Proyecto', color: 'bg-primary/10 text-primary' },
 };
 
-type StatusTab = 'all' | 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED';
+// Tabs del portal estilo admin: dot + contador. SIN tab "Cerrados" (colapsa
+// en Resueltos — feature #12). Las etiquetas reusan STATUS_LABEL salvo el
+// plural de "Todos".
+type StatusTab = 'all' | 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED';
 
 const tabConfig: { value: StatusTab; label: string; dotColor: string }[] = [
  { value: 'all', label: 'Todos', dotColor: '' },
- { value: 'OPEN', label: 'Abiertos', dotColor: 'bg-primary' },
- { value: 'IN_PROGRESS', label: 'En Proceso', dotColor: 'bg-warning' },
- { value: 'IN_REVIEW', label: 'En Revision', dotColor: 'bg-info' },
- { value: 'RESOLVED', label: 'Resueltos', dotColor: 'bg-success' },
- { value: 'CLOSED', label: 'Cerrados', dotColor: 'bg-muted-foreground' },
+ { value: 'OPEN', label: 'Abiertos', dotColor: STATUS_DOT.OPEN },
+ { value: 'IN_PROGRESS', label: 'En Proceso', dotColor: STATUS_DOT.IN_PROGRESS },
+ { value: 'IN_REVIEW', label: 'En Revision', dotColor: STATUS_DOT.IN_REVIEW },
+ { value: 'RESOLVED', label: 'Resueltos', dotColor: STATUS_DOT.RESOLVED },
 ];
 
 interface TicketItem {
@@ -76,6 +73,8 @@ interface BusinessHours {
  timezone: string;
 }
 
+const PAGE_SIZE = 10;
+
 const EMPTY_FORM = {
  projectId: '',
  title: '',
@@ -92,7 +91,11 @@ export default function PortalTicketsPage() {
  const router = useRouter();
  const pathname = usePathname();
  const searchParams = useSearchParams();
+ // `tickets` = set COMPLETO del cliente (el endpoint devuelve todos). El
+ // filtrado (tab/search/proyecto/onlyMine), los contadores y la paginacion
+ // se hacen 100% client-side — volumen bajo por cliente (feature #12, opcion B).
  const [tickets, setTickets] = useState<TicketItem[]>([]);
+ const [page, setPage] = useState(1);
  const [projects, setProjects] = useState<ProjectOption[]>([]);
  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
  const [businessHours, setBusinessHours] = useState<BusinessHours | null>(null);
@@ -106,9 +109,18 @@ export default function PortalTicketsPage() {
  const [attachFile, setAttachFile] = useState<File | null>(null);
  const [form, setForm] = useState({ ...EMPTY_FORM });
 
+ // Carga inicial: trae TODOS los tickets del cliente una sola vez.
  useEffect(() => {
  loadData();
- }, [onlyMine]);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, []);
+
+ // Reset a pagina 1 cuando cambia cualquier filtro client-side (tab, busqueda,
+ // proyecto, "Mis tickets"). Sin esto, al filtrar podriamos quedar en una
+ // pagina vacia (p.ej. estabas en pag 3 y el filtro deja solo 8 resultados).
+ useEffect(() => {
+ setPage(1);
+ }, [activeTab, search, filterProject, onlyMine]);
 
  // Flujo "Crear nueva consulta" desde un ticket RESOLVED: el modal "¿mismo tema?"
  // navega aca con ?related=<id>&same=1|0. Pre-rellenamos el form y abrimos el
@@ -154,16 +166,17 @@ export default function PortalTicketsPage() {
 
  const loadData = async () => {
  try {
- const ticketParams = new URLSearchParams();
- if (onlyMine && user?.id) ticketParams.set('createdByUserId', user.id);
- const qs = ticketParams.toString() ? `?${ticketParams.toString()}` : '';
  const [ticketsRes, projectsRes, catRes, bhRes] = await Promise.all([
- api.get<any>(`/portal/tickets${qs}`),
+ api.get<any>('/portal/tickets'),
  api.get<any>('/portal/projects'),
  api.get<any>('/portal/ticket-categories').catch(() => ({ data: [] })),
  api.get<any>('/portal/business-hours').catch(() => ({ data: null })),
  ]);
- setTickets(Array.isArray(ticketsRes.data) ? ticketsRes.data : ticketsRes.data?.data || []);
+ // El endpoint devuelve { data, meta: { total } } con TODOS los tickets del
+ // cliente. Defensivo ante array legacy por si el backend aun no esta desplegado.
+ const body = ticketsRes.data;
+ const list: TicketItem[] = Array.isArray(body) ? body : body?.data || [];
+ setTickets(list);
  setProjects(Array.isArray(projectsRes.data) ? projectsRes.data : projectsRes.data?.data || []);
  const cats = Array.isArray(catRes.data) ? catRes.data : catRes.data?.data || [];
  setDynamicCategories(cats);
@@ -173,6 +186,12 @@ export default function PortalTicketsPage() {
  } finally {
  setLoading(false);
  }
+ };
+
+ // Cambio de pagina 100% client-side: solo mueve el offset del slice.
+ const handlePageChange = (target: number) => {
+ setPage(target);
+ window.scrollTo({ top: 0, behavior: 'smooth' });
  };
 
  const handleCreate = async (e: React.FormEvent) => {
@@ -192,6 +211,7 @@ export default function PortalTicketsPage() {
  toast.success('Solicitud enviada', 'Tu solicitud de nuevo proyecto fue enviada al equipo');
  setShowCreate(false);
  setForm({ ...EMPTY_FORM });
+ setPage(1);
  await loadData();
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al enviar la solicitud');
@@ -238,6 +258,7 @@ export default function PortalTicketsPage() {
  setShowCreate(false);
  setAttachFile(null);
  setForm({ ...EMPTY_FORM });
+ setPage(1);
  await loadData();
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear el ticket');
@@ -246,39 +267,49 @@ export default function PortalTicketsPage() {
  }
  };
 
- const counts = {
- all: tickets.length,
- OPEN: tickets.filter((t) => t.status === 'OPEN').length,
- IN_PROGRESS: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
- IN_REVIEW: tickets.filter((t) => t.status === 'IN_REVIEW').length,
- RESOLVED: tickets.filter((t) => t.status === 'RESOLVED').length,
- CLOSED: tickets.filter((t) => t.status === 'CLOSED').length,
- };
-
- const getFilteredTickets = (tab: StatusTab) => {
- return tickets.filter((t) => {
+ // Filtros NO-tab (search + proyecto + "Mis tickets") sobre el set COMPLETO.
+ // Base para los contadores de tabs Y para la lista visible — asi los counts
+ // y el listado siempre cuadran entre si.
+ const baseFiltered = useMemo(() => {
  const q = search.toLowerCase();
+ return tickets.filter((t) => {
  const matchesSearch = !q || t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || (t.ticketNumber || '').toLowerCase().includes(q);
- const matchesStatus = tab === 'all' || t.status === tab;
  const matchesProject = !filterProject || t.project?.id === filterProject;
- return matchesSearch && matchesStatus && matchesProject;
+ const matchesMine = !onlyMine || t.createdByUser?.id === user?.id;
+ return matchesSearch && matchesProject && matchesMine;
  });
- };
+ }, [tickets, search, filterProject, onlyMine, user?.id]);
+
+ // Contadores de tabs EXACTOS: count sobre el set completo ya filtrado por los
+ // OTROS filtros (no por la tab). Reflejan todos los tickets del cliente, no
+ // una pagina.
+ const counts = useMemo(
+ () => ({
+ all: baseFiltered.length,
+ OPEN: baseFiltered.filter((t) => t.status === 'OPEN').length,
+ IN_PROGRESS: baseFiltered.filter((t) => t.status === 'IN_PROGRESS').length,
+ IN_REVIEW: baseFiltered.filter((t) => t.status === 'IN_REVIEW').length,
+ RESOLVED: baseFiltered.filter((t) => t.status === 'RESOLVED').length,
+ }),
+ [baseFiltered],
+ );
+
+ const getFilteredTickets = (tab: StatusTab) =>
+ tab === 'all' ? baseFiltered : baseFiltered.filter((t) => t.status === tab);
 
  const renderTicketCard = (ticket: TicketItem) => {
- const statusConf = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
+ const status = ticket.status as TicketStatus;
+ const statusLabel = STATUS_LABEL[status] || STATUS_LABEL.OPEN;
+ const statusBadge = STATUS_BADGE[status] || STATUS_BADGE.OPEN;
+ const statusDot = STATUS_DOT[status] || STATUS_DOT.OPEN;
  const catConf = CATEGORY_CONFIG[ticket.category] || CATEGORY_CONFIG.SUPPORT_REQUEST;
 
  return (
  <Link key={ticket.id} href={`/portal/tickets/${ticket.id}`}>
  <div className="group rounded-xl bg-card p-3 sm:p-4 transition-all hover:shadow-md border border-border hover:border-primary/30 active:scale-[0.99]">
  <div className="flex items-start gap-2.5 sm:gap-3">
- {/* Status dot */}
- <div className={cn('mt-1.5 h-2 w-2 rounded-full shrink-0',
- ticket.status === 'OPEN' ? 'bg-primary' :
- ticket.status === 'IN_PROGRESS' ? 'bg-warning' :
- ticket.status === 'RESOLVED' ? 'bg-success' : 'bg-muted-foreground'
- )} />
+ {/* Status dot — reusa STATUS_DOT del status-machine */}
+ <div className={cn('mt-1.5 h-2 w-2 rounded-full shrink-0', statusDot)} />
 
  <div className="flex-1 min-w-0">
  {/* Title row */}
@@ -287,8 +318,8 @@ export default function PortalTicketsPage() {
  <span className="text-[10px] font-mono text-muted-foreground/50">#{ticket.ticketNumber || ticket.id.slice(-8).toUpperCase()}</span>
  <h3 className="text-[13px] sm:text-sm font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 sm:truncate leading-snug mt-0.5">{ticket.title}</h3>
  </div>
- <Badge className={cn(statusConf.color, 'border-none text-[10px] font-semibold shrink-0 whitespace-nowrap')}>
- {statusConf.label}
+ <Badge className={cn(statusBadge, 'text-[10px] font-semibold shrink-0 whitespace-nowrap')}>
+ {statusLabel}
  </Badge>
  </div>
 
@@ -325,20 +356,36 @@ export default function PortalTicketsPage() {
  };
 
  const renderTicketList = (tab: StatusTab) => {
- const list = getFilteredTickets(tab);
- if (list.length === 0) {
+ const filtered = getFilteredTickets(tab);
+ if (filtered.length === 0) {
  return (
  <div className="flex flex-col items-center py-12 sm:py-16 text-center px-4">
  <Ticket className="mb-3 h-8 w-8 sm:h-10 sm:w-10 text-muted-foreground/50"/>
  <p className="text-xs sm:text-sm text-muted-foreground">
- {search || filterProject
+ {search || filterProject || onlyMine
  ? 'No se encontraron tickets con esos filtros'
  : tab === 'all' ? 'No hay tickets aun' : `No hay tickets ${tabConfig.find((t) => t.value === tab)?.label.toLowerCase()}`}
  </p>
  </div>
  );
  }
- return <div className="space-y-2">{list.map(renderTicketCard)}</div>;
+ // Paginacion 100% client-side sobre el array ya filtrado.
+ const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+ const safePage = Math.min(page, totalPages);
+ const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+ return (
+ <div className="space-y-2">
+ {pageItems.map(renderTicketCard)}
+ {/* Paginacion numerada client-side: refleja el set FILTRADO (feature #12) */}
+ <TicketsPagination
+ page={safePage}
+ totalPages={totalPages}
+ total={filtered.length}
+ limit={PAGE_SIZE}
+ onPageChange={handlePageChange}
+ />
+ </div>
+ );
  };
 
  if (loading) {
@@ -368,7 +415,7 @@ export default function PortalTicketsPage() {
  </div>
  <div className="flex items-center gap-2 shrink-0">
  {counts.OPEN > 0 && (
- <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+ <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
  <CircleDot className="h-3 w-3"/> {counts.OPEN} abiertos
  </div>
  )}
@@ -439,7 +486,11 @@ export default function PortalTicketsPage() {
  />
  </div>
  </>
- ) : form.category && form.category !== 'SUPPORT_REQUEST' ? (
+ ) : form.category && form.category !== 'NEW_PROJECT' ? (
+ /* Proyecto + Titulo + Descripcion: se renderizan tambien para
+    SUPPORT_REQUEST (y categorias dynamic:) — fix pre-fill del #11
+    (feature #12 T11). Antes el guard excluia SUPPORT_REQUEST y el
+    pre-llenado de "Crear nueva consulta / Si" no se veia. */
  <>
  <div className="space-y-2">
  <Label className="text-muted-foreground">Proyecto</Label>
@@ -520,36 +571,25 @@ export default function PortalTicketsPage() {
  {/* Tabs + search */}
  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as StatusTab)}>
  <div className="space-y-3">
- {/* Scrollable tabs */}
+ {/* Scrollable tabs — estilo admin: dot + contador */}
  <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto scrollbar-none">
  <TabsList className="w-max sm:w-auto inline-flex">
  {tabConfig.map((tab) => (
- <TabsTrigger key={tab.value} value={tab.value} className="gap-1 text-[11px] sm:text-xs px-2.5 sm:px-3">
+ <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5 text-[11px] sm:text-xs px-2.5 sm:px-3">
  {tab.dotColor && <div className={cn('h-1.5 w-1.5 rounded-full', tab.dotColor)} />}
  <span className="whitespace-nowrap">{tab.label}</span>
- {counts[tab.value] > 0 && (
- <span className="text-[10px] opacity-60">({counts[tab.value]})</span>
- )}
+ <span className="ml-0.5 text-[10px] opacity-60">({counts[tab.value]})</span>
  </TabsTrigger>
  ))}
  </TabsList>
  </div>
 
- {/* Search + filter */}
+ {/* Search + filtros secundarios */}
  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
  <div className="relative flex-1">
  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
  <Input placeholder="Buscar tickets..." className="pl-9 h-9 text-sm" value={search} onChange={(e) => setSearch(e.target.value)}/>
  </div>
- <Button
- variant={onlyMine ? 'default' : 'outline'}
- size="sm"
- className="h-9 text-xs gap-1.5 shrink-0"
- onClick={() => setOnlyMine(!onlyMine)}
- >
- <User className="h-3.5 w-3.5"/>
- Mis tickets
- </Button>
  {projects.length > 1 && (
  <Select value={filterProject || 'all'} onValueChange={(v) => setFilterProject(v === 'all' ? '' : v)}>
  <SelectTrigger className="w-full sm:w-[160px] h-9 text-xs">
@@ -563,6 +603,16 @@ export default function PortalTicketsPage() {
  </SelectContent>
  </Select>
  )}
+ {/* "Mis tickets" como filtro SECUNDARIO (no protagonista) */}
+ <Button
+ variant={onlyMine ? 'secondary' : 'ghost'}
+ size="sm"
+ className="h-9 text-xs gap-1.5 shrink-0"
+ onClick={() => setOnlyMine(!onlyMine)}
+ >
+ <User className="h-3.5 w-3.5"/>
+ Mis tickets
+ </Button>
  </div>
  </div>
 

@@ -12,7 +12,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { useSocket } from '@/hooks/use-socket';
-import { getInitials } from '@/lib/utils';
+import { getInitials, cn } from '@/lib/utils';
 import { SameTopicDialog } from '@/components/tickets/same-topic-dialog';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -206,8 +206,8 @@ export default function PortalTicketDetailPage() {
 
  return (
  <div className="mx-auto max-w-5xl space-y-6 pb-4">
- {/* Back + title */}
- <div>
+ {/* Back + title — header atenuado cuando el ticket esta resuelto (read-only) */}
+ <div className={cn(isResolved && 'opacity-75')}>
  <Link
  href="/portal/tickets"
  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-3"
@@ -233,9 +233,10 @@ export default function PortalTicketDetailPage() {
  </div>
  </div>
 
- {/* Resolved banner — ticket terminal, chat read-only para el cliente */}
+ {/* Banner full-width arriba — ticket terminal, chat read-only para el cliente.
+     Realzado cuando esta resuelto (border-success/40 + shadow). Label "Resuelto". */}
  {isResolved && (
- <div className="bg-success/10 border border-success/20 rounded-xl p-5">
+ <div className="bg-success/10 border border-success/40 shadow-lg shadow-success/20 rounded-xl p-5">
  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
  <div className="flex items-start gap-2.5">
  <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5"/>
@@ -257,8 +258,9 @@ export default function PortalTicketDetailPage() {
  </div>
  )}
 
- <div className="grid gap-6 lg:grid-cols-2">
- {/* Left: Ticket info */}
+ {/* Grid 2 columnas: izquierda (Descripcion + Informacion), derecha (Chat) */}
+ <div className="grid gap-6 lg:grid-cols-2 items-start">
+ {/* Left: Descripcion + Informacion del Ticket */}
  <div className="space-y-4">
  {/* Description */}
  <div className="rounded-xl bg-card p-5 border border-border">
@@ -272,9 +274,9 @@ export default function PortalTicketDetailPage() {
  )}
  </div>
 
- {/* Metadata */}
+ {/* Metadata — Informacion del Ticket */}
  <div className="rounded-xl bg-card p-5 border border-border space-y-3">
- <h2 className="text-sm font-semibold text-muted-foreground">Informacion</h2>
+ <h2 className="text-sm font-semibold text-muted-foreground">Informacion del Ticket</h2>
  <div className="space-y-2.5">
  {ticket.project && (
  <div className="flex items-center justify-between text-sm">
@@ -320,14 +322,14 @@ export default function PortalTicketDetailPage() {
  )}
  </div>
 
- {/* Right: Chat */}
+ {/* Right: Chat con el equipo */}
  <div className="flex flex-col rounded-xl bg-card border border-border overflow-hidden"style={{ minHeight: '420px', maxHeight: '600px' }}>
  <div className="flex items-center gap-2 border-b border-border px-4 py-3">
  <MessageSquare className="h-4 w-4 text-primary"/>
  <span className="text-sm font-semibold text-foreground">Chat con el equipo</span>
  </div>
 
- {/* Messages */}
+ {/* Messages — el historial queda 100% legible aunque el ticket este resuelto */}
  <div className="flex-1 overflow-y-auto p-4 space-y-3">
  {messages.length === 0 ? (
  <div className="flex flex-col items-center justify-center h-full text-center py-8">
@@ -390,7 +392,17 @@ export default function PortalTicketDetailPage() {
  {/* Input */}
  <div className="border-t border-border p-3">
  {ticket.channel ? (
- <form onSubmit={handleSend} className="flex items-center gap-2">
+ /* Composer read-only "todo gris" cuando el ticket esta resuelto:
+    opacity-60 + pointer-events-none envuelve SOLO la zona del composer
+    (input + enviar + adjuntar), ademas del disabled que ya tiene. El
+    historial de mensajes de arriba queda 100% legible. */
+ <form
+ onSubmit={handleSend}
+ className={cn(
+ 'flex items-center gap-2',
+ isResolved && 'opacity-60 pointer-events-none',
+ )}
+ >
  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || isResolved} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
  <Paperclip className="h-4 w-4"/>
  </button>
