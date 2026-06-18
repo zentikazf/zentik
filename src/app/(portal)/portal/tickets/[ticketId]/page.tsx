@@ -13,6 +13,7 @@ import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { useSocket } from '@/hooks/use-socket';
 import { getInitials } from '@/lib/utils';
+import { SameTopicDialog } from '@/components/tickets/same-topic-dialog';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
@@ -65,6 +66,7 @@ export default function PortalTicketDetailPage() {
  const [messageText, setMessageText] = useState('');
  const [sending, setSending] = useState(false);
  const [uploading, setUploading] = useState(false);
+ const [showSameTopic, setShowSameTopic] = useState(false);
  const fileInputRef = useRef<HTMLInputElement>(null);
  const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -195,6 +197,7 @@ export default function PortalTicketDetailPage() {
 
  const statusConf = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
  const catConf = CATEGORY_CONFIG[ticket.category] || CATEGORY_CONFIG.SUPPORT_REQUEST;
+ const isResolved = ticket.status === 'RESOLVED';
 
  const TASK_STATUS_LABELS: Record<string, string> = {
  BACKLOG: 'Nuevo', TODO: 'Pendiente', IN_PROGRESS: 'En Desarrollo',
@@ -229,6 +232,30 @@ export default function PortalTicketDetailPage() {
  </span>
  </div>
  </div>
+
+ {/* Resolved banner — ticket terminal, chat read-only para el cliente */}
+ {isResolved && (
+ <div className="bg-success/10 border border-success/20 rounded-xl p-5">
+ <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+ <div className="flex items-start gap-2.5">
+ <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5"/>
+ <div>
+ <h2 className="text-sm font-semibold text-success">Ticket resuelto</h2>
+ <p className="text-xs text-muted-foreground mt-0.5">
+ Este ticket fue marcado como resuelto. Si tenes otra consulta, crea una nueva.
+ </p>
+ </div>
+ </div>
+ <Button
+ size="sm"
+ className="rounded-full shrink-0 self-start sm:self-auto"
+ onClick={() => setShowSameTopic(true)}
+ >
+ Crear nueva consulta
+ </Button>
+ </div>
+ </div>
+ )}
 
  <div className="grid gap-6 lg:grid-cols-2">
  {/* Left: Ticket info */}
@@ -364,7 +391,7 @@ export default function PortalTicketDetailPage() {
  <div className="border-t border-border p-3">
  {ticket.channel ? (
  <form onSubmit={handleSend} className="flex items-center gap-2">
- <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
+ <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || isResolved} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
  <Paperclip className="h-4 w-4"/>
  </button>
  <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xlsx,.csv,.txt" />
@@ -372,14 +399,14 @@ export default function PortalTicketDetailPage() {
  type="text"
  value={messageText}
  onChange={(e) => setMessageText(e.target.value)}
- placeholder="Escribe un mensaje..."
- disabled={sending}
+ placeholder={isResolved ? 'Ticket resuelto — chat de solo lectura' : 'Escribe un mensaje...'}
+ disabled={sending || isResolved}
  className="flex-1 rounded-full border border-border bg-muted px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
  />
  <Button
  type="submit"
  size="sm"
- disabled={!messageText.trim() || sending}
+ disabled={!messageText.trim() || sending || isResolved}
  className="rounded-full h-9 w-9 p-0 shrink-0"
  >
  <Send className="h-4 w-4"/>
@@ -392,6 +419,11 @@ export default function PortalTicketDetailPage() {
  </div>
  </div>
 
+ <SameTopicDialog
+ open={showSameTopic}
+ onOpenChange={setShowSameTopic}
+ ticketId={ticket.id}
+ />
  </div>
  );
 }
