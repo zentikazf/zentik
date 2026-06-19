@@ -31,6 +31,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   Search,
   ShieldAlert,
   TicketIcon,
@@ -46,6 +47,7 @@ import { ticketService } from '@/services/ticket.service';
 import { useTicketsSocket } from '@/hooks/use-tickets-socket';
 import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
 import { TicketsFacetsPanel, countActiveFacets } from '@/components/tickets/tickets-facets-panel';
+import { TicketsPagination } from '@/components/tickets/tickets-pagination';
 import { OnnixSyncButton } from '@/components/tickets/onnix-sync-button';
 import { SlaBadge, CriticalityBadge } from '@/components/tickets/ticket-resolved-badges';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
@@ -94,7 +96,7 @@ export default function TicketsPage() {
   const searchParams = useSearchParams();
 
   // ─── Filtros (URL source of truth + cookie restore) ──────────
-  const { filters, applyFilters, resetFilters } = useTicketsFilters();
+  const { filters, filtersKey, applyFilters, resetFilters } = useTicketsFilters();
   const activeTab = filters.status;
 
   const initialTicketParam = searchParams.get('ticket');
@@ -104,9 +106,15 @@ export default function TicketsPage() {
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [stats, setStats] = useState<TicketStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  // ─── Paginación offset (feature #12) ─────────────────────────
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [total, setTotal] = useState(0);
+  // Indicador "hay tickets nuevos" — se enciende ante ticket:created/closed
+  // por WS sin saltar de página; el usuario decide refrescar.
+  const [hasNewTickets, setHasNewTickets] = useState(false);
 
   // ─── Crear ticket modal ──────────────────────────────────────
   const [showCreate, setShowCreate] = useState(false);
@@ -168,26 +176,26 @@ export default function TicketsPage() {
     [filters, effectiveSort],
   );
 
+  // Paginación offset: loadTickets SIEMPRE hace REPLACE (no append).
+  // Recibe la página destino (1-based). Default: la página actual.
   const loadTickets = useCallback(
-    async (cursor?: string) => {
+    async (targetPage = 1) => {
       if (!orgId) return;
       try {
         const res = await ticketService.list(orgId, {
           ...backendQuery,
-          ...(cursor && { cursor }),
+          page: targetPage,
         });
-        if (cursor) {
-          setTickets((prev) => [...prev, ...res.data.data]);
-        } else {
-          setTickets(res.data.data);
-        }
-        setNextCursor(res.data.meta.nextCursor);
+        setTickets(res.data.data);
+        setTotal(res.data.meta.total);
+        setTotalPages(res.data.meta.totalPages);
+        setPage(res.data.meta.page);
+        setHasNewTickets(false);
       } catch (err) {
         if (err instanceof ApiError && err.statusCode === 404) {
-          if (!cursor) {
-            setTickets([]);
-            setNextCursor(null);
-          }
+          setTickets([]);
+          setTotal(0);
+          setTotalPages(0);
         } else {
           toast.error('Error', err instanceof ApiError ? err.message : 'Error al cargar tickets');
         }
@@ -208,22 +216,29 @@ export default function TicketsPage() {
     }
   }, [orgId]);
 
-  const loadMore = useCallback(async () => {
-    if (!orgId || !nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      await loadTickets(nextCursor);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [orgId, nextCursor, loadingMore, loadTickets]);
-
-  // Carga cada vez que cambia el query (incluye tab, search, facets, sort).
+  // Reset de página centralizado: cuando cambia CUALQUIER filtro
+  // (tab/search/sort/facets/reset → cambia `filtersKey`) volvemos a page 1
+  // y recargamos. NO persistimos `page` en URL/cookie (AC4 #12).
+  // Un solo efecto cubre todos los entry points.
   useEffect(() => {
     if (!orgId) return;
     setLoading(true);
-    loadTickets();
-  }, [orgId, loadTickets]);
+    setPage(1);
+    loadTickets(1);
+    // loadTickets depende de backendQuery (≈ filtersKey); filtersKey está en deps
+    // para reforzar el reset explícito ante cualquier mutación de filtro.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, filtersKey]);
+
+  // Cambio de página explícito desde el paginador.
+  const handlePageChange = useCallback(
+    (target: number) => {
+      setLoading(true);
+      loadTickets(target);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    [loadTickets],
+  );
 
   useEffect(() => {
     if (!orgId) return;
@@ -258,34 +273,51 @@ export default function TicketsPage() {
     }
   }, [form.clientId, orgId]);
 
-  // ─── WebSocket: refrescar cuando llegan eventos ──────────────
+  // ─── WebSocket: actualizar SIN saltar de página (feature #12) ─
+  // Patch in-place del ticket visible para updated/assigned (no refetch que
+  // cambie la página). created/closed NO recargan la página actual saltando a
+  // page 1: solo refrescan stats + encienden el indicador "nuevos".
+  const patchTicketStatus = useCallback((ticketId: string, status?: string) => {
+    if (!status) return;
+    setTickets((prev) =>
+      prev.map((t) =>
+        t.id === ticketId ? { ...t, status: status as TicketListItem['status'] } : t,
+      ),
+    );
+  }, []);
+
   const { status: wsStatus, shouldFallbackPoll } = useTicketsSocket(orgId, {
-    'ticket:updated': () => {
-      loadTickets();
+    'ticket:updated': (payload) => {
+      patchTicketStatus(payload.ticketId, payload.status);
       loadStats();
     },
     'ticket:created': () => {
-      loadTickets();
+      // No recargar la página actual (no patear al usuario a page 1).
+      setHasNewTickets(true);
       loadStats();
     },
     'ticket:closed': () => {
-      loadTickets();
+      setHasNewTickets(true);
       loadStats();
     },
-    'ticket:assigned': () => {
-      loadTickets();
+    'ticket:assigned': (payload) => {
+      // El assignment no viene completo en el payload; refrescamos stats y
+      // marcamos cambio sin mover la página. El detalle al abrir el panel.
+      patchTicketStatus(payload.ticketId, undefined);
+      loadStats();
     },
   });
 
-  // Fallback polling si WS lleva >30s caido
+  // Fallback polling si WS lleva >30s caido — recarga la página ACTUAL
+  // (no salta a page 1).
   useEffect(() => {
     if (!shouldFallbackPoll || !orgId) return;
     const interval = setInterval(() => {
-      loadTickets();
+      loadTickets(page);
       loadStats();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [shouldFallbackPoll, orgId, loadTickets, loadStats]);
+  }, [shouldFallbackPoll, orgId, page, loadTickets, loadStats]);
 
   // ─── Handlers ───────────────────────────────────────────────
   const handleTabChange = (v: string) => {
@@ -607,6 +639,21 @@ export default function TicketsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Indicador "hay tickets nuevos" — no salta de página, el usuario
+              decide refrescar (feature #12, WS created/closed). */}
+          {hasNewTickets && (
+            <button
+              type="button"
+              onClick={() => {
+                setPage(1);
+                loadTickets(1);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+              title="Hay tickets nuevos — actualizar lista"
+            >
+              <RefreshCw className="h-3 w-3" /> Nuevos tickets
+            </button>
+          )}
           {counts.OPEN > 0 && (
             <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
               <CircleDot className="h-3 w-3" /> {counts.OPEN} abiertos
@@ -943,22 +990,14 @@ export default function TicketsPage() {
           ) : (
             <div className="space-y-2">
               {filteredTickets.map(renderTicketCard)}
-              {nextCursor && (
-                <div className="flex justify-center pt-4">
-                  <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
-                    {loadingMore ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Cargando...
-                      </>
-                    ) : (
-                      `Cargar más`
-                    )}
-                  </Button>
-                </div>
-              )}
-              <p className="text-center text-[11px] text-muted-foreground pt-2">
-                Mostrando {filteredTickets.length} de {counts[activeTab as keyof typeof counts] ?? counts.all}
-              </p>
+              {/* Paginación numerada offset (feature #12) */}
+              <TicketsPagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                limit={PAGE_LIMIT}
+                onPageChange={handlePageChange}
+              />
             </div>
           )}
         </div>
@@ -970,7 +1009,8 @@ export default function TicketsPage() {
         open={panelOpen}
         onOpenChange={closePanel}
         onTicketUpdated={() => {
-          loadTickets();
+          // Recarga la página ACTUAL (no salta a page 1).
+          loadTickets(page);
           loadStats();
         }}
       />

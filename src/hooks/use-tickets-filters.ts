@@ -179,6 +179,17 @@ export function useTicketsFilters() {
   );
 
   /**
+   * Clave serializada de los filtros (sin params de UI como ticket/panel).
+   * Cambia ante CUALQUIER mutación de filtro (tab/search/sort/facets/reset).
+   *
+   * El consumidor (listado admin) la usa para RESETEAR `page=1` de forma
+   * centralizada: un solo efecto keyed en `filtersKey` cubre todos los entry
+   * points sin persistir `page` en la URL/cookie (AC4 #12: al restaurar filtros
+   * siempre arranca en page 1, evita offset fuera de rango).
+   */
+  const filtersKey = useMemo(() => serializeFilters(filters).toString(), [filters]);
+
+  /**
    * Aplica un patch a los filtros actuales y actualiza la URL + cookie.
    * Pasar `null` o `[]` para limpiar un campo.
    *
@@ -252,7 +263,7 @@ export function useTicketsFilters() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { filters, applyFilters, resetFilters };
+  return { filters, filtersKey, applyFilters, resetFilters };
 }
 
 // ─── Helpers de uso externo ────────────────────────────────────────────────

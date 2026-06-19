@@ -108,9 +108,17 @@ export interface TicketStats {
   TOTAL: number;
 }
 
+export interface TicketsListMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
 export interface TicketsListResponse {
   data: TicketListItem[];
-  meta: { nextCursor: string | null; limit: number; hasNext: boolean };
+  meta: TicketsListMeta;
 }
 
 export interface UpdateTicketInput {
@@ -126,7 +134,7 @@ export interface CloseTicketInput {
 
 export interface ListTicketsQuery {
   status?: TicketStatus;
-  cursor?: string;
+  page?: number;
   limit?: number;
   clientId?: string;
   projectId?: string;
