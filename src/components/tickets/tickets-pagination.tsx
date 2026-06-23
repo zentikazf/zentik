@@ -3,7 +3,11 @@
 import { useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+
+/** Opciones por defecto del selector de items por página (cap 50 = límite del backend). */
+export const DEFAULT_PAGE_SIZE_OPTIONS = [10, 15, 20, 50] as const;
 
 interface TicketsPaginationProps {
   /** Página actual (1-based). */
@@ -16,6 +20,14 @@ interface TicketsPaginationProps {
   limit: number;
   /** Callback al cambiar de página. Recibe la página destino (ya clampeada 1..totalPages). */
   onPageChange: (page: number) => void;
+  /**
+   * Callback al cambiar la cantidad de items por página. Si se provee, se
+   * renderiza el selector de cantidad. Opcional para no romper los usos
+   * actuales que no lo necesitan.
+   */
+  onPageSizeChange?: (pageSize: number) => void;
+  /** Opciones del selector de cantidad. Default: 10/15/20/50. */
+  pageSizeOptions?: readonly number[];
   /** Clases extra para el contenedor. */
   className?: string;
 }
@@ -38,6 +50,8 @@ export function TicketsPagination({
   total,
   limit,
   onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   className,
 }: TicketsPaginationProps) {
   // Normalización defensiva: totalPages null/0/NaN → 0.
@@ -89,12 +103,34 @@ export function TicketsPagination({
         className,
       )}
     >
-      {/* "Mostrando X–Y de Z" */}
-      <p className="text-[11px] sm:text-xs text-muted-foreground">
-        {total === 1
-          ? `Mostrando 1 de ${total}`
-          : `Mostrando ${rangeStart}–${rangeEnd} de ${total}`}
-      </p>
+      {/* "Mostrando X–Y de Z" + selector de cantidad por página (opcional) */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <p className="text-[11px] sm:text-xs text-muted-foreground">
+          {total === 1
+            ? `Mostrando 1 de ${total}`
+            : `Mostrando ${rangeStart}–${rangeEnd} de ${total}`}
+        </p>
+        {onPageSizeChange && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] sm:text-xs text-muted-foreground">Por página</span>
+            <Select
+              value={String(limit)}
+              onValueChange={(v) => onPageSizeChange(Number(v))}
+            >
+              <SelectTrigger className="h-8 w-[68px] text-xs" aria-label="Items por página">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageSizeOptions.map((opt) => (
+                  <SelectItem key={opt} value={String(opt)}>
+                    {opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
 
       {/* Navegación — solo si hay más de una página */}
       {showNumbers && (
