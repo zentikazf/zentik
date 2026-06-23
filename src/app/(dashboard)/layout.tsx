@@ -10,7 +10,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { FolderKanban } from 'lucide-react';
 import { PasswordToggle } from '@/components/ui/password-input';
-// import { AdminMcpFab } from '@/components/admin-mcp/admin-mcp-fab'; // desactivado, ver linea ~189
+import { AdminMcpFab } from '@/components/admin-mcp/admin-mcp-fab';
 
 function WelcomeChangePasswordModal({ onComplete, userName, roleName, orgName }: { onComplete: () => void; userName?: string; roleName?: string; orgName?: string }) {
  const [step, setStep] = useState<'welcome' | 'password'>('welcome');
@@ -186,9 +186,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
  </div>
  </main>
  </div>
- {/* AdminMcpFab desactivado temporalmente — pendiente integracion estable.
-     Reactivar quitando el comentario cuando se complete el follow-up.
- <AdminMcpFab /> */}
+ <AdminMcpFab />
  </>
  );
 }
