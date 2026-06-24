@@ -83,7 +83,7 @@ const criticalityConfig: Record<string, { label: string; className: string; bg: 
   LOW: { label: 'Baja', className: 'text-muted-foreground', bg: 'bg-muted text-muted-foreground' },
 };
 
-const PAGE_LIMIT = 20;
+const DEFAULT_PAGE_SIZE = 15;
 const POLL_INTERVAL_MS = 60000;
 
 // API base URL para el endpoint de export CSV (necesario para construir
@@ -112,6 +112,9 @@ export default function TicketsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
+  // Items por página configurable (feature #12 P3): 10/15/20/50, default 15.
+  // El cap es 50 (límite del backend en ListTicketsQueryDto).
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   // Indicador "hay tickets nuevos" — se enciende ante ticket:created/closed
   // por WS sin saltar de página; el usuario decide refrescar.
   const [hasNewTickets, setHasNewTickets] = useState(false);
@@ -171,9 +174,9 @@ export default function TicketsPage() {
     () => ({
       ...buildBackendQuery(filters),
       ...(effectiveSort && { sortBy: effectiveSort.sortBy, sortOrder: effectiveSort.sortOrder }),
-      limit: PAGE_LIMIT,
+      limit: pageSize,
     }),
-    [filters, effectiveSort],
+    [filters, effectiveSort, pageSize],
   );
 
   // Paginación offset: loadTickets SIEMPRE hace REPLACE (no append).
@@ -217,18 +220,19 @@ export default function TicketsPage() {
   }, [orgId]);
 
   // Reset de página centralizado: cuando cambia CUALQUIER filtro
-  // (tab/search/sort/facets/reset → cambia `filtersKey`) volvemos a page 1
-  // y recargamos. NO persistimos `page` en URL/cookie (AC4 #12).
-  // Un solo efecto cubre todos los entry points.
+  // (tab/search/sort/facets/reset → cambia `filtersKey`) o la cantidad por
+  // página (`pageSize`, feature #12 P3) volvemos a page 1 y recargamos.
+  // NO persistimos `page` en URL/cookie (AC4 #12). Un solo efecto cubre
+  // todos los entry points.
   useEffect(() => {
     if (!orgId) return;
     setLoading(true);
     setPage(1);
     loadTickets(1);
-    // loadTickets depende de backendQuery (≈ filtersKey); filtersKey está en deps
-    // para reforzar el reset explícito ante cualquier mutación de filtro.
+    // loadTickets depende de backendQuery (≈ filtersKey + pageSize); ambos están
+    // en deps para reforzar el reset explícito ante cualquier mutación.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, filtersKey]);
+  }, [orgId, filtersKey, pageSize]);
 
   // Cambio de página explícito desde el paginador.
   const handlePageChange = useCallback(
@@ -990,13 +994,14 @@ export default function TicketsPage() {
           ) : (
             <div className="space-y-2">
               {filteredTickets.map(renderTicketCard)}
-              {/* Paginación numerada offset (feature #12) */}
+              {/* Paginación numerada offset + selector de cantidad (feature #12 P3) */}
               <TicketsPagination
                 page={page}
                 totalPages={totalPages}
                 total={total}
-                limit={PAGE_LIMIT}
+                limit={pageSize}
                 onPageChange={handlePageChange}
+                onPageSizeChange={setPageSize}
               />
             </div>
           )}

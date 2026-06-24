@@ -73,7 +73,7 @@ interface BusinessHours {
  timezone: string;
 }
 
-const PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 15;
 
 const EMPTY_FORM = {
  projectId: '',
@@ -96,6 +96,8 @@ export default function PortalTicketsPage() {
  // se hacen 100% client-side — volumen bajo por cliente (feature #12, opcion B).
  const [tickets, setTickets] = useState<TicketItem[]>([]);
  const [page, setPage] = useState(1);
+ // Items por página configurable (feature #12 P3): 10/15/20/50, default 15.
+ const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
  const [projects, setProjects] = useState<ProjectOption[]>([]);
  const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
  const [businessHours, setBusinessHours] = useState<BusinessHours | null>(null);
@@ -116,11 +118,12 @@ export default function PortalTicketsPage() {
  }, []);
 
  // Reset a pagina 1 cuando cambia cualquier filtro client-side (tab, busqueda,
- // proyecto, "Mis tickets"). Sin esto, al filtrar podriamos quedar en una
- // pagina vacia (p.ej. estabas en pag 3 y el filtro deja solo 8 resultados).
+ // proyecto, "Mis tickets") o la cantidad por pagina (pageSize, feature #12 P3).
+ // Sin esto, al filtrar podriamos quedar en una pagina vacia (p.ej. estabas en
+ // pag 3 y el filtro deja solo 8 resultados).
  useEffect(() => {
  setPage(1);
- }, [activeTab, search, filterProject, onlyMine]);
+ }, [activeTab, search, filterProject, onlyMine, pageSize]);
 
  // Flujo "Crear nueva consulta" desde un ticket RESOLVED: el modal "¿mismo tema?"
  // navega aca con ?related=<id>&same=1|0. Pre-rellenamos el form y abrimos el
@@ -370,19 +373,21 @@ export default function PortalTicketsPage() {
  );
  }
  // Paginacion 100% client-side sobre el array ya filtrado.
- const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+ const totalPages = Math.ceil(filtered.length / pageSize);
  const safePage = Math.min(page, totalPages);
- const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+ const pageItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
  return (
  <div className="space-y-2">
  {pageItems.map(renderTicketCard)}
- {/* Paginacion numerada client-side: refleja el set FILTRADO (feature #12) */}
+ {/* Paginacion numerada client-side + selector de cantidad: refleja el set
+     FILTRADO (feature #12 P3) */}
  <TicketsPagination
  page={safePage}
  totalPages={totalPages}
  total={filtered.length}
- limit={PAGE_SIZE}
+ limit={pageSize}
  onPageChange={handlePageChange}
+ onPageSizeChange={setPageSize}
  />
  </div>
  );
