@@ -44,6 +44,7 @@ import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ticketService } from '@/services/ticket.service';
+import { useBadgeStore } from '@/stores/use-badge-store';
 import { useTicketsSocket } from '@/hooks/use-tickets-socket';
 import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
 import { TicketsFacetsPanel, countActiveFacets } from '@/components/tickets/tickets-facets-panel';
@@ -436,6 +437,9 @@ export default function TicketsPage() {
       });
       await loadTickets();
       await loadStats();
+      // Capa 1 (#20): crear un ticket sube el conteo de abiertos → refetch del
+      // badge "Soporte" del sidebar contra DB (debounced).
+      if (orgId) useBadgeStore.getState().refetch('tickets', orgId);
     } catch (err) {
       toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear el ticket');
     } finally {
@@ -1017,6 +1021,10 @@ export default function TicketsPage() {
           // Recarga la página ACTUAL (no salta a page 1).
           loadTickets(page);
           loadStats();
+          // Capa 1 (#20): la mutación propia (cerrar/resolver/cambiar estado/
+          // asignar via TicketActionBar) puede cambiar el conteo de abiertos →
+          // refetch del badge "Soporte" del sidebar contra DB (debounced).
+          if (orgId) useBadgeStore.getState().refetch('tickets', orgId);
         }}
       />
     </div>
