@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, clearToken } from '@/lib/api-client';
+import { disconnectSocket } from '@/lib/socket';
 
 interface AuthClient {
   id: string;
@@ -138,6 +139,10 @@ export function useAuth() {
     try {
       await api.post('/auth/logout');
     } finally {
+      // Cerrar los sockets /chat y /tickets del lado cliente (R4 AC4). Sin esto,
+      // aunque el backend invalide la sesion, el socket-client intentaria
+      // reconectar tras el disconnect del servidor. Sin namespace → cierra ambos.
+      disconnectSocket();
       // Limpiar Bearer token de localStorage (auth mobile cross-domain).
       clearToken();
       // Reset completo del store para que la siguiente sesion arranque limpia
