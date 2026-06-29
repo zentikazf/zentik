@@ -15,7 +15,10 @@ export type TicketsWsEvents = {
   }) => void;
 };
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
+// 'auth-error' (#19 BAJO-2 AC6): estado TERMINAL — la sesion ya no es valida, el
+// handler central de lib/socket.ts dispara el logout. La UI lo compara por
+// igualdad (no switch exhaustivo), asi que extenderlo es backward-compatible.
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'auth-error';
 
 /**
  * Hook que conecta al namespace /tickets, valida membership con join-org
@@ -55,7 +58,20 @@ export function useTicketsSocket(
       socket.emit('tickets:join-org', { orgId });
     };
 
-    const onDisconnect = () => {
+    const onDisconnect = (reason: string) => {
+      // Rechazo de auth server-side (#19 BAJO-2 AC6): el backend invalido la sesion
+      // (`disconnect(true)` → este reason, sin auto-reconexion). Estado TERMINAL,
+      // NO armamos el timer de polling (no tiene sentido reintentar sin sesion).
+      // El logout lo dispara el handler central de lib/socket.ts.
+      if (reason === 'io server disconnect') {
+        setStatus('auth-error');
+        if (fallbackTimerRef.current) {
+          clearTimeout(fallbackTimerRef.current);
+          fallbackTimerRef.current = null;
+        }
+        return;
+      }
+      // Resto de reasons (transport close / ping timeout / etc.) = transitorio.
       setStatus('disconnected');
       // Si WS sigue caido pasados 30s → activar polling fallback
       if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
@@ -64,6 +80,8 @@ export function useTicketsSocket(
       }, 30000);
     };
 
+    // connect_error es SIEMPRE transitorio (#19 BAJO-2 AC6): mantiene reintento +
+    // fallback, NUNCA logout. El auth-fail viaja por `disconnect` reason, no aca.
     const onConnectError = () => {
       setStatus('disconnected');
     };
