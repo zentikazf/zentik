@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, clearToken } from '@/lib/api-client';
+import { disconnectSocket, setAuthFailHandler } from '@/lib/socket';
 
 interface AuthClient {
   id: string;
@@ -63,6 +64,11 @@ let state: AuthState = {
 };
 
 let fetchPromise: Promise<void> | null = null;
+// Guard re-entrante del logout (#19 BAJO-2 AC4). El logout puede dispararse desde
+// el boton de UI Y desde el handler de auth-fail del socket (`'io server
+// disconnect'` lo produce tanto el auth-fail como el logout/revoke normal del
+// #18). Sin este guard habria doble POST /auth/logout + doble router.push.
+let loggingOut = false;
 const listeners = new Set<() => void>();
 
 function setState(next: AuthState) {
@@ -135,9 +141,18 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
+    // Idempotente (#19 BAJO-2 AC4): si ya hay un logout en curso o el usuario ya
+    // se deslogueo, no repetir. Evita doble POST /auth/logout + doble push cuando
+    // el auth-fail del socket y el boton de UI se disparan casi simultaneos.
+    if (loggingOut || state.user == null) return;
+    loggingOut = true;
     try {
       await api.post('/auth/logout');
     } finally {
+      // Cerrar los sockets /chat y /tickets del lado cliente (R4 AC4). Sin esto,
+      // aunque el backend invalide la sesion, el socket-client intentaria
+      // reconectar tras el disconnect del servidor. Sin namespace → cierra ambos.
+      disconnectSocket();
       // Limpiar Bearer token de localStorage (auth mobile cross-domain).
       clearToken();
       // Reset completo del store para que la siguiente sesion arranque limpia
@@ -148,8 +163,21 @@ export function useAuth() {
         loading: false,
       });
       router.push('/login');
+      loggingOut = false;
     }
   }, [router]);
+
+  // Cablear el handler global de auth-fail del socket (#19 BAJO-2 AC4): cuando un
+  // socket recibe `auth:error` o un `'io server disconnect'` de rechazo, hace
+  // logout. El guard idempotente lo protege de disparos duplicados.
+  useEffect(() => {
+    setAuthFailHandler(() => {
+      void logout();
+    });
+    return () => {
+      setAuthFailHandler(null);
+    };
+  }, [logout]);
 
   return {
     user: snapshot.user,

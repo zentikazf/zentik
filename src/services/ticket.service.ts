@@ -31,6 +31,16 @@ export const ticketService = {
   openCount: (orgId: string) =>
     api.get<{ count: number }>(`/organizations/${orgId}/tickets/open-count`),
 
+  // Counts para los badges del sidebar admin (#20). Centralizan la URL en el
+  // service en vez de `api.get` inline en el store/sidebar. Ambos endpoints
+  // devuelven `{ count }`; el de approvals esta gateado por `manage:projects`
+  // (el caller lo invoca solo si el user tiene el permiso, para no disparar 403).
+  approvalsCount: (orgId: string) =>
+    api.get<{ count: number }>(`/organizations/${orgId}/approvals/count`),
+
+  projectsPendingCount: (orgId: string) =>
+    api.get<{ count: number }>(`/organizations/${orgId}/projects/pending-count`),
+
   detail: (ticketId: string) => api.get<TicketDetail>(`/tickets/${ticketId}`),
 
   events: (ticketId: string) => api.get<TicketEvent[]>(`/tickets/${ticketId}/events`),

@@ -10,6 +10,7 @@ import { PhaseBadge } from '@/components/ui/phase-badge';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
+import { useBadgeStore } from '@/stores/use-badge-store';
 import { TaskApprovalOtpModal } from '@/components/task/task-approval-otp-modal';
 import {
  CheckCircle2,
@@ -78,6 +79,10 @@ export default function ApprovalsPage() {
  setTasks((prev) => prev.filter((t) => t.id !== otpTaskId));
  }
  setOtpTaskId(null);
+ // Capa 1 (#20): refetch del badge contra DB tras la accion propia. El badge
+ // sale del count() del endpoint, NUNCA del length de `tasks` (la lista local
+ // optimista de arriba no debe contaminar el conteo del sidebar).
+ if (orgId) useBadgeStore.getState().refetch('approvals', orgId);
  };
 
  const handleReject = async (taskId: string) => {
@@ -89,6 +94,9 @@ export default function ApprovalsPage() {
  setRejectingId(null);
  setRejectReason('');
  setTasks((prev) => prev.filter((t) => t.id !== taskId));
+ // Capa 1 (#20): refetch del badge contra DB tras rechazar (el filter local de
+ // arriba es solo UX optimista; el conteo del sidebar sale del count()).
+ useBadgeStore.getState().refetch('approvals', orgId);
  } catch (err) {
  const message =
  err instanceof ApiError ? err.message : 'Error al rechazar la tarea';

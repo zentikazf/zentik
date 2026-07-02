@@ -24,8 +24,9 @@ import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useNotificationStore } from '@/stores/use-notification-store';
+import { useBadgeStore } from '@/stores/use-badge-store';
+import { useTicketsSocket } from '@/hooks/use-tickets-socket';
 import { useOrg } from '@/providers/org-provider';
-import { api } from '@/lib/api-client';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { NotificationPanel } from '@/components/notifications/notification-panel';
 
@@ -54,9 +55,6 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  const [collapsed, setCollapsed] = useState(false);
  const [notifOpen, setNotifOpen] = useState(false);
- const [pendingProjectsCount, setPendingProjectsCount] = useState(0);
- const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
- const [openTicketsCount, setOpenTicketsCount] = useState(0);
  const pathname = usePathname();
  const { user, logout } = useAuth();
  const { hasPermission, roleName } = usePermissions();
@@ -64,21 +62,62 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  const { unreadCount } = useNotificationStore();
  const { orgId } = useOrg();
 
+ // Badges en vivo (#20). El conteo vive en `useBadgeStore` (no en useState local,
+ // que quedaba stale toda la sesion porque el sidebar nunca desmonta). El badge se
+ // deriva SIEMPRE del refetch contra el endpoint count(), nunca del length de una
+ // lista. Capa 1: accion propia (las paginas llaman refetch). Capa 2: WS de otros
+ // (suscripcion abajo). Capa 3: poll 60s + foco (efecto abajo).
+ const pendingProjectsCount = useBadgeStore((s) => s.projectsPendingCount);
+ const pendingApprovalsCount = useBadgeStore((s) => s.approvalsCount);
+ const openTicketsCount = useBadgeStore((s) => s.ticketsCount);
+
+ // Gates de permiso: el item "Aprobaciones" se muestra con `manage:projects`;
+ // "Soporte"/"Proyectos" con `read:projects`. Refetchear approvals sin el permiso
+ // dispararia un 403 → lo gateamos en cada caller (montaje, WS y poll).
+ const canRead = hasPermission('read:projects');
+ const canApprovals = hasPermission('manage:projects');
+
+ // Capa 1+3 (montaje / cambio de org): refetch inicial de los kinds permitidos.
  useEffect(() => {
- if (!orgId || !hasPermission('read:projects')) return;
- api.get(`/organizations/${orgId}/projects/pending-count`)
- .then((res) => setPendingProjectsCount(res.data?.count ?? 0))
- .catch(() => {});
- if (hasPermission('manage:projects')) {
- api.get(`/organizations/${orgId}/approvals/count`)
- .then((res) => setPendingApprovalsCount(res.data?.count ?? 0))
- .catch(() => {});
- }
- api.get(`/organizations/${orgId}/tickets/open-count`)
- .then((res) => setOpenTicketsCount(res.data?.count ?? 0))
- .catch(() => {});
+ if (!orgId || !canRead) return;
+ useBadgeStore.getState().refetchAll(orgId, { includeApprovals: canApprovals });
  // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [orgId]);
+ }, [orgId, canRead, canApprovals]);
+
+ // Capa 2 (accion ajena): reusa el socket /tickets compartido (re-join en connect,
+ // ref-count de leave-org, manejo #18/#19) — NO hand-roll. Soporte converge via los
+ // ticket:* que YA emite el gateway; Aprobaciones via la senal nueva approvals:updated
+ // (gateada por permiso para no refetchear un endpoint 403). Todos los ticket:* mapean
+ // al MISMO refetch('tickets') → el doble-emit del cierre colapsa via el debounce.
+ useTicketsSocket(canRead ? orgId : null, {
+ 'ticket:created': () => useBadgeStore.getState().refetch('tickets', orgId),
+ 'ticket:updated': () => useBadgeStore.getState().refetch('tickets', orgId),
+ 'ticket:closed': () => useBadgeStore.getState().refetch('tickets', orgId),
+ 'approvals:updated': () => {
+ if (canApprovals) useBadgeStore.getState().refetch('approvals', orgId);
+ },
+ });
+
+ // Capa 3 (reconciliacion): poll 60s + visibilitychange, con el guard de pestaña
+ // oculta (espejo de portal-sidebar.tsx) para no pollear en background. Red de
+ // respaldo si el WS esta caido o el cliente quedo fuera de la room.
+ useEffect(() => {
+ if (!orgId || !canRead) return;
+ const refetchAll = () => {
+ if (document.visibilityState === 'hidden') return;
+ useBadgeStore.getState().refetchAll(orgId, { includeApprovals: canApprovals });
+ };
+ const interval = setInterval(refetchAll, 60000);
+ const handleVisibility = () => {
+ if (document.visibilityState === 'visible') refetchAll();
+ };
+ document.addEventListener('visibilitychange', handleVisibility);
+ return () => {
+ clearInterval(interval);
+ document.removeEventListener('visibilitychange', handleVisibility);
+ };
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [orgId, canRead, canApprovals]);
 
  const isActive = (href: string) => {
  if (href === '/dashboard') return pathname === '/' || pathname === '/dashboard';
@@ -300,6 +339,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  {visibleItems.map((item) => {
  const active = isActive(item.href);
  const Icon = item.icon;
+ // Badge en vivo tambien en el drawer mobile (#20, paridad con desktop).
+ const badge = item.href === '/projects' && pendingProjectsCount > 0
+ ? pendingProjectsCount
+ : item.href === '/approvals' && pendingApprovalsCount > 0
+ ? pendingApprovalsCount
+ : item.href === '/tickets' && openTicketsCount > 0
+ ? openTicketsCount
+ : 0;
  return (
  <Link
  key={item.name}
@@ -313,7 +360,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  )}
  >
  <Icon className="h-5 w-5"/>
- <span>{item.name}</span>
+ <span className="flex-1 flex items-center justify-between">
+ {item.name}
+ {badge > 0 && (
+ <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-bold text-warning-foreground">
+ {badge}
+ </span>
+ )}
+ </span>
  </Link>
  );
  })}
