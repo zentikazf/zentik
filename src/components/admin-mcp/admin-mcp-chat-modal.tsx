@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, Send, RotateCcw, Wrench } from 'lucide-react';
+import { Bot, Send, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAdminMcpChat, type ChatStage, type UiMessage } from './use-admin-mcp-chat';
 import { RenderMarkdown } from './render-markdown';
@@ -49,27 +49,6 @@ function MessageBubble({ message }: { message: UiMessage }) {
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
           <RenderMarkdown content={message.content} />
-        )}
-        {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1 border-t border-border/40 pt-2">
-            <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              <Wrench className="h-3 w-3" />
-              Tools:
-            </span>
-            {message.toolCalls.map((tc, idx) => (
-              <span
-                key={`${tc.tool}-${idx}`}
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                  tc.ok
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-destructive/10 text-destructive',
-                )}
-              >
-                {tc.tool}
-              </span>
-            ))}
-          </div>
         )}
       </div>
     </div>
