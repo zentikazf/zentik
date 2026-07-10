@@ -52,6 +52,7 @@ interface SubUser {
  id: string;
  name: string;
  email: string;
+ emailVerified: boolean;
  createdAt: string;
 }
 
@@ -134,6 +135,9 @@ export default function ClientDetailPage() {
  // Delete sub-user confirmation
  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
  const [deleting, setDeleting] = useState(false);
+
+ // Reenviar activación (por-fila)
+ const [resendingId, setResendingId] = useState<string | null>(null);
 
  // Delete hours transaction
  const [deleteTxConfirm, setDeleteTxConfirm] = useState<{ id: string; type: string; hours: number; note: string | null } | null>(null);
@@ -242,6 +246,19 @@ export default function ClientDetailPage() {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al eliminar usuario');
  } finally {
  setDeleting(false);
+ }
+ };
+
+ const handleResendActivation = async (userId: string, name: string) => {
+ if (!orgId) return;
+ setResendingId(userId);
+ try {
+ await api.post(`/organizations/${orgId}/clients/${clientId}/users/${userId}/resend-activation`);
+ toast.success('Activación reenviada', `${name} va a recibir un nuevo email para activar su cuenta`);
+ } catch (err) {
+ toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo reenviar la activación');
+ } finally {
+ setResendingId(null);
  }
  };
 
@@ -710,13 +727,28 @@ export default function ClientDetailPage() {
  <div className="flex-1 min-w-0">
  <p className="text-sm font-medium text-card-foreground truncate">{u.name}</p>
  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+ {!u.emailVerified && (
+ <Badge className="mt-1 bg-amber-500/15 text-amber-600 dark:text-amber-500 text-[10px]">Sin verificar</Badge>
+ )}
  </div>
+ <div className="flex items-center gap-1 shrink-0">
+ {!u.emailVerified && (
+ <button
+ onClick={() => handleResendActivation(u.id, u.name)}
+ disabled={resendingId === u.id}
+ title="Reenviar activación"
+ className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors disabled:opacity-50"
+ >
+ <Mail className={`h-3.5 w-3.5 ${resendingId === u.id ? 'animate-pulse' : ''}`}/>
+ </button>
+ )}
  <button
  onClick={() => setDeleteConfirm({ id: u.id, name: u.name })}
  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
  >
  <Trash2 className="h-3.5 w-3.5"/>
  </button>
+ </div>
  </div>
  ))}
  </div>
