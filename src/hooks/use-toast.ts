@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { sileo } from 'sileo';
 
 export type ToastVariant = 'default' | 'destructive' | 'success' | 'notification';
 
@@ -33,20 +33,27 @@ export interface ToastData {
   notificationType?: NotificationType;
 }
 
-let toastListeners: Array<(toast: ToastData) => void> = [];
-let toastCount = 0;
-
+/**
+ * Shim: misma API que antes, delega a sileo.
+ * Los 71+ archivos que importan { toast } siguen funcionando sin cambios.
+ */
 export function toast({
   title,
   description,
   variant = 'default',
-  duration = 4000,
-  notificationType,
+  duration,
 }: Omit<ToastData, 'id'>) {
-  const id = String(++toastCount);
-  const data: ToastData = { id, title, description, variant, duration, notificationType };
-  toastListeners.forEach((listener) => listener(data));
-  return id;
+  const opts = { title, description, ...(duration ? { duration } : {}) };
+  switch (variant) {
+    case 'success':
+      return sileo.success(opts);
+    case 'destructive':
+      return sileo.error(opts);
+    case 'notification':
+      return sileo.info({ ...opts, duration: duration ?? 10000 });
+    default:
+      return sileo.info(opts);
+  }
 }
 
 toast.success = (title: string, description?: string) =>
@@ -59,33 +66,4 @@ toast.info = (title: string, description?: string, options?: { duration?: number
   toast({ title, description, variant: 'default', duration: options?.duration });
 
 toast.notification = (title: string, description?: string, notificationType?: NotificationType) =>
-  toast({ title, description, variant: 'notification', duration: 10000, notificationType: notificationType || 'default' });
-
-export function useToastStore() {
-  const [toasts, setToasts] = useState<ToastData[]>([]);
-
-  const addToast = useCallback((data: ToastData) => {
-    setToasts((prev) => [...prev, data]);
-    if (data.duration && data.duration > 0) {
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== data.id));
-      }, data.duration);
-    }
-  }, []);
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const subscribe = useCallback(
-    (listener: (toast: ToastData) => void) => {
-      toastListeners.push(listener);
-      return () => {
-        toastListeners = toastListeners.filter((l) => l !== listener);
-      };
-    },
-    [],
-  );
-
-  return { toasts, addToast, dismissToast, subscribe };
-}
+  toast({ title, description, variant: 'notification', duration: 10000 });

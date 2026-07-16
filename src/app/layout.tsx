@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from '@/providers/theme-provider';
-import { Toaster } from '@/components/ui/toaster';
+import { Toaster } from 'sileo';
 import { AppVersionChecker } from '@/components/app-version-checker';
 import './globals.css';
 
