@@ -4,12 +4,13 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Paperclip } from 'lucide-react';
+import { Send, Paperclip, X, Loader2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { useSocket } from '@/hooks/use-socket';
 import { cn, getInitials } from '@/lib/utils';
+import { ChatImage } from '@/components/tickets/chat-image';
 
 interface ChatFile {
   id: string;
@@ -35,6 +36,14 @@ interface TicketChatProps {
   className?: string;
 }
 
+/** Adjunto pendiente de enviar (aun no subido). `preview` es un object URL para
+ * imagenes, null para el resto. */
+interface PendingAttachment {
+  id: string;
+  file: File;
+  preview: string | null;
+}
+
 /**
  * Componente de chat reusable para tickets.
  * Reproduce la UI/UX del chat actual de tickets/[id]/page.tsx
@@ -46,7 +55,7 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [pending, setPending] = useState<PendingAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -96,40 +105,85 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
     }
   }, [messages]);
 
+  // Ref al pending actual para revocar los object URLs al desmontar sin
+  // recrear el efecto de cleanup en cada cambio.
+  const pendingRef = useRef<PendingAttachment[]>([]);
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+  useEffect(() => {
+    return () => {
+      pendingRef.current.forEach((p) => p.preview && URL.revokeObjectURL(p.preview));
+    };
+  }, []);
+
+  const addFiles = useCallback((files: File[]) => {
+    const additions = files.map((file) => ({
+      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+      file,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+    }));
+    setPending((prev) => [...prev, ...additions]);
+  }, []);
+
+  const removePending = useCallback((id: string) => {
+    setPending((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target?.preview) URL.revokeObjectURL(target.preview);
+      return prev.filter((p) => p.id !== id);
+    });
+  }, []);
+
+  // Envio unificado: sube los adjuntos pendientes (si hay) y postea UN mensaje
+  // con el texto + los fileIds. content es requerido por el backend (1..5000),
+  // asi que si no hay texto usamos el marcador 📎 (que oculta la burbuja al render).
   const handleSend = useCallback(async () => {
-    if (!newMessage.trim() || !channelId) return;
-    setSending(true);
     const content = newMessage.trim();
-    setNewMessage('');
+    if ((!content && pending.length === 0) || !channelId || sending) return;
+    setSending(true);
     try {
-      await api.post<any>(`/channels/${channelId}/messages`, { content });
+      let fileIds: string[] = [];
+      if (pending.length > 0) {
+        const uploaded = await Promise.all(
+          pending.map(async (p) => {
+            const formData = new FormData();
+            formData.append('file', p.file);
+            const res = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
+            return res.data?.id as string | undefined;
+          }),
+        );
+        fileIds = uploaded.filter((id): id is string => Boolean(id));
+      }
+      await api.post<any>(`/channels/${channelId}/messages`, {
+        content: content || `📎 ${pending.map((p) => p.file.name).join(', ')}`,
+        ...(fileIds.length > 0 && { fileIds }),
+      });
+      pending.forEach((p) => p.preview && URL.revokeObjectURL(p.preview));
+      setPending([]);
+      setNewMessage('');
     } catch (err) {
       toast.error('Error', err instanceof ApiError ? err.message : 'Error al enviar el mensaje');
-      setNewMessage(content);
     } finally {
       setSending(false);
     }
-  }, [newMessage, channelId]);
+  }, [newMessage, channelId, pending, sending]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !channelId) return;
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const uploadRes = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
-      const fileId = uploadRes.data?.id;
-      await api.post<any>(`/channels/${channelId}/messages`, {
-        content: `📎 ${file.name}`,
-        ...(fileId && { fileIds: [fileId] }),
-      });
-      toast.success('Archivo enviado', file.name);
-    } catch (err) {
-      toast.error('Error', err instanceof ApiError ? err.message : 'Error al subir archivo');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) addFiles(files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Paste de imagen (Ctrl+V): si el clipboard trae archivos, los agrega al
+  // preview y frena el paste por defecto (evita pegar la imagen como texto raro).
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData?.items || [])
+      .filter((it) => it.kind === 'file')
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => Boolean(f));
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
     }
   };
 
@@ -179,19 +233,28 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
                   )}
                   {msg.files && msg.files.length > 0 && (
                     <div className="flex flex-col gap-1.5">
-                      {msg.files.map((f) => (
-                        <a
-                          key={f.id}
-                          href={f.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={f.originalName}
-                          className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
-                        >
-                          <Paperclip className="h-4 w-4 text-primary shrink-0" />
-                          <span className="truncate font-medium text-foreground">{f.originalName}</span>
-                        </a>
-                      ))}
+                      {msg.files.map((f) =>
+                        f.mimeType?.startsWith('image/') ? (
+                          <ChatImage
+                            key={f.id}
+                            src={f.url}
+                            alt={f.originalName}
+                            className="max-h-60 max-w-[240px]"
+                          />
+                        ) : (
+                          <a
+                            key={f.id}
+                            href={f.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={f.originalName}
+                            className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
+                          >
+                            <Paperclip className="h-4 w-4 text-primary shrink-0" />
+                            <span className="truncate font-medium text-foreground">{f.originalName}</span>
+                          </a>
+                        ),
+                      )}
                     </div>
                   )}
                   <span className="text-[10px] text-muted-foreground px-1">
@@ -209,11 +272,44 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
       </ScrollArea>
 
       <div className="p-2 border-t border-border">
+        {/* Preview de adjuntos pendientes (imagenes con thumbnail, resto como chip) */}
+        {pending.length > 0 && (
+          <div className={cn('flex flex-wrap gap-2 mb-2', sending && 'opacity-60 pointer-events-none')}>
+            {pending.map((p) => (
+              <div key={p.id} className="relative">
+                {p.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.preview}
+                    alt={p.file.name}
+                    className="h-16 w-16 rounded-lg border border-border object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted px-1">
+                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                    <span className="w-full truncate text-center text-[9px] text-muted-foreground">
+                      {p.file.name}
+                    </span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removePending(p.id)}
+                  aria-label="Quitar adjunto"
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow hover:opacity-90"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2">
           <Textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Escribe un mensaje..."
+            onPaste={handlePaste}
+            placeholder="Escribe un mensaje o pega una imagen..."
             className="min-h-[40px] max-h-32 resize-none text-sm"
             rows={1}
             onKeyDown={(e) => {
@@ -224,23 +320,28 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
             }}
           />
           <div className="flex flex-col gap-1">
-            <Button size="sm" onClick={handleSend} disabled={!newMessage.trim() || sending}>
-              <Send className="h-4 w-4" />
+            <Button
+              size="sm"
+              onClick={handleSend}
+              disabled={(!newMessage.trim() && pending.length === 0) || sending}
+            >
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
             <Button
               size="sm"
               variant="outline"
               className="text-muted-foreground"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+              disabled={sending}
             >
               <Paperclip className="h-4 w-4" />
             </Button>
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               className="hidden"
-              onChange={handleFileUpload}
+              onChange={handleFileSelect}
               accept="image/*,.pdf,.doc,.docx,.xlsx,.csv,.txt"
             />
           </div>

@@ -7,13 +7,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ChevronLeft, Send, Paperclip, Ticket, CheckCircle2, Clock, AlertCircle, MessageSquare, FileText, Image, Download } from 'lucide-react';
+import { ChevronLeft, Send, Paperclip, Ticket, CheckCircle2, Clock, AlertCircle, MessageSquare, FileText, Download, X, Loader2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { useSocket } from '@/hooks/use-socket';
 import { getInitials, cn } from '@/lib/utils';
 import { SameTopicDialog } from '@/components/tickets/same-topic-dialog';
+import { ChatImage } from '@/components/tickets/chat-image';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
@@ -57,6 +58,14 @@ interface ChatMessage {
  files?: { id: string; originalName: string; mimeType: string; url: string }[];
 }
 
+/** Adjunto pendiente de enviar (aun no subido). `preview` es un object URL para
+ * imagenes, null para el resto. */
+interface PendingAttachment {
+ id: string;
+ file: File;
+ preview: string | null;
+}
+
 export default function PortalTicketDetailPage() {
  const { ticketId } = useParams<{ ticketId: string }>();
  const { user } = useAuth();
@@ -65,9 +74,10 @@ export default function PortalTicketDetailPage() {
  const [loading, setLoading] = useState(true);
  const [messageText, setMessageText] = useState('');
  const [sending, setSending] = useState(false);
- const [uploading, setUploading] = useState(false);
+ const [pending, setPending] = useState<PendingAttachment[]>([]);
  const [showSameTopic, setShowSameTopic] = useState(false);
  const fileInputRef = useRef<HTMLInputElement>(null);
+ const pendingRef = useRef<PendingAttachment[]>([]);
  const messagesEndRef = useRef<HTMLDivElement>(null);
 
  const { joinRoom, leaveRoom } = useSocket({
@@ -128,44 +138,85 @@ export default function PortalTicketDetailPage() {
  }
  };
 
+ // Mantiene pendingRef en sync para revocar los object URLs al desmontar.
+ useEffect(() => {
+ pendingRef.current = pending;
+ }, [pending]);
+ useEffect(() => {
+ return () => {
+ pendingRef.current.forEach((p) => p.preview && URL.revokeObjectURL(p.preview));
+ };
+ }, []);
+
+ const addFiles = (files: File[]) => {
+ const additions = files.map((file) => ({
+ id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+ file,
+ preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+ }));
+ setPending((prev) => [...prev, ...additions]);
+ };
+
+ const removePending = (id: string) => {
+ setPending((prev) => {
+ const target = prev.find((p) => p.id === id);
+ if (target?.preview) URL.revokeObjectURL(target.preview);
+ return prev.filter((p) => p.id !== id);
+ });
+ };
+
+ // Envio unificado: sube los adjuntos pendientes (si hay) y postea UN mensaje
+ // con texto + fileIds. content es requerido por el backend (1..5000): si no hay
+ // texto usamos el marcador 📎 (que oculta la burbuja al render).
  const handleSend = async (e: React.FormEvent) => {
  e.preventDefault();
- if (!messageText.trim() || !ticket?.channel?.id) return;
-
- setSending(true);
  const content = messageText.trim();
- setMessageText('');
-
+ if ((!content && pending.length === 0) || !ticket?.channel?.id || sending) return;
+ const channelId = ticket.channel.id;
+ setSending(true);
  try {
- await api.post<any>(`/channels/${ticket.channel.id}/messages`, { content });
- // Message will arrive via WebSocket broadcast (message:new)
+ let fileIds: string[] = [];
+ if (pending.length > 0) {
+ const uploaded = await Promise.all(
+ pending.map(async (p) => {
+ const formData = new FormData();
+ formData.append('file', p.file);
+ const res = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
+ return res.data?.id as string | undefined;
+ }),
+ );
+ fileIds = uploaded.filter((id): id is string => Boolean(id));
+ }
+ await api.post<any>(`/channels/${channelId}/messages`, {
+ content: content || `📎 ${pending.map((p) => p.file.name).join(', ')}`,
+ ...(fileIds.length > 0 && { fileIds }),
+ });
+ // El mensaje llega via WebSocket broadcast (message:new)
+ pending.forEach((p) => p.preview && URL.revokeObjectURL(p.preview));
+ setPending([]);
+ setMessageText('');
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al enviar el mensaje');
- setMessageText(content);
  } finally {
  setSending(false);
  }
  };
 
- const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
- const file = e.target.files?.[0];
- if (!file || !ticket?.channel?.id) return;
- setUploading(true);
- try {
- const formData = new FormData();
- formData.append('file', file);
- const uploadRes = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
- const fileId = uploadRes.data?.id;
- await api.post<any>(`/channels/${ticket.channel.id}/messages`, {
- content: `📎 ${file.name}`,
- ...(fileId && { fileIds: [fileId] }),
- });
- toast.success('Archivo enviado', file.name);
- } catch (err) {
- toast.error('Error', err instanceof ApiError ? err.message : 'Error al subir archivo');
- } finally {
- setUploading(false);
+ const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+ const files = Array.from(e.target.files || []);
+ if (files.length > 0) addFiles(files);
  if (fileInputRef.current) fileInputRef.current.value = '';
+ };
+
+ // Paste de imagen (Ctrl+V): si el clipboard trae archivos, los agrega al preview.
+ const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+ const files = Array.from(e.clipboardData?.items || [])
+ .filter((it) => it.kind === 'file')
+ .map((it) => it.getAsFile())
+ .filter((f): f is File => Boolean(f));
+ if (files.length > 0) {
+ e.preventDefault();
+ addFiles(files);
  }
  };
 
@@ -368,14 +419,18 @@ export default function PortalTicketDetailPage() {
  )}
  {msg.files && msg.files.length > 0 && (
  <div className="flex flex-col gap-1.5">
- {msg.files.map((f) => (
+ {msg.files.map((f) =>
+ f.mimeType?.startsWith('image/') ? (
+ <ChatImage key={f.id} src={f.url} alt={f.originalName} className="max-h-60 max-w-[240px]"/>
+ ) : (
  <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" download={f.originalName}
   className="flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2 text-xs hover:bg-muted/50 transition-colors">
  <FileText className="h-4 w-4 text-primary shrink-0"/>
  <span className="truncate font-medium text-foreground">{f.originalName}</span>
  <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-auto"/>
  </a>
- ))}
+ ),
+ )}
  </div>
  )}
  <span className="text-[10px] text-muted-foreground px-1">
@@ -394,36 +449,54 @@ export default function PortalTicketDetailPage() {
  {ticket.channel ? (
  /* Composer read-only "todo gris" cuando el ticket esta resuelto:
     opacity-60 + pointer-events-none envuelve SOLO la zona del composer
-    (input + enviar + adjuntar), ademas del disabled que ya tiene. El
-    historial de mensajes de arriba queda 100% legible. */
- <form
- onSubmit={handleSend}
- className={cn(
- 'flex items-center gap-2',
- isResolved && 'opacity-60 pointer-events-none',
+    (preview + input + enviar + adjuntar), ademas del disabled que ya tiene.
+    El historial de mensajes de arriba queda 100% legible. */
+ <div className={cn(isResolved && 'opacity-60 pointer-events-none')}>
+ {/* Preview de adjuntos pendientes (imagenes con thumbnail, resto como chip) */}
+ {pending.length > 0 && (
+ <div className={cn('flex flex-wrap gap-2 mb-2', sending && 'opacity-60 pointer-events-none')}>
+ {pending.map((p) => (
+ <div key={p.id} className="relative">
+ {p.preview ? (
+ // eslint-disable-next-line @next/next/no-img-element
+ <img src={p.preview} alt={p.file.name} className="h-16 w-16 rounded-lg border border-border object-cover"/>
+ ) : (
+ <div className="flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-muted px-1">
+ <Paperclip className="h-4 w-4 text-muted-foreground"/>
+ <span className="w-full truncate text-center text-[9px] text-muted-foreground">{p.file.name}</span>
+ </div>
  )}
- >
- <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || isResolved} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
+ <button type="button" onClick={() => removePending(p.id)} aria-label="Quitar adjunto" className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow hover:opacity-90">
+ <X className="h-3 w-3"/>
+ </button>
+ </div>
+ ))}
+ </div>
+ )}
+ <form onSubmit={handleSend} className="flex items-center gap-2">
+ <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending || isResolved} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
  <Paperclip className="h-4 w-4"/>
  </button>
- <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx,.xlsx,.csv,.txt" />
+ <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.doc,.docx,.xlsx,.csv,.txt" />
  <input
  type="text"
  value={messageText}
  onChange={(e) => setMessageText(e.target.value)}
- placeholder={isResolved ? 'Ticket resuelto — chat de solo lectura' : 'Escribe un mensaje...'}
+ onPaste={handlePaste}
+ placeholder={isResolved ? 'Ticket resuelto — chat de solo lectura' : 'Escribe un mensaje o pega una imagen...'}
  disabled={sending || isResolved}
  className="flex-1 rounded-full border border-border bg-muted px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
  />
  <Button
  type="submit"
  size="sm"
- disabled={!messageText.trim() || sending || isResolved}
+ disabled={(!messageText.trim() && pending.length === 0) || sending || isResolved}
  className="rounded-full h-9 w-9 p-0 shrink-0"
  >
- <Send className="h-4 w-4"/>
+ {sending ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
  </Button>
  </form>
+ </div>
  ) : (
  <p className="text-center text-xs text-muted-foreground py-1">Canal de chat no disponible</p>
  )}
