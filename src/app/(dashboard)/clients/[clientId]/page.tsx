@@ -38,6 +38,8 @@ import {
  ChevronLeft,
  ChevronRight,
  Pencil,
+ Lock,
+ Receipt,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
@@ -65,6 +67,7 @@ interface HoursTransaction {
  priceAmount: string | null;
  priceRate: string | null;
  priceCurrency: string | null;
+ billedCycleId: string | null;
  task?: { id: string; title: string; type?: 'SUPPORT' | 'PROJECT' | null; project?: { id: string; name: string } } | null;
 }
 
@@ -399,6 +402,25 @@ export default function ClientDetailPage() {
  </div>
  </div>
 
+ {/* Acceso a Facturación por ciclos (#25 — T23) */}
+ {hasPermission('read:billing') && (
+ <Link
+ href={`/clients/${clientId}/facturacion`}
+ className="flex items-center justify-between rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/40"
+ >
+ <div className="flex items-center gap-3">
+ <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+ <Receipt className="h-5 w-5 text-primary"/>
+ </div>
+ <div>
+ <p className="text-[15px] font-semibold text-card-foreground">Facturación</p>
+ <p className="text-sm text-muted-foreground">Cerrá ciclos mensuales y gestioná las facturas del cliente</p>
+ </div>
+ </div>
+ <ChevronRight className="h-5 w-5 text-muted-foreground"/>
+ </Link>
+ )}
+
  {/* Hours Widget - Full width */}
  <div className="rounded-xl border border-border bg-card p-6">
  <div className="flex items-center justify-between mb-5">
@@ -579,6 +601,16 @@ export default function ClientDetailPage() {
  </td>
  <td className="px-3 py-2.5">
  <div className="flex items-center gap-1 justify-end">
+ {/* Movimiento facturado (#25): inmutable, read-only. */}
+ {tx.billedCycleId ? (
+ <span
+ className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40"
+ title="Movimiento facturado (solo lectura). Reabrí el ciclo para editarlo."
+ >
+ <Lock className="h-3.5 w-3.5"/>
+ </span>
+ ) : (
+ <>
  {canEditHours && (tx.type === 'USAGE' || tx.type === 'LOAN') && (
  <button
  onClick={() => {
@@ -599,6 +631,8 @@ export default function ClientDetailPage() {
  >
  <Trash2 className="h-3.5 w-3.5"/>
  </button>
+ </>
+ )}
  </div>
  </td>
  </tr>
