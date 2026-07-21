@@ -9,9 +9,7 @@ import {
  FileText as AlcanceIcon,
  Calculator,
  ListTodo,
- FileText,
  BarChart2,
- Timer,
  ClipboardCheck,
  CalendarDays,
  ChevronsUpDown,
@@ -47,12 +45,10 @@ const primaryTabs: TabItem[] = [
  { label: 'Alcance', href: '/alcance', icon: AlcanceIcon, permission: 'manage:projects' },
  { label: 'Presupuesto', href: '/presupuesto', icon: Calculator, permission: 'manage:projects' },
  { label: 'Tareas', href: '/backlog', icon: ListTodo, permission: 'read:tasks' },
- { label: 'Factura', href: '/invoices', icon: FileText, permission: 'read:billing' },
  { label: 'Reportes', href: '/reports', icon: BarChart2, permission: 'read:projects' },
 ];
 
 const secondaryActions: TabItem[] = [
- { label: 'Tiempo', href: '/time', icon: Timer, permission: 'read:time-entries' },
  { label: 'Archivos', href: '/files', icon: FolderOpen },
  { label: 'Aprobaciones', href: '/approvals', icon: ClipboardCheck, badgeKey: 'approvals', permission: 'manage:projects' },
  { label: 'Calendario', href: '/calendar', icon: CalendarDays },
