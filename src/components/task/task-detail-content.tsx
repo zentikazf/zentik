@@ -18,15 +18,17 @@ import {
  ArrowLeft, Calendar, Tag, User, Clock, CheckCircle2, Paperclip,
  Download, File as FileIcon, Image, FileText, Plus, Send, MessageSquare,
  Upload, Shield, Eye, EyeOff, AlertTriangle, DollarSign, XCircle,
+ Trash2, Pencil, Check,
 } from 'lucide-react';
 import {
  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
-import { formatRelative, getInitials, cn } from '@/lib/utils';
+import { formatRelative, getInitials, cn, formatHoursFromMinutes, formatWorkedOn } from '@/lib/utils';
 import { TASK_TYPE_OPTIONS } from '@/lib/task-utils';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useAuth } from '@/hooks/use-auth';
 import { TaskApprovalOtpModal } from '@/components/task/task-approval-otp-modal';
 
 // ── Constant maps ──────────────────────────────────────────────────
@@ -91,6 +93,15 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
 
  // Approval panel (visible cuando IN_REVIEW + permission manage:projects)
  const { hasPermission } = usePermissions();
+ const { user: currentUser } = useAuth();
+
+ // H4 — Registrar horas (carga manual)
+ const [hoursToLog, setHoursToLog] = useState('');
+ const [workedOnDraft, setWorkedOnDraft] = useState<string>(() => new Date().toLocaleDateString('en-CA'));
+ const [logNote, setLogNote] = useState('');
+ const [loggingHours, setLoggingHours] = useState(false);
+ const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+ const [editHours, setEditHours] = useState('');
  const [approvalOtpOpen, setApprovalOtpOpen] = useState(false);
  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
  const [rejectReason, setRejectReason] = useState('');
@@ -235,6 +246,64 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  }
  };
 
+ // ── H4: Registrar / corregir / borrar horas manuales ──
+ const handleLogHours = async () => {
+ const hours = Number(hoursToLog);
+ if (!hoursToLog || Number.isNaN(hours) || hours <= 0) {
+ toast.error('Error', 'Ingresá una cantidad de horas válida');
+ return;
+ }
+ setLoggingHours(true);
+ try {
+ await api.post(`/tasks/${taskId}/time-entries`, {
+ minutes: Math.round(hours * 60),
+ workedOn: workedOnDraft,
+ note: logNote || undefined,
+ });
+ setHoursToLog('');
+ setLogNote('');
+ await loadTask();
+ onUpdated?.();
+ toast.success('Horas registradas');
+ } catch (err) {
+ const msg = err instanceof ApiError ? err.message : 'No se pudieron registrar las horas';
+ toast.error('Error', msg);
+ } finally {
+ setLoggingHours(false);
+ }
+ };
+
+ const handleSaveCorrection = async (id: string) => {
+ const hours = Number(editHours);
+ if (!editHours || Number.isNaN(hours) || hours <= 0) {
+ toast.error('Error', 'Ingresá una cantidad de horas válida');
+ return;
+ }
+ try {
+ await api.patch(`/time-entries/${id}`, { minutes: Math.round(hours * 60) });
+ setEditingEntryId(null);
+ setEditHours('');
+ await loadTask();
+ onUpdated?.();
+ toast.success('Corrección aplicada');
+ } catch (err) {
+ const msg = err instanceof ApiError ? err.message : 'No se pudo corregir la entrada';
+ toast.error('Error', msg);
+ }
+ };
+
+ const handleDeleteEntry = async (id: string) => {
+ try {
+ await api.delete(`/time-entries/${id}`);
+ await loadTask();
+ onUpdated?.();
+ toast.success('Registro eliminado');
+ } catch (err) {
+ const msg = err instanceof ApiError ? err.message : 'No se pudo eliminar el registro';
+ toast.error('Error', msg);
+ }
+ };
+
  const handleAddComment = async () => {
  if (!newComment.trim()) return;
  try {
@@ -299,9 +368,14 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  const priorityOpt = PRIORITY_OPTIONS.find((p) => p.value === task.priority);
  const completedSubs = (task.subTasks || []).filter((s: any) => s.status === 'DONE').length;
  const totalSubs = (task.subTasks || []).length;
- const totalSeconds = task.totalDuration || 0;
- const totalHours = Math.floor(totalSeconds / 3600);
- const totalMins = Math.floor((totalSeconds % 3600) / 60);
+ // H4: total y lista se calculan de las entradas reales (minutes), tolerando legacy (duration/60).
+ const realEntries = (task.timeEntries || []).filter((e: any) => !e.deletedAt);
+ const totalMinutes = realEntries.reduce(
+ (s: number, e: any) => s + (e.minutes ?? Math.round((e.duration ?? 0) / 60)),
+ 0,
+ );
+ const todayStr = new Date().toLocaleDateString('en-CA');
+ const taskDayStr = task.createdAt ? task.createdAt.slice(0, 10) : undefined;
 
  // Pre-registradas badge: TimeEntry DRAFT con duracion > 0
  const draftEntry = (task.timeEntries || []).find((te: any) => te.status === 'DRAFT');
@@ -766,24 +840,85 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </div>
  </div>
 
- {/* Time Summary */}
+ {/* Time Summary + carga manual (H4) */}
  <div className={isSheet ? '' : 'rounded-xl border border-border bg-card p-5'}>
  <h3 className="mb-2 text-[15px] font-semibold text-foreground">Tiempo Registrado</h3>
- <p className="text-2xl font-bold text-foreground">{totalHours}h {totalMins}m</p>
- {task.timeEntries && task.timeEntries.length > 0 && (
- <div className="mt-3 space-y-1.5">
- {task.timeEntries.slice(0, 5).map((entry: any) => (
- <div key={entry.id} className="flex items-center justify-between text-xs text-muted-foreground">
- <div className="flex items-center gap-1.5">
- <Avatar className="h-4 w-4">
+ <p className="text-2xl font-bold text-foreground">{formatHoursFromMinutes(totalMinutes)}</p>
+
+ {/* Registrar horas (carga manual con fecha de trabajo) */}
+ <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/30 p-2.5">
+ <div className="flex items-center gap-2">
+ <input
+ type="number" min="0" step="0.25" value={hoursToLog}
+ onChange={(e) => setHoursToLog(e.target.value)}
+ onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogHours(); } }}
+ placeholder="Horas"
+ className="h-8 w-20 rounded border border-border bg-background px-2 text-sm text-foreground"
+ />
+ <input
+ type="date" value={workedOnDraft} max={todayStr} min={taskDayStr}
+ onChange={(e) => setWorkedOnDraft(e.target.value)}
+ className="h-8 flex-1 rounded border border-border bg-background px-2 text-xs text-foreground"
+ />
+ </div>
+ <Textarea
+ value={logNote} onChange={(e) => setLogNote(e.target.value)}
+ placeholder="Nota (opcional)" rows={2}
+ className="text-xs resize-none min-h-0"
+ />
+ <Button size="sm" className="w-full h-8 text-xs" disabled={loggingHours || !hoursToLog} onClick={handleLogHours}>
+ <Clock className="h-3.5 w-3.5 mr-1"/> {loggingHours ? 'Registrando...' : 'Registrar horas'}
+ </Button>
+ </div>
+
+ {/* Lista de entradas reales — tolera nuevas (minutes/workedOn) y legacy (duration) */}
+ {realEntries.length > 0 && (
+ <div className="mt-3 space-y-2">
+ {realEntries.map((entry: any) => {
+ const mins = entry.minutes ?? Math.round((entry.duration ?? 0) / 60);
+ const canModify = hasPermission('manage:time-entries') || entry.userId === currentUser?.id;
+ const isEditing = editingEntryId === entry.id;
+ return (
+ <div key={entry.id} className="flex items-start justify-between gap-2 text-xs">
+ <div className="flex items-start gap-1.5 min-w-0">
+ <Avatar className="h-5 w-5 shrink-0">
  <AvatarImage src={entry.user?.image} />
- <AvatarFallback className="text-[7px]">{entry.user?.name?.charAt(0)}</AvatarFallback>
+ <AvatarFallback className="text-[8px]">{getInitials(entry.user?.name || '?')}</AvatarFallback>
  </Avatar>
- <span>{entry.description || 'Sin descripción'}</span>
+ <div className="min-w-0">
+ {isEditing ? (
+ <div className="flex items-center gap-1">
+ <input
+ type="number" min="0" step="0.25" value={editHours} autoFocus
+ onChange={(e) => setEditHours(e.target.value)}
+ onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCorrection(entry.id); if (e.key === 'Escape') setEditingEntryId(null); }}
+ className="h-6 w-16 rounded border border-warning bg-background px-1.5 text-xs text-foreground"
+ />
+ <button onClick={() => handleSaveCorrection(entry.id)} title="Guardar" className="text-success hover:opacity-70"><Check className="h-3.5 w-3.5"/></button>
+ <button onClick={() => setEditingEntryId(null)} title="Cancelar" className="text-muted-foreground hover:text-destructive"><XCircle className="h-3.5 w-3.5"/></button>
  </div>
- <span className="font-medium text-foreground">{entry.duration ? `${Math.floor(entry.duration / 3600)}h ${Math.floor((entry.duration % 3600) / 60)}m` : '—'}</span>
+ ) : (
+ <p className="text-foreground">
+ <span className="font-medium">{formatHoursFromMinutes(mins)}</span>
+ {entry.workedOn && <span className="text-muted-foreground"> · {formatWorkedOn(entry.workedOn)}</span>}
+ {' · '}<span className="text-muted-foreground">{entry.user?.name || '—'}</span>
+ </p>
+ )}
+ {!isEditing && entry.description && <p className="text-muted-foreground truncate">{entry.description}</p>}
+ {!isEditing && entry.correctedById && (
+ <p className="text-[10px] text-warning">corregido{typeof entry.previousMinutes === 'number' ? ` (antes ${formatHoursFromMinutes(entry.previousMinutes)})` : ''}</p>
+ )}
  </div>
- ))}
+ </div>
+ {canModify && !isEditing && (
+ <div className="flex items-center gap-1 shrink-0">
+ <button onClick={() => { setEditingEntryId(entry.id); setEditHours(String(mins / 60)); }} title="Corregir" className="text-muted-foreground hover:text-warning"><Pencil className="h-3.5 w-3.5"/></button>
+ <button onClick={() => handleDeleteEntry(entry.id)} title="Eliminar" className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5"/></button>
+ </div>
+ )}
+ </div>
+ );
+ })}
  </div>
  )}
  </div>

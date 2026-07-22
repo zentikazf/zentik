@@ -35,7 +35,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
-import { ApiError } from '@/lib/api-client';
+import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { ticketService } from '@/services/ticket.service';
 import { TicketActionBar } from './ticket-action-bar';
@@ -74,6 +74,12 @@ export function TicketSidePanel({
   // Notas del admin
   const [adminNotes, setAdminNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
+
+  // H4 — Registrar horas en la tarea del ticket
+  const [hoursToLog, setHoursToLog] = useState('');
+  const [workedOnDraft, setWorkedOnDraft] = useState<string>(() => new Date().toLocaleDateString('en-CA'));
+  const [logNote, setLogNote] = useState('');
+  const [loggingHours, setLoggingHours] = useState(false);
 
   // Cargar preferencia de ancho desde localStorage
   useEffect(() => {
@@ -151,7 +157,33 @@ export function TicketSidePanel({
     }
   };
 
+  const handleLogHours = async () => {
+    const taskId = ticket?.task?.id;
+    if (!taskId) return;
+    const hours = Number(hoursToLog);
+    if (!hoursToLog || Number.isNaN(hours) || hours <= 0) {
+      toast.error('Error', 'Ingresá una cantidad de horas válida');
+      return;
+    }
+    setLoggingHours(true);
+    try {
+      await api.post(`/tasks/${taskId}/time-entries`, {
+        minutes: Math.round(hours * 60),
+        workedOn: workedOnDraft,
+        note: logNote || undefined,
+      });
+      setHoursToLog('');
+      setLogNote('');
+      toast.success('Horas registradas');
+    } catch (err) {
+      toast.error('Error', err instanceof ApiError ? err.message : 'No se pudieron registrar las horas');
+    } finally {
+      setLoggingHours(false);
+    }
+  };
+
   const sla = ticket && (ticket.slaResponseBreached || ticket.slaResolutionBreached);
+  const todayStr = new Date().toLocaleDateString('en-CA');
   const assignee = ticket?.task?.assignments?.[0]?.user;
   const criticality = ticket?.criticality || ticket?.categoryConfig?.criticality || ticket?.priority;
   const criticalityStyle = criticality ? CRITICALITY_BADGE[criticality] : null;
@@ -261,6 +293,40 @@ export function TicketSidePanel({
                   onUpdated={handleUpdated}
                 />
 
+                {/* 1.5) Registrar horas en la tarea del ticket (H4) — oculto si el ticket no tiene tarea */}
+                {ticket.task && (
+                  <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" /> Registrar horas
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min="0" step="0.25" value={hoursToLog}
+                        onChange={(e) => setHoursToLog(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogHours(); } }}
+                        placeholder="Horas"
+                        className="h-8 w-20 rounded border border-border bg-background px-2 text-sm text-foreground"
+                      />
+                      <input
+                        type="date" value={workedOnDraft} max={todayStr}
+                        onChange={(e) => setWorkedOnDraft(e.target.value)}
+                        className="h-8 flex-1 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      />
+                    </div>
+                    <Textarea
+                      value={logNote} onChange={(e) => setLogNote(e.target.value)}
+                      placeholder="Nota (opcional)" rows={2}
+                      className="text-xs resize-none min-h-0"
+                    />
+                    <Button
+                      size="sm" className="w-full h-8 text-xs"
+                      disabled={loggingHours || !hoursToLog}
+                      onClick={handleLogHours}
+                    >
+                      {loggingHours ? 'Registrando...' : 'Registrar horas'}
+                    </Button>
+                  </div>
+                )}
 
                 {/* 2) Estado en Kanban — educativo + link al board */}
                 {ticket.task?.boardColumn && (
