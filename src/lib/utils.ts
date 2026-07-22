@@ -64,3 +64,18 @@ export function getInitials(name: string): string {
     .toUpperCase()
     .slice(0, 2);
 }
+
+// H4 — Horas con coma decimal es-PY: 90 → "1,5 h" (toFixed daría punto).
+export function formatHoursFromMinutes(minutes: number): string {
+  const value = new Intl.NumberFormat('es-PY', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  }).format(minutes / 60);
+  return `${value} h`;
+}
+
+// H4 — Fecha de trabajo corta es-PY: '2026-07-20' → "dom 20/07". Parseo date-only
+// (medianoche LOCAL) para no correr un día por la zona horaria en el display.
+export function formatWorkedOn(date: string): string {
+  return format(new Date(`${date.slice(0, 10)}T00:00:00`), 'EEE dd/MM', { locale: es });
+}

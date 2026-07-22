@@ -303,6 +303,16 @@ export interface TimeEntry {
   duration: number | null;
   billable: boolean;
   createdAt: string;
+  // H4 — la hora como declaración humana + traza + soft delete (aditivas, nullables).
+  minutes?: number | null;
+  workedOn?: string | null;
+  origin?: 'MANUAL' | 'TIMER' | 'SEED' | null;
+  createdById?: string | null;
+  correctedById?: string | null;
+  correctedAt?: string | null;
+  previousMinutes?: number | null;
+  correctionNote?: string | null;
+  deletedAt?: string | null;
   task?: Task;
   user?: User;
 }

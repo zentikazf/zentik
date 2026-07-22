@@ -47,6 +47,9 @@ const actionLabels: Record<string, string> = {
  'task.deleted': 'eliminó',
  'task.assigned': 'asignó',
  'task.status.changed': 'cambió el estado de',
+ 'time_entry.created': 'registró horas en',
+ 'time_entry.corrected': 'corrigió horas en',
+ 'time_entry.deleted': 'eliminó horas de',
 };
 
 const resourceLabels: Record<string, string> = {
@@ -87,6 +90,8 @@ function getChangeSummary(oldData: Record<string, any> | null | undefined, newDa
  description: 'Descripción',
  dueDate: 'Fecha límite',
  assigneeId: 'Asignado',
+ minutes: 'Minutos',
+ workedOn: 'Fecha',
  };
 
  for (const key of Object.keys(newData)) {
