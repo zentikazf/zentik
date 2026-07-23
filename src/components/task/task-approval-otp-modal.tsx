@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
  Dialog,
  DialogContent,
@@ -9,17 +10,27 @@ import {
  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle2, Pencil, Clock, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
+import { formatHoursFromMinutes, formatWorkedOn } from '@/lib/utils';
+
+interface ApprovalEntry {
+ minutes: number;
+ workedOn: string | null;
+ userId: string | null;
+ userName: string | null;
+}
 
 interface ApprovalPreview {
- task: { id: string; title: string };
+ task: { id: string; title: string; projectId: string };
  originalEstimate: number;
- currentDraftHours: number;
- hasDraft: boolean;
+ realHours: number;
+ realMinutes: number;
+ hasManualHours: boolean;
+ entries: ApprovalEntry[];
+ closedWithoutHours: { by: string; reason: string | null; at: string } | null;
 }
 
 interface TaskApprovalOtpModalProps {
@@ -32,8 +43,6 @@ interface TaskApprovalOtpModalProps {
 export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }: TaskApprovalOtpModalProps) {
  const [preview, setPreview] = useState<ApprovalPreview | null>(null);
  const [loading, setLoading] = useState(false);
- const [editing, setEditing] = useState(false);
- const [hours, setHours] = useState('');
  const [submitting, setSubmitting] = useState(false);
  // H6 — si la tarea no tiene horas reales, el backend bloquea la aprobación;
  // ofrecemos "aprobar sin horas (0 h)" con motivo (auditado).
@@ -43,8 +52,6 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  useEffect(() => {
  if (!open || !taskId) {
  setPreview(null);
- setEditing(false);
- setHours('');
  setEscapeMode(false);
  setEscapeReason('');
  return;
@@ -52,9 +59,7 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  setLoading(true);
  api.get(`/tasks/${taskId}/approval-preview`)
  .then((res) => {
- const data = res.data as ApprovalPreview;
- setPreview(data);
- setHours(String(data.currentDraftHours || data.originalEstimate || 0));
+ setPreview(res.data as ApprovalPreview);
  })
  .catch((err) => {
  const msg = err instanceof ApiError ? err.message : 'No se pudo cargar el preview';
@@ -64,18 +69,17 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  .finally(() => setLoading(false));
  }, [open, taskId, onOpenChange]);
 
+ // H7 — la aprobación NO manda confirmedHours: el backend cobra las horas MANUALES
+ // reales cargadas en la tarea. El modal solo confirma.
  const handleConfirm = async () => {
  if (!taskId) return;
- const parsed = parseFloat(hours);
- if (Number.isNaN(parsed) || parsed < 0) {
- toast.error('Error', 'Ingresa un numero valido de horas');
- return;
- }
-
  setSubmitting(true);
  try {
- await api.post(`/tasks/${taskId}/approve`, { confirmedHours: parsed });
- toast.success('Tarea aprobada', `Se registraron ${parsed}h`);
+ await api.post(`/tasks/${taskId}/approve`, {});
+ toast.success(
+ 'Tarea aprobada',
+ preview ? `Se descontaron ${formatHoursFromMinutes(preview.realMinutes)} del cupo` : 'Horas confirmadas',
+ );
  onApproved?.();
  onOpenChange(false);
  } catch (err) {
@@ -111,10 +115,7 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
 
  if (!preview && !loading) return null;
 
- const parsedHours = parseFloat(hours);
- const variance = !Number.isNaN(parsedHours) && preview
- ? parsedHours - (preview.originalEstimate || 0)
- : 0;
+ const variance = preview ? preview.realHours - (preview.originalEstimate || 0) : 0;
 
  return (
  <Dialog open={open} onOpenChange={onOpenChange}>
@@ -122,7 +123,7 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  <DialogHeader>
  <DialogTitle className="flex items-center gap-2">
  <Clock className="h-4 w-4 text-primary"/>
- Confirma las horas trabajadas
+ Confirmá las horas trabajadas
  </DialogTitle>
  </DialogHeader>
 
@@ -134,55 +135,30 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  ) : (
  <>
  <div className="space-y-3 py-2">
+ {/* AJ-3 — la tarea llegó cerrada sin horas (escape H6): avisar al PM. */}
+ {preview.closedWithoutHours && (
+ <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
+ <p className="flex items-center gap-1.5 text-xs font-medium text-warning">
+ <AlertTriangle className="h-3.5 w-3.5"/> Cerrada sin horas por {preview.closedWithoutHours.by}
+ </p>
+ {preview.closedWithoutHours.reason && (
+ <p className="mt-1 text-[11px] text-muted-foreground">Motivo: {preview.closedWithoutHours.reason}</p>
+ )}
+ </div>
+ )}
+
  <div>
  <p className="text-xs text-muted-foreground">Tarea</p>
  <p className="text-sm font-medium text-foreground">{preview.task.title}</p>
  </div>
 
- <div className="grid grid-cols-2 gap-3">
- <div className="rounded-xl border border-border p-3">
- <p className="text-[11px] text-muted-foreground">Estimaste</p>
- <p className="text-lg font-bold text-foreground">{preview.originalEstimate}h</p>
- </div>
- <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
- <p className="text-[11px] text-muted-foreground">Registraste</p>
- {editing ? (
- <Input
- type="number"
- min={0}
- step="0.5"
- autoFocus
- value={hours}
- onChange={(e) => setHours(e.target.value)}
- className="h-8 text-lg font-bold border-none px-0 focus-visible:ring-0 shadow-none"
- />
- ) : (
- <p className="text-lg font-bold text-primary">{hours}h</p>
- )}
- </div>
- </div>
-
- {!editing && !Number.isNaN(parsedHours) && (
- <p className="text-[11px] text-muted-foreground text-center">
- {variance > 0 && `↑ Excediste estimacion en ${variance.toFixed(1)}h`}
- {variance < 0 && `↓ Bajo estimacion por ${Math.abs(variance).toFixed(1)}h`}
- {variance === 0 && '✓ En estimacion'}
- </p>
- )}
-
- {!preview.hasDraft && !escapeMode && (
- <p className="text-[11px] text-warning bg-warning/10 rounded-lg p-2">
- No hay registro previo de horas. Vas a confirmar las horas manualmente.
- </p>
- )}
-
- {escapeMode && (
+ {escapeMode ? (
  <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3">
  <p className="flex items-center gap-1.5 text-xs font-medium text-warning">
- <AlertTriangle className="h-3.5 w-3.5"/> Esta tarea no tiene horas reales cargadas
+ <AlertTriangle className="h-3.5 w-3.5"/> Aprobar sin horas (0 h)
  </p>
  <p className="text-[11px] text-muted-foreground">
- Podés aprobarla sin horas (0 h) si el trabajo fue realmente nulo. Queda registrado quién y por qué.
+ Aprobala sin horas si el trabajo fue realmente nulo. Queda registrado quién y por qué.
  </p>
  <Textarea
  value={escapeReason}
@@ -191,6 +167,57 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  rows={2}
  autoFocus
  />
+ </div>
+ ) : preview.hasManualHours ? (
+ <>
+ {/* Desglose read-only de las horas reales cargadas. */}
+ <div className="space-y-1.5">
+ <p className="text-xs text-muted-foreground">Estas son las horas reales cargadas en la tarea:</p>
+ <ul className="divide-y divide-border rounded-xl border border-border">
+ {preview.entries.map((e, i) => (
+ <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+ <span className="font-medium text-foreground">{formatHoursFromMinutes(e.minutes)}</span>
+ <span className="text-xs text-muted-foreground">
+ {e.workedOn ? formatWorkedOn(e.workedOn) : 'sin fecha'}{e.userName ? ` · ${e.userName}` : ''}
+ </span>
+ </li>
+ ))}
+ </ul>
+ </div>
+
+ {/* Total destacado + nota de impacto. */}
+ <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+ <div className="flex items-center justify-between">
+ <span className="text-xs text-muted-foreground">Total a confirmar</span>
+ <span className="text-lg font-bold text-primary">{formatHoursFromMinutes(preview.realMinutes)}</span>
+ </div>
+ <p className="mt-1 text-[11px] text-muted-foreground">
+ Al confirmar, se descuentan {formatHoursFromMinutes(preview.realMinutes)} del cupo del cliente.
+ </p>
+ </div>
+
+ {/* Varianza informativa vs. estimación (no editable). */}
+ {preview.originalEstimate > 0 && (
+ <p className="text-center text-[11px] text-muted-foreground">
+ Estimaste {preview.originalEstimate}h ·{' '}
+ {variance > 0 && `↑ ${variance.toFixed(1)}h por encima de lo estimado`}
+ {variance < 0 && `↓ ${Math.abs(variance).toFixed(1)}h por debajo de lo estimado`}
+ {variance === 0 && '✓ en estimación'}
+ </p>
+ )}
+ </>
+ ) : (
+ // Caso 0 entradas reales: sin el warning engañoso anterior.
+ <div className="space-y-2 rounded-lg border border-border p-3">
+ <p className="text-sm font-medium text-foreground">Esta tarea no tiene horas reales cargadas.</p>
+ <p className="text-[11px] text-muted-foreground">
+ Cargá las horas trabajadas y volvé a aprobar, o aprobá sin horas (0 h) si el trabajo fue nulo.
+ </p>
+ <Link href={`/projects/${preview.task.projectId}/tasks/${preview.task.id}`}>
+ <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+ Cargar horas
+ </Button>
+ </Link>
  </div>
  )}
  </div>
@@ -205,14 +232,23 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  {submitting ? 'Aprobando...' : 'Aprobar sin horas (0 h)'}
  </Button>
  </>
- ) : (
+ ) : preview.hasManualHours ? (
  <>
- <Button variant="outline" onClick={() => setEditing(!editing)} disabled={submitting}>
- <Pencil className="h-3 w-3 mr-1"/> {editing ? 'Listo' : 'Ajustar'}
+ <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+ Cancelar
  </Button>
  <Button onClick={handleConfirm} disabled={submitting} className="bg-primary hover:bg-primary/90">
  <CheckCircle2 className="h-3 w-3 mr-1"/>
- {submitting ? 'Aprobando...' : `Confirmar ${hours}h`}
+ {submitting ? 'Aprobando...' : `Confirmar ${formatHoursFromMinutes(preview.realMinutes)} y aprobar`}
+ </Button>
+ </>
+ ) : (
+ <>
+ <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+ Cerrar
+ </Button>
+ <Button variant="destructive" onClick={() => setEscapeMode(true)} disabled={submitting}>
+ Aprobar sin horas (0 h)
  </Button>
  </>
  )}
