@@ -11,7 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { TimerWidget } from '@/components/timer/timer-widget';
 import { ActivityFeed } from '@/components/activity/activity-feed';
 import { LabelSelector } from '@/components/labels/label-selector';
 import {
@@ -377,13 +376,6 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  const todayStr = new Date().toLocaleDateString('en-CA');
  const taskDayStr = task.createdAt ? task.createdAt.slice(0, 10) : undefined;
 
- // Pre-registradas badge: TimeEntry DRAFT con duracion > 0
- const draftEntry = (task.timeEntries || []).find((te: any) => te.status === 'DRAFT');
- const preRegisteredHours = draftEntry?.duration && draftEntry.duration > 0
- ? (draftEntry.duration / 3600).toFixed(1)
- : null;
- const isOrphanDraft = preRegisteredHours && (!task.assignments || task.assignments.length === 0);
-
  // Layout root: sheet usa padding compacto y scroll completo, page usa max-w-6xl
  const rootClass = isSheet
  ? 'flex flex-col h-full overflow-hidden'
@@ -584,9 +576,6 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
 
  {/* ── RIGHT SIDEBAR ─────────────────────────────────── */}
  <div className="space-y-4">
- {/* Timer */}
- <TimerWidget taskId={task.id} taskTitle={task.title} />
-
  {/* Details */}
  <div className={isSheet ? '' : 'rounded-xl border border-border bg-card p-5'}>
  <h3 className="mb-4 text-[15px] font-semibold text-foreground">Detalles</h3>
@@ -705,16 +694,6 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </Button>
  </div>
  </div>
- {/* Badge: Pre-registradas (TimeEntry DRAFT) */}
- {preRegisteredHours && (
- <div className="flex justify-end">
- <Badge className={`text-[10px] ${isOrphanDraft ? 'bg-warning/15 text-warning' : 'bg-info/10 text-info'}`}>
- <Clock className="h-3 w-3 mr-1"/>
- Pre-registradas: {preRegisteredHours}h
- {isOrphanDraft && ' — sin asignee'}
- </Badge>
- </div>
- )}
  {task.type === 'SUPPORT' && clientHours && (
  <div className="flex items-center justify-between text-[10px]">
  <span className="text-muted-foreground">Disponibles: {clientHours.availableHours.toFixed(1)}h / {clientHours.contractedHours}h</span>
