@@ -29,6 +29,7 @@ import { TASK_TYPE_OPTIONS } from '@/lib/task-utils';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useAuth } from '@/hooks/use-auth';
 import { TaskApprovalOtpModal } from '@/components/task/task-approval-otp-modal';
+import { TaskHoursGateDialog } from '@/components/task/task-hours-gate-dialog';
 
 // ── Constant maps ──────────────────────────────────────────────────
 const STATUS_OPTIONS = [
@@ -105,6 +106,11 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
  const [rejectReason, setRejectReason] = useState('');
  const [rejecting, setRejecting] = useState(false);
+
+ // H6 — gate de horas (proactivo en el detalle): si intentás pasar a En Revisión
+ // sin horas reales cargadas, abrimos el diálogo en vez de mandar el PATCH.
+ const [gateOpen, setGateOpen] = useState(false);
+ const [gateTarget, setGateTarget] = useState<string>('IN_REVIEW');
 
  // Project members for assignee picker (excluyendo Cliente)
  const [projectMembers, setProjectMembers] = useState<any[]>([]);
@@ -583,7 +589,19 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  {/* Status */}
  <div className="flex items-center justify-between">
  <span className="text-muted-foreground text-xs">Estado</span>
- <Select value={task.status} onValueChange={(v) => patchTask({ status: v })}>
+ <Select
+ value={task.status}
+ onValueChange={(v) => {
+ // Gate proactivo: a En Revisión sin horas reales → abrir diálogo, no patchear.
+ // (A Completada el backend ya exige aprobación explícita — no se intercepta acá.)
+ if (v === 'IN_REVIEW' && totalMinutes === 0) {
+ setGateTarget('IN_REVIEW');
+ setGateOpen(true);
+ return;
+ }
+ patchTask({ status: v });
+ }}
+ >
  <SelectTrigger className="h-7 w-32 text-xs border-none shadow-none">
  <SelectValue />
  </SelectTrigger>
@@ -1018,6 +1036,29 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </DialogFooter>
  </DialogContent>
  </Dialog>
+
+ {/* H6 — Gate de horas (proactivo) */}
+ <TaskHoursGateDialog
+ open={gateOpen}
+ onOpenChange={setGateOpen}
+ taskId={taskId}
+ targetLabel="En Revisión"
+ canCloseWithoutHours={hasPermission('manage:projects') || (task.assignments || []).some((a: any) => a.user?.id === currentUser?.id)}
+ taskDay={taskDayStr}
+ onLogged={async () => {
+ // Las horas ya se registraron en el diálogo; ahora re-disparamos la transición.
+ await api.patch(`/tasks/${taskId}`, { status: gateTarget });
+ await loadTask();
+ onUpdated?.();
+ }}
+ onEscape={async (reason) => {
+ const res = await api.patch(`/tasks/${taskId}`, { status: gateTarget, closeWithoutHours: true, closeWithoutHoursReason: reason });
+ setTask(res.data);
+ onUpdated?.();
+ await loadTask();
+ toast.success('Tarea cerrada sin horas');
+ }}
+ />
  </div>
  );
 }

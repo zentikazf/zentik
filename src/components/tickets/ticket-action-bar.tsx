@@ -15,6 +15,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
 import { ticketService } from '@/services/ticket.service';
+import { TaskHoursGateDialog } from '@/components/task/task-hours-gate-dialog';
 import {
   STATUS_LABEL,
   getValidTransitions,
@@ -46,6 +47,16 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // H6 — gate de horas reactivo: resolver un ticket sin horas en su task abre el diálogo.
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateInfo, setGateInfo] = useState<{
+    taskId: string;
+    targetStatus: string;
+    canCloseWithoutHours: boolean;
+    logHoursEndpoint?: string;
+    payload: { status?: TicketStatus; assigneeId?: string | null };
+  } | null>(null);
+
   // Re-sync local state when ticket changes (WS push, etc.)
   useEffect(() => {
     setStatus(ticket.status);
@@ -76,14 +87,14 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
   const handleConfirm = async () => {
     if (!hasChanges || saving) return;
 
+    const payload: { status?: TicketStatus; assigneeId?: string | null } = {};
+    if (status !== ticket.status) payload.status = status;
+    if ((assigneeId || '') !== (currentAssignee?.id ?? '')) {
+      payload.assigneeId = assigneeId || null;
+    }
+
     setSaving(true);
     try {
-      const payload: { status?: TicketStatus; assigneeId?: string | null } = {};
-      if (status !== ticket.status) payload.status = status;
-      if ((assigneeId || '') !== (currentAssignee?.id ?? '')) {
-        payload.assigneeId = assigneeId || null;
-      }
-
       const res = await ticketService.update(ticket.id, payload);
       onUpdated(res.data);
 
@@ -95,6 +106,20 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
       }
       toast.success('Ticket actualizado', parts.join(' · '));
     } catch (err) {
+      // H6: el ticket no tiene horas reales en su task → abrir el diálogo del gate
+      // apuntando a ticket.task.id, en vez del toast genérico.
+      if (err instanceof ApiError && err.code === 'WORK_HOURS_REQUIRED' && ticket.task?.id) {
+        const d = (err.details || {}) as Record<string, unknown>;
+        setGateInfo({
+          taskId: (d.taskId as string) || ticket.task.id,
+          targetStatus: (d.targetStatus as string) || 'IN_REVIEW',
+          canCloseWithoutHours: !!d.canCloseWithoutHours,
+          logHoursEndpoint: d.logHoursEndpoint as string | undefined,
+          payload,
+        });
+        setGateOpen(true);
+        return;
+      }
       toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo actualizar');
     } finally {
       setSaving(false);
@@ -102,6 +127,7 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
   };
 
   return (
+    <>
     <div className="rounded-xl border border-border bg-card p-3 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {/* Estado */}
@@ -162,5 +188,32 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
         </Button>
       </div>
     </div>
+
+    {gateInfo && (
+      <TaskHoursGateDialog
+        open={gateOpen}
+        onOpenChange={setGateOpen}
+        taskId={gateInfo.taskId}
+        targetLabel={gateInfo.targetStatus === 'DONE' ? 'Completada' : 'En Revisión'}
+        canCloseWithoutHours={gateInfo.canCloseWithoutHours}
+        logHoursEndpoint={gateInfo.logHoursEndpoint}
+        onLogged={async () => {
+          // Horas registradas → reintentar la transición del ticket.
+          const res = await ticketService.update(ticket.id, gateInfo.payload);
+          onUpdated(res.data);
+        }}
+        onEscape={async (reason) => {
+          // Cerrar la task sin horas (audita) y luego re-aplicar la transición del ticket.
+          await api.patch(`/tasks/${gateInfo.taskId}`, {
+            status: gateInfo.targetStatus,
+            closeWithoutHours: true,
+            closeWithoutHoursReason: reason,
+          });
+          const res = await ticketService.update(ticket.id, gateInfo.payload);
+          onUpdated(res.data);
+        }}
+      />
+    )}
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from '@/providers/theme-provider';
-import { Toaster } from 'sileo';
+import { AppToaster } from '@/components/app-toaster';
 import { AppVersionChecker } from '@/components/app-version-checker';
 import './globals.css';
 
@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
  <ThemeProvider>
  <AppVersionChecker />
  {children}
- <Toaster />
+ <AppToaster />
  </ThemeProvider>
  </body>
  </html>

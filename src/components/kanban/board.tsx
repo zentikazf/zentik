@@ -23,6 +23,7 @@ import type { BoardColumn, Task } from '@/types';
 import { useBoardStore } from '@/stores/use-board-store';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
+import { TaskHoursGateDialog } from '@/components/task/task-hours-gate-dialog';
 
 interface KanbanBoardProps {
  boardId: string;
@@ -49,6 +50,17 @@ export function KanbanBoard({
 }: KanbanBoardProps) {
  const { columns, setColumns, moveTask } = useBoardStore();
  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+ // H6 — gate de horas reactivo: el backend rechaza el move sin horas → abrimos el diálogo.
+ const [gateOpen, setGateOpen] = useState(false);
+ const [gateInfo, setGateInfo] = useState<{
+ taskId: string;
+ targetStatus: string;
+ targetColumnId: string;
+ sourceColumnId: string;
+ canCloseWithoutHours: boolean;
+ logHoursEndpoint?: string;
+ } | null>(null);
 
  useEffect(() => {
  setColumns(initialColumns);
@@ -123,8 +135,23 @@ export function KanbanBoard({
  position: 0,
  });
  } catch (err) {
- // Revert on failure
+ // Revert optimista
  moveTask(activeId, targetColumnId, sourceColumn.id, 0);
+ // H6: si se bloqueó por falta de horas, abrir el diálogo del gate (no el toast plano).
+ // La card no carga timeEntries → el gate es forzosamente reactivo.
+ if (err instanceof ApiError && err.code === 'WORK_HOURS_REQUIRED') {
+ const d = (err.details || {}) as Record<string, unknown>;
+ setGateInfo({
+ taskId: (d.taskId as string) || activeId,
+ targetStatus: (d.targetStatus as string) || '',
+ targetColumnId,
+ sourceColumnId: sourceColumn.id,
+ canCloseWithoutHours: !!d.canCloseWithoutHours,
+ logHoursEndpoint: d.logHoursEndpoint as string | undefined,
+ });
+ setGateOpen(true);
+ return;
+ }
  const msg = err instanceof ApiError ? err.message : 'No se pudo mover la tarea';
  toast.error('Movimiento bloqueado', msg);
  }
@@ -133,6 +160,7 @@ export function KanbanBoard({
  );
 
  return (
+ <>
  <DndContext
  sensors={sensors}
  collisionDetection={closestCorners}
@@ -168,5 +196,35 @@ export function KanbanBoard({
  {activeTask ? <KanbanCard task={activeTask} overlay /> : null}
  </DragOverlay>
  </DndContext>
+
+ {gateInfo && (
+ <TaskHoursGateDialog
+ open={gateOpen}
+ onOpenChange={setGateOpen}
+ taskId={gateInfo.taskId}
+ targetLabel={gateInfo.targetStatus === 'DONE' ? 'Completada' : 'En Revisión'}
+ canCloseWithoutHours={gateInfo.canCloseWithoutHours}
+ logHoursEndpoint={gateInfo.logHoursEndpoint}
+ onLogged={async () => {
+ // Horas ya registradas en el diálogo → reintentar el move.
+ await api.patch(`/boards/${boardId}/tasks/move`, {
+ taskId: gateInfo.taskId,
+ targetColumnId: gateInfo.targetColumnId,
+ position: 0,
+ });
+ moveTask(gateInfo.taskId, gateInfo.sourceColumnId, gateInfo.targetColumnId, 0);
+ }}
+ onEscape={async (reason) => {
+ // El board no cierra sin horas por el move (gate duro); se reenvía por PATCH /tasks/:id.
+ await api.patch(`/tasks/${gateInfo.taskId}`, {
+ status: gateInfo.targetStatus,
+ closeWithoutHours: true,
+ closeWithoutHoursReason: reason,
+ });
+ moveTask(gateInfo.taskId, gateInfo.sourceColumnId, gateInfo.targetColumnId, 0);
+ }}
+ />
+ )}
+ </>
  );
 }
