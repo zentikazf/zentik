@@ -11,7 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { TimerWidget } from '@/components/timer/timer-widget';
 import { ActivityFeed } from '@/components/activity/activity-feed';
 import { LabelSelector } from '@/components/labels/label-selector';
 import {
@@ -30,6 +29,7 @@ import { TASK_TYPE_OPTIONS } from '@/lib/task-utils';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useAuth } from '@/hooks/use-auth';
 import { TaskApprovalOtpModal } from '@/components/task/task-approval-otp-modal';
+import { TaskHoursGateDialog } from '@/components/task/task-hours-gate-dialog';
 
 // ── Constant maps ──────────────────────────────────────────────────
 const STATUS_OPTIONS = [
@@ -106,6 +106,11 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
  const [rejectReason, setRejectReason] = useState('');
  const [rejecting, setRejecting] = useState(false);
+
+ // H6 — gate de horas (proactivo en el detalle): si intentás pasar a En Revisión
+ // sin horas reales cargadas, abrimos el diálogo en vez de mandar el PATCH.
+ const [gateOpen, setGateOpen] = useState(false);
+ const [gateTarget, setGateTarget] = useState<string>('IN_REVIEW');
 
  // Project members for assignee picker (excluyendo Cliente)
  const [projectMembers, setProjectMembers] = useState<any[]>([]);
@@ -377,13 +382,6 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  const todayStr = new Date().toLocaleDateString('en-CA');
  const taskDayStr = task.createdAt ? task.createdAt.slice(0, 10) : undefined;
 
- // Pre-registradas badge: TimeEntry DRAFT con duracion > 0
- const draftEntry = (task.timeEntries || []).find((te: any) => te.status === 'DRAFT');
- const preRegisteredHours = draftEntry?.duration && draftEntry.duration > 0
- ? (draftEntry.duration / 3600).toFixed(1)
- : null;
- const isOrphanDraft = preRegisteredHours && (!task.assignments || task.assignments.length === 0);
-
  // Layout root: sheet usa padding compacto y scroll completo, page usa max-w-6xl
  const rootClass = isSheet
  ? 'flex flex-col h-full overflow-hidden'
@@ -584,9 +582,6 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
 
  {/* ── RIGHT SIDEBAR ─────────────────────────────────── */}
  <div className="space-y-4">
- {/* Timer */}
- <TimerWidget taskId={task.id} taskTitle={task.title} />
-
  {/* Details */}
  <div className={isSheet ? '' : 'rounded-xl border border-border bg-card p-5'}>
  <h3 className="mb-4 text-[15px] font-semibold text-foreground">Detalles</h3>
@@ -594,7 +589,19 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  {/* Status */}
  <div className="flex items-center justify-between">
  <span className="text-muted-foreground text-xs">Estado</span>
- <Select value={task.status} onValueChange={(v) => patchTask({ status: v })}>
+ <Select
+ value={task.status}
+ onValueChange={(v) => {
+ // Gate proactivo: a En Revisión sin horas reales → abrir diálogo, no patchear.
+ // (A Completada el backend ya exige aprobación explícita — no se intercepta acá.)
+ if (v === 'IN_REVIEW' && totalMinutes === 0) {
+ setGateTarget('IN_REVIEW');
+ setGateOpen(true);
+ return;
+ }
+ patchTask({ status: v });
+ }}
+ >
  <SelectTrigger className="h-7 w-32 text-xs border-none shadow-none">
  <SelectValue />
  </SelectTrigger>
@@ -705,16 +712,6 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </Button>
  </div>
  </div>
- {/* Badge: Pre-registradas (TimeEntry DRAFT) */}
- {preRegisteredHours && (
- <div className="flex justify-end">
- <Badge className={`text-[10px] ${isOrphanDraft ? 'bg-warning/15 text-warning' : 'bg-info/10 text-info'}`}>
- <Clock className="h-3 w-3 mr-1"/>
- Pre-registradas: {preRegisteredHours}h
- {isOrphanDraft && ' — sin asignee'}
- </Badge>
- </div>
- )}
  {task.type === 'SUPPORT' && clientHours && (
  <div className="flex items-center justify-between text-[10px]">
  <span className="text-muted-foreground">Disponibles: {clientHours.availableHours.toFixed(1)}h / {clientHours.contractedHours}h</span>
@@ -1039,6 +1036,29 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </DialogFooter>
  </DialogContent>
  </Dialog>
+
+ {/* H6 — Gate de horas (proactivo) */}
+ <TaskHoursGateDialog
+ open={gateOpen}
+ onOpenChange={setGateOpen}
+ taskId={taskId}
+ targetLabel="En Revisión"
+ canCloseWithoutHours={hasPermission('manage:projects') || (task.assignments || []).some((a: any) => a.user?.id === currentUser?.id)}
+ taskDay={taskDayStr}
+ onLogged={async () => {
+ // Las horas ya se registraron en el diálogo; ahora re-disparamos la transición.
+ await api.patch(`/tasks/${taskId}`, { status: gateTarget });
+ await loadTask();
+ onUpdated?.();
+ }}
+ onEscape={async (reason) => {
+ const res = await api.patch(`/tasks/${taskId}`, { status: gateTarget, closeWithoutHours: true, closeWithoutHoursReason: reason });
+ setTask(res.data);
+ onUpdated?.();
+ await loadTask();
+ toast.success('Tarea cerrada sin horas');
+ }}
+ />
  </div>
  );
 }
