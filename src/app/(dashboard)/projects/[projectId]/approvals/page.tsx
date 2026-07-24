@@ -10,7 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
-import { cn, getInitials, formatDate } from '@/lib/utils';
+import { getInitials, formatDate } from '@/lib/utils';
+import { TaskApprovalOtpModal } from '@/components/task/task-approval-otp-modal';
 
 export default function ProjectApprovalsPage() {
  const { projectId } = useParams<{ projectId: string }>();
@@ -19,6 +20,7 @@ export default function ProjectApprovalsPage() {
  const [rejectingId, setRejectingId] = useState<string | null>(null);
  const [rejectReason, setRejectReason] = useState('');
  const [processing, setProcessing] = useState<string | null>(null);
+ const [otpTaskId, setOtpTaskId] = useState<string | null>(null);
 
  const loadApprovals = useCallback(async () => {
  try {
@@ -36,18 +38,15 @@ export default function ProjectApprovalsPage() {
  loadApprovals();
  }, [loadApprovals]);
 
- const handleApprove = async (taskId: string) => {
- setProcessing(taskId);
- try {
- await api.post(`/tasks/${taskId}/approve`);
- toast.success('Aprobada', 'La tarea fue aprobada y movida a Deploy');
- await loadApprovals();
- } catch (err) {
- const message = err instanceof ApiError ? err.message : 'Error al aprobar';
- toast.error('Error', message);
- } finally {
- setProcessing(null);
- }
+ // H7 — Aprobar abre el modal (cobra las horas MANUALES reales); la confirmación
+ // ocurre adentro. Ya NO hay POST a ciegas que caía al fallback de la estimación.
+ const handleApprove = (taskId: string) => {
+ setOtpTaskId(taskId);
+ };
+
+ const handleApproved = () => {
+ setOtpTaskId(null);
+ loadApprovals();
  };
 
  const handleReject = async (taskId: string) => {
@@ -195,6 +194,14 @@ export default function ProjectApprovalsPage() {
  ))}
  </div>
  )}
+
+ {/* H7 — Modal de aprobación (mismo flujo que /approvals org): cobra las horas reales. */}
+ <TaskApprovalOtpModal
+ taskId={otpTaskId}
+ open={!!otpTaskId}
+ onOpenChange={(o) => { if (!o) setOtpTaskId(null); }}
+ onApproved={handleApproved}
+ />
  </div>
  );
 }
