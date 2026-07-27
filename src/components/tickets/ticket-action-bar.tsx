@@ -108,6 +108,12 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
     } catch (err) {
       // H6: el ticket no tiene horas reales en su task → abrir el diálogo del gate
       // apuntando a ticket.task.id, en vez del toast genérico.
+      // H8c: reabrir el ticket movería la task fuera de DONE; si está facturada → 409.
+      // Bloqueo duro (sin escape): toast claro, la nota de crédito es H9.
+      if (err instanceof ApiError && err.code === 'TASK_HOURS_BILLED') {
+        toast.error('No se puede reabrir: ya está facturada', err.message);
+        return;
+      }
       if (err instanceof ApiError && err.code === 'WORK_HOURS_REQUIRED' && ticket.task?.id) {
         const d = (err.details || {}) as Record<string, unknown>;
         setGateInfo({
