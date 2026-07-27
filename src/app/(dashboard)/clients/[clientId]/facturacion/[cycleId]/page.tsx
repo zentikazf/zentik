@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatWorkedOn } from '@/lib/utils';
 import {
   CYCLE_STATUS_CONFIG,
   CycleTransactionsResponse,
@@ -118,7 +118,7 @@ export default function CycleDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
-                  <th className="px-3 py-2.5 font-medium text-muted-foreground">Fecha</th>
+                  <th className="px-3 py-2.5 font-medium text-muted-foreground">Trabajo</th>
                   <th className="px-3 py-2.5 font-medium text-muted-foreground">Concepto</th>
                   <th className="px-3 py-2.5 font-medium text-muted-foreground">Tipo</th>
                   <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Horas</th>
@@ -131,16 +131,28 @@ export default function CycleDetailPage() {
                   return (
                     <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(tx.createdAt).toLocaleDateString('es-PY', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
+                        {/* H8b: workedOn es @db.Date (UTC-midnight = día Asunción) → formatWorkedOn evita
+                            el day-shift; createdAt es instante real → display local. */}
+                        {tx.workedOn
+                          ? formatWorkedOn(tx.workedOn)
+                          : new Date(tx.createdAt).toLocaleDateString('es-PY', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
                       </td>
                       <td className="px-3 py-2.5">
                         <p className="truncate max-w-[280px] text-foreground">
                           {tx.task?.title ?? tx.note ?? '—'}
                         </p>
+                        {tx.atrasada && tx.workedMonth && (
+                          <span
+                            className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+                            title="Trabajo de un mes anterior, arrastrado a esta factura"
+                          >
+                            <Clock className="h-2.5 w-2.5" /> {formatPeriodLabel(tx.workedMonth)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <span
