@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Eye, EyeOff, Lock, AlertTriangle, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Lock, AlertTriangle, RotateCcw, History } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api-client';
@@ -46,6 +46,14 @@ function RowLine({ row, currency }: { row: BillingRow; currency: string }) {
           {!row.billable && !row.sinTarifa && (
             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
               No cobra
+            </span>
+          )}
+          {row.atrasada && row.workedMonth && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary"
+              title="Trabajo de un mes anterior ya cerrado, arrastrado a este cierre"
+            >
+              <History className="h-2.5 w-2.5" /> {formatPeriodLabel(row.workedMonth)}
             </span>
           )}
         </div>
@@ -127,6 +135,17 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
           )}
         </div>
       </div>
+
+      {/* H8b: integridad — facturable sin fecha de trabajo bloquea el cierre (no perder plata). */}
+      {builder.sinFechaTrabajo > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {builder.sinFechaTrabajo} movimiento(s) facturable(s) sin fecha de trabajo. Hay que corregir el
+            dato antes de cerrar — el cierre se bloquea para no perder esa plata.
+          </span>
+        </div>
+      )}
 
       {/* 2 columnas: Soporte | Proyecto + Interno */}
       <div className="grid gap-4 md:grid-cols-2">

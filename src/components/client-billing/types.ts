@@ -18,6 +18,9 @@ export interface BillingRow {
   hours: number;
   note: string | null;
   createdAt: string;
+  workedOn: string | null; // H8b: fecha real de trabajo (eje de facturación)
+  workedMonth: string | null; // H8b: 'YYYY-MM' de pertenencia
+  atrasada: boolean; // H8b: pertenece a un mes anterior al del builder (arrastrada)
   priceAmount: string | null;
   priceRate: string | null;
   priceCurrency: string | null;
@@ -33,6 +36,7 @@ export interface BillingCycle {
   invoiceNumber: string;
   periodStart: string;
   periodEnd: string;
+  cutoffDate: string | null; // H8b: instante efectivo del corte (= periodEnd si mes completo)
   totalHours: number;
   totalAmount: string;
   currency: string;
@@ -60,6 +64,7 @@ export interface CycleBuilder {
   subtotalFueraCupo: string;
   totalFacturable: string;
   currency: string;
+  sinFechaTrabajo: number; // H8b: filas facturables con precio pero sin worked_on (bloquean el cierre)
   cycles: BillingCycle[];
 }
 
@@ -67,6 +72,9 @@ export interface CycleBuilder {
 export interface CycleTransactionLine {
   id: string;
   createdAt: string;
+  workedOn: string | null; // H8b
+  workedMonth: string | null; // H8b: mes de pertenencia
+  atrasada: boolean; // H8b: pertenece a un mes anterior al del ciclo
   type: string;
   hours: number;
   note: string | null;

@@ -110,14 +110,15 @@ export function CloseCycleDialog({
                 onChange={(e) => setPartial(e.target.checked)}
                 className="h-4 w-4 rounded border-border"
               />
-              Corte parcial (facturar solo hasta una fecha)
+              Corte parcial (facturar solo hasta una fecha de trabajo)
             </label>
             {partial && (
               <div className="space-y-1 pl-6">
-                <Label>Facturar movimientos hasta</Label>
+                <Label>Facturar trabajo hasta esta fecha</Label>
                 <Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
                 <p className="text-xs text-muted-foreground">
-                  El remanente posterior queda disponible como &quot;Facturar resto&quot;.
+                  Corta por <strong>fecha de trabajo</strong> (no de registro). El trabajo posterior queda
+                  disponible como &quot;Facturar resto&quot;.
                 </p>
               </div>
             )}
