@@ -30,9 +30,12 @@ export interface BillingRow {
   sinTarifa: boolean;
 }
 
+export type CycleKind = 'MONTH' | 'ACCUMULATED';
+
 export interface BillingCycle {
   id: string;
   status: CycleStatus;
+  kind: CycleKind; // H8d: MONTH (un mes) | ACCUMULATED (varios meses en una factura)
   invoiceNumber: string;
   periodStart: string;
   periodEnd: string;
@@ -44,7 +47,34 @@ export interface BillingCycle {
   closedAt: string | null;
   sentAt: string | null;
   paidAt: string | null;
+  cancelReason: string | null; // H8d/A3: motivo de anulación
+  cancelledAt: string | null; // H8d/A3: cuándo se anuló
   createdAt: string;
+}
+
+// H8d — respuesta del dry-run POST .../billing/cycles/preview. Montos como STRING (Decimal del backend);
+// NUNCA aritmética monetaria en el cliente — los subtotales/total ya vienen calculados.
+export interface CyclePreview {
+  mode: 'MES' | 'ACUMULADO';
+  periodStart: string;
+  periodEnd: string;
+  cutoffDate: string;
+  grupos: Array<{
+    workedMonth: string; // 'YYYY-MM'
+    label: string; // 'Abril 2026'
+    rows: BillingRow[];
+    subtotalMes: string;
+    horasMes: number;
+  }>;
+  total: string;
+  currency: string;
+  bloqueos: {
+    sinTarifaRate: boolean;
+    sinFechaTrabajo: { count: number; ids: string[] };
+  };
+  puedeEmitir: boolean;
+  motivo: 'NOTHING_TO_BILL' | null;
+  nextInvoiceHint: string;
 }
 
 export interface MonthSummary {
@@ -86,6 +116,7 @@ export interface CycleTransactionLine {
 export interface CycleTransactionsResponse {
   cycle: BillingCycle;
   transactions: CycleTransactionLine[];
+  grupos: Array<{ workedMonth: string; label: string; subtotal: string; horas: number }>; // H8d: desglose por mes
 }
 
 // Config de estado de la factura (español) — compartida entre builder y detalle.
@@ -96,7 +127,7 @@ export const CYCLE_STATUS_CONFIG: Record<
   DRAFT: { label: 'Borrador', variant: 'muted' },
   SENT: { label: 'Enviada', variant: 'info' },
   PAID: { label: 'Cobrada', variant: 'success' },
-  CANCELLED: { label: 'Cancelada', variant: 'destructive' },
+  CANCELLED: { label: 'Anulada', variant: 'destructive' },
 };
 
 // Etiqueta 'YYYY-MM' → 'Julio 2026' (es-PY), primera letra en mayúscula.

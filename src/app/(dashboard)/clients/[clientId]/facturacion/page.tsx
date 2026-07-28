@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Receipt } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
@@ -98,5 +101,18 @@ export default function ClientBillingPage() {
     }
   }
 
-  return <BillingCyclesList months={months} onSelect={setPeriod} />;
+  return (
+    <div className="space-y-4">
+      {canManage && (
+        <div className="flex justify-end">
+          <Link href={`/clients/${clientId}/facturacion/generar`}>
+            <Button>
+              <Receipt className="mr-1.5 h-4 w-4" /> Generar factura
+            </Button>
+          </Link>
+        </div>
+      )}
+      <BillingCyclesList months={months} onSelect={setPeriod} />
+    </div>
+  );
 }
