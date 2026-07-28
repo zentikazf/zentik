@@ -149,6 +149,16 @@ export default function PortalHoursPage() {
    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
     <div className="rounded-xl border border-border bg-card p-5">
      <div className="flex items-center gap-2 mb-2">
+      <TrendingUp className="h-4 w-4 text-success"/>
+      <p className="text-xs text-muted-foreground">Disponibles</p>
+     </div>
+     <p className="text-2xl font-bold text-foreground">{data.availableHours.toFixed(1)}h</p>
+     {data.loanedHours > 0 && (
+      <p className="text-[11px] text-warning">+{data.loanedHours.toFixed(1)}h en préstamo</p>
+     )}
+    </div>
+    <div className="rounded-xl border border-border bg-card p-5">
+     <div className="flex items-center gap-2 mb-2">
       <Clock className="h-4 w-4 text-primary"/>
       <p className="text-xs text-muted-foreground">Consumidas</p>
      </div>
@@ -164,16 +174,6 @@ export default function PortalHoursPage() {
       {formatCurrency(data.totalAmount, data.currency)}
      </p>
      <p className="text-[11px] text-muted-foreground">Pendiente de facturar</p>
-    </div>
-    <div className="rounded-xl border border-border bg-card p-5">
-     <div className="flex items-center gap-2 mb-2">
-      <TrendingUp className="h-4 w-4 text-success"/>
-      <p className="text-xs text-muted-foreground">Disponibles</p>
-     </div>
-     <p className="text-2xl font-bold text-foreground">{data.availableHours.toFixed(1)}h</p>
-     {data.loanedHours > 0 && (
-      <p className="text-[11px] text-warning">+{data.loanedHours.toFixed(1)}h en préstamo</p>
-     )}
     </div>
    </div>
 
