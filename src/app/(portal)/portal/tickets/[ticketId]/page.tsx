@@ -71,6 +71,7 @@ export default function PortalTicketDetailPage() {
  const { user } = useAuth();
  const [ticket, setTicket] = useState<TicketDetail | null>(null);
  const [messages, setMessages] = useState<ChatMessage[]>([]);
+ const [accessDenied, setAccessDenied] = useState(false);
  const [loading, setLoading] = useState(true);
  const [messageText, setMessageText] = useState('');
  const [sending, setSending] = useState(false);
@@ -133,8 +134,12 @@ export default function PortalTicketDetailPage() {
  const res = await api.get<any>(`/channels/${channelId}/messages?limit=100`);
  const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
  setMessages(data.reverse());
- } catch {
- // Silent fail - chat may not be accessible yet
+ setAccessDenied(false);
+ } catch (err) {
+ // Un 403 CHANNEL_FORBIDDEN = no sos miembro del canal: los mensajes siguen en
+ // la DB, no se perdieron. Se distingue de "sin mensajes" para no simular perdida.
+ setMessages([]);
+ setAccessDenied(err instanceof ApiError && err.statusCode === 403);
  }
  };
 
@@ -386,8 +391,17 @@ export default function PortalTicketDetailPage() {
  <div className="flex flex-col items-center justify-center h-full text-center py-8">
  <MessageSquare className="h-8 w-8 text-muted-foreground/50 mb-2"/>
  <p className="text-sm text-muted-foreground">
+ {accessDenied ? (
+ <>
+ No tenés acceso a este chat.<br />
+ <span className="text-xs">Los mensajes existen; pedí acceso al canal del ticket.</span>
+ </>
+ ) : (
+ <>
  Ningún mensaje aun.<br />
  <span className="text-xs">Escribe para comunicarte con el equipo.</span>
+ </>
+ )}
  </p>
  </div>
  ) : (

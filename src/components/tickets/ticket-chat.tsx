@@ -53,6 +53,7 @@ interface PendingAttachment {
 export function TicketChat({ channelId, className }: TicketChatProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<PendingAttachment[]>([]);
@@ -81,8 +82,13 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
       const res = await api.get<any>(`/channels/${cid}/messages?limit=100`);
       const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
       setMessages(data.reverse());
-    } catch {
-      // chat may not be accessible yet — silent
+      setAccessDenied(false);
+    } catch (err) {
+      // Un 403 CHANNEL_FORBIDDEN = no sos miembro del canal: los mensajes SIGUEN
+      // en la DB, no se perdieron. Se distingue de "sin mensajes" para no simular
+      // una perdida de datos (antes este catch era silencioso y los ocultaba).
+      setMessages([]);
+      setAccessDenied(err instanceof ApiError && err.statusCode === 403);
     }
   }, []);
 
@@ -266,7 +272,18 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
             );
           })}
           {messages.length === 0 && (
-            <div className="text-center py-8 text-xs text-muted-foreground">No hay mensajes aun.</div>
+            <div className="text-center py-8 text-xs text-muted-foreground">
+              {accessDenied ? (
+                <>
+                  No tenés acceso a este chat.
+                  <span className="mt-1 block">
+                    Los mensajes existen; pedí que te agreguen al canal del ticket para verlos.
+                  </span>
+                </>
+              ) : (
+                'No hay mensajes aun.'
+              )}
+            </div>
           )}
         </div>
       </ScrollArea>
@@ -309,7 +326,8 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onPaste={handlePaste}
-            placeholder="Escribe un mensaje o pega una imagen..."
+            placeholder={accessDenied ? 'No tenés acceso a este chat' : 'Escribe un mensaje o pega una imagen...'}
+            disabled={accessDenied}
             className="min-h-[40px] max-h-32 resize-none text-sm"
             rows={1}
             onKeyDown={(e) => {
@@ -323,7 +341,7 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
             <Button
               size="sm"
               onClick={handleSend}
-              disabled={(!newMessage.trim() && pending.length === 0) || sending}
+              disabled={(!newMessage.trim() && pending.length === 0) || sending || accessDenied}
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
@@ -332,7 +350,7 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
               variant="outline"
               className="text-muted-foreground"
               onClick={() => fileInputRef.current?.click()}
-              disabled={sending}
+              disabled={sending || accessDenied}
             >
               <Paperclip className="h-4 w-4" />
             </Button>

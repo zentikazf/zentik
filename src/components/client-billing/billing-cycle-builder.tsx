@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Eye, EyeOff, Lock, AlertTriangle, RotateCcw, History } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Lock, AlertTriangle, Ban, History } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import { CloseCycleDialog } from './close-cycle-dialog';
+import { CancelCycleDialog } from './cancel-cycle-dialog';
 import { BillingCycle, BillingRow, CycleBuilder, CycleStatus, formatPeriodLabel } from './types';
 
 const CYCLE_STATUS: Record<CycleStatus, { label: string; variant: 'muted' | 'info' | 'success' | 'destructive' }> = {
@@ -72,6 +73,7 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
   const [showVisibleOnly, setShowVisibleOnly] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<BillingCycle | null>(null);
 
   const hasFacturable = builder.soporte.some((r) => r.billable);
   const visibleOnly = [...builder.proyecto, ...builder.interno];
@@ -84,19 +86,6 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
       onChanged();
     } catch (err) {
       toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo actualizar la factura');
-    } finally {
-      setActingId(null);
-    }
-  };
-
-  const reopen = async (cycle: BillingCycle) => {
-    setActingId(cycle.id);
-    try {
-      await api.post(`/organizations/${orgId}/clients/${clientId}/billing/cycles/${cycle.id}/reopen`);
-      toast.success('Ciclo reabierto', 'Los movimientos vuelven a estar disponibles');
-      onChanged();
-    } catch (err) {
-      toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo reabrir el ciclo');
     } finally {
       setActingId(null);
     }
@@ -205,42 +194,58 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
               const conf = CYCLE_STATUS[c.status];
               const acting = actingId === c.id;
               return (
-                <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                  <Link
-                    href={`/clients/${clientId}/facturacion/${c.id}`}
-                    className="flex items-center gap-3 transition-opacity hover:opacity-80"
-                    title="Ver lo facturado"
-                  >
-                    <span className="font-mono text-sm text-foreground">{c.invoiceNumber}</span>
-                    <Badge variant={conf.variant}>{conf.label}</Badge>
-                    <span className="font-mono text-sm font-semibold text-foreground">
-                      {formatCurrency(c.totalAmount, c.currency)}
-                    </span>
-                  </Link>
-                  {canManage && (
-                    <div className="flex items-center gap-2">
-                      {c.status === 'DRAFT' && (
-                        <Button size="sm" variant="outline" disabled={acting} onClick={() => updateStatus(c, 'SENT')}>
-                          Marcar Enviada
-                        </Button>
-                      )}
-                      {c.status === 'SENT' && (
-                        <Button size="sm" variant="outline" disabled={acting} onClick={() => updateStatus(c, 'PAID')}>
-                          Marcar Cobrada
-                        </Button>
-                      )}
-                      {c.status !== 'PAID' && c.status !== 'CANCELLED' && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={acting}
-                          onClick={() => reopen(c)}
-                          title="Libera los movimientos estampados"
-                        >
-                          <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reabrir
-                        </Button>
-                      )}
-                    </div>
+                <div key={c.id} className="px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Link
+                      href={`/clients/${clientId}/facturacion/${c.id}`}
+                      className="flex items-center gap-3 transition-opacity hover:opacity-80"
+                      title="Ver lo facturado"
+                    >
+                      <span className="font-mono text-sm text-foreground">{c.invoiceNumber}</span>
+                      <Badge variant={conf.variant}>{conf.label}</Badge>
+                      {c.kind === 'ACCUMULATED' && <Badge variant="info">Acumulada</Badge>}
+                      <span className="font-mono text-sm font-semibold text-foreground">
+                        {formatCurrency(c.totalAmount, c.currency)}
+                      </span>
+                    </Link>
+                    {canManage && (
+                      <div className="flex items-center gap-2">
+                        {c.status === 'DRAFT' && (
+                          <Button size="sm" variant="outline" disabled={acting} onClick={() => updateStatus(c, 'SENT')}>
+                            Marcar Enviada
+                          </Button>
+                        )}
+                        {c.status === 'SENT' && (
+                          <Button size="sm" variant="outline" disabled={acting} onClick={() => updateStatus(c, 'PAID')}>
+                            Marcar Cobrada
+                          </Button>
+                        )}
+                        {c.status !== 'PAID' && c.status !== 'CANCELLED' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={acting}
+                            onClick={() => setCancelTarget(c)}
+                            title="Anula la factura y libera los movimientos"
+                          >
+                            <Ban className="mr-1 h-3.5 w-3.5" /> Anular
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {c.status === 'CANCELLED' && c.cancelReason && (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Anulada
+                      {c.cancelledAt
+                        ? ` el ${new Date(c.cancelledAt).toLocaleDateString('es-PY', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}`
+                        : ''}{' '}
+                      — {c.cancelReason}
+                    </p>
                   )}
                 </div>
               );
@@ -259,6 +264,18 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
         onOpenChange={setCloseOpen}
         onSaved={onChanged}
       />
+
+      {cancelTarget && (
+        <CancelCycleDialog
+          orgId={orgId}
+          clientId={clientId}
+          invoiceNumber={cancelTarget.invoiceNumber}
+          cycleId={cancelTarget.id}
+          open={!!cancelTarget}
+          onOpenChange={(open) => !open && setCancelTarget(null)}
+          onDone={onChanged}
+        />
+      )}
     </div>
   );
 }

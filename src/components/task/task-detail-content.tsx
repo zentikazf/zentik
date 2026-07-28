@@ -173,6 +173,12 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  onUpdated?.();
  if (!isSheet) toast.success('Tarea actualizada');
  } catch (err) {
+ // H8c: reabrir una tarea facturada → 409 TASK_HOURS_BILLED. Bloqueo duro, sin escape
+ // (la nota de crédito es H9). El resto de patches cae al toast genérico de abajo.
+ if (err instanceof ApiError && err.code === 'TASK_HOURS_BILLED') {
+ toast.error('No se puede reabrir: ya está facturada', err.message);
+ return;
+ }
  const msg = err instanceof ApiError ? err.message : 'Error al actualizar';
  toast.error('Error', msg);
  }
@@ -217,8 +223,13 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  setRejectReason('');
  await loadTask();
  } catch (err) {
+ // H8c: rechazar una tarea facturada → 409 TASK_HOURS_BILLED (defensa en profundidad).
+ if (err instanceof ApiError && err.code === 'TASK_HOURS_BILLED') {
+ toast.error('No se puede rechazar: ya está facturada', err.message);
+ } else {
  const msg = err instanceof ApiError ? err.message : 'No se pudo rechazar la tarea';
  toast.error('Error', msg);
+ }
  } finally {
  setRejecting(false);
  }
@@ -304,6 +315,11 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  onUpdated?.();
  toast.success('Registro eliminado');
  } catch (err) {
+ // H8c: borrar una carga ya facturada → 409 TASK_HOURS_BILLED (bloqueo duro hasta H9).
+ if (err instanceof ApiError && err.code === 'TASK_HOURS_BILLED') {
+ toast.error('No se puede eliminar: ya está facturada', err.message);
+ return;
+ }
  const msg = err instanceof ApiError ? err.message : 'No se pudo eliminar el registro';
  toast.error('Error', msg);
  }

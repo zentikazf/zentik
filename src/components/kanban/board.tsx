@@ -137,6 +137,15 @@ export function KanbanBoard({
  } catch (err) {
  // Revert optimista
  moveTask(activeId, targetColumnId, sourceColumn.id, 0);
+ // H8c: reapertura de tarea facturada → bloqueo duro. Sin escape (no hay horas que
+ // cargar ni "cerrar sin horas"): toast claro, no el gate dialog. La card ya volvió.
+ if (err instanceof ApiError && err.code === 'TASK_HOURS_BILLED') {
+ toast.error(
+ 'No se puede reabrir: ya está facturada',
+ err.message || 'Las horas de esta tarea ya se incluyeron en una factura. Para revertirla, primero emití una nota de crédito.',
+ );
+ return;
+ }
  // H6: si se bloqueó por falta de horas, abrir el diálogo del gate (no el toast plano).
  // La card no carga timeEntries → el gate es forzosamente reactivo.
  if (err instanceof ApiError && err.code === 'WORK_HOURS_REQUIRED') {
