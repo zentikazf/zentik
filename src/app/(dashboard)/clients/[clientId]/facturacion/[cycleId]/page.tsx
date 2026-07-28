@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Clock, Ban } from 'lucide-react';
+import { ArrowLeft, Clock, Ban, Download, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { api } from '@/lib/api-client';
+import { api, getToken } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate, formatWorkedOn } from '@/lib/utils';
@@ -16,6 +17,8 @@ import {
   CycleTransactionsResponse,
   formatPeriodLabel,
 } from '@/components/client-billing/types';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 function LinesTable({ txs, currency }: { txs: CycleTransactionLine[]; currency: string }) {
   return (
@@ -87,6 +90,7 @@ export default function CycleDetailPage() {
 
   const [data, setData] = useState<CycleTransactionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgId || !clientId || !cycleId) return;
@@ -106,6 +110,43 @@ export default function CycleDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Descarga del PDF: fetch crudo + blob + <a download> (el api-client axios no expone helper de
+  // blob), mismo patrón que el export CSV de tickets. Bearer + cookie de sesión (cross-site fallback).
+  const handleDownloadPdf = useCallback(async () => {
+    if (!orgId || !clientId || !cycleId || downloading) return;
+    setDownloading(true);
+    try {
+      const url = `${API_URL}/api/v1/organizations/${orgId}/clients/${clientId}/billing/cycles/${cycleId}/pdf`;
+      const token = getToken();
+      const res = await fetch(url, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) {
+        if (res.status === 403) {
+          toast.error('Sin permisos', 'No tenés permiso para descargar la factura');
+        } else {
+          toast.error('Error', `No se pudo descargar el PDF (HTTP ${res.status})`);
+        }
+        return;
+      }
+      const blob = await res.blob();
+      const filename = `${data?.cycle.invoiceNumber ?? 'factura'}.pdf`;
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch (err) {
+      toast.error('Error', err instanceof Error ? err.message : 'No se pudo descargar el PDF');
+    } finally {
+      setDownloading(false);
+    }
+  }, [orgId, clientId, cycleId, downloading, data]);
 
   if (loading) {
     return (
@@ -142,12 +183,18 @@ export default function CycleDetailPage() {
 
   return (
     <div className="space-y-5">
-      <Link
-        href={`/clients/${clientId}/facturacion`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary"
-      >
-        <ArrowLeft className="h-4 w-4" /> Volver a facturación
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href={`/clients/${clientId}/facturacion`}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary"
+        >
+          <ArrowLeft className="h-4 w-4" /> Volver a facturación
+        </Link>
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownloadPdf} disabled={downloading}>
+          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Descargar PDF
+        </Button>
+      </div>
 
       {/* Header con totales congelados */}
       <div className="rounded-xl border border-border bg-card p-6">
