@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Receipt } from 'lucide-react';
+import { Receipt, Clock, Download, Loader2, FileText } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { api, getToken } from '@/lib/api-client';
+import { toast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ────────────────────────────────────────────────────────────────────
 // Datos mock — período 2026-04. Reemplazar por fetch a /portal/billing
@@ -155,6 +161,174 @@ function buildClientView(data: BillingPeriodData) {
 // Page
 // ────────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────────
+// H8f — Facturas de horas emitidas (motor de horas). Vive junto al mock de
+// Botmaker (intacto). GATE-1: el cliente ve SENT/PAID + CANCELLED marcadas
+// "Anulada" (sin acción); nunca DRAFT. El backend (getMyInvoices) ya filtra.
+// ────────────────────────────────────────────────────────────────────
+
+interface PortalInvoice {
+ id: string;
+ invoiceNumber: string;
+ kind: 'MONTH' | 'ACCUMULATED';
+ periodStart: string;
+ periodEnd: string;
+ cutoffDate: string | null;
+ totalHours: number;
+ totalAmount: string;
+ currency: string;
+ status: 'SENT' | 'PAID' | 'CANCELLED';
+ cancelReason: string | null;
+ cancelledAt: string | null;
+}
+
+// Estado → etiqueta es-PY + token semántico (theme-aware, 4.5:1 en claro/oscuro).
+// Coherente con el admin (Borrador→Enviada→Cobrada). CANCELLED = "Anulada", sin acción.
+const INVOICE_STATUS: Record<PortalInvoice['status'], { label: string; className: string }> = {
+ SENT: { label: 'Enviada', className: 'bg-info/10 text-info' },
+ PAID: { label: 'Cobrada', className: 'bg-success/15 text-success' },
+ CANCELLED: { label: 'Anulada', className: 'bg-destructive/10 text-destructive' },
+};
+
+// Período en la zona del negocio (America/Asuncion) para no correr un mes por TZ —
+// mismo criterio que el generador de PDF (H8e). Rango si el corte cae en otro mes.
+function invoicePeriodLabel(inv: PortalInvoice): string {
+ const fmt = (iso: string) => {
+  const s = new Intl.DateTimeFormat('es-PY', {
+   timeZone: 'America/Asuncion',
+   month: 'long',
+   year: 'numeric',
+  }).format(new Date(iso));
+  return s.charAt(0).toUpperCase() + s.slice(1);
+ };
+ const start = fmt(inv.periodStart);
+ const end = fmt(inv.cutoffDate ?? inv.periodEnd);
+ return start === end ? start : `${start} – ${end}`;
+}
+
+function HoursInvoicesSection() {
+ const [invoices, setInvoices] = useState<PortalInvoice[] | null>(null);
+ const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+ useEffect(() => {
+  api
+   .get<PortalInvoice[]>('/portal/invoices')
+   .then((r) => setInvoices(r.data))
+   .catch(() => setInvoices([]));
+ }, []);
+
+ // Descarga: fetch crudo + blob + <a download> (Bearer + cookie de sesión), mismo patrón que el
+ // PDF admin de H8e. El backend valida que el ciclo sea del cliente y esté emitido (SENT/PAID).
+ const handleDownload = useCallback(
+  async (inv: PortalInvoice) => {
+   if (downloadingId) return;
+   setDownloadingId(inv.id);
+   try {
+    const url = `${API_URL}/api/v1/portal/invoices/${inv.id}/pdf`;
+    const token = getToken();
+    const res = await fetch(url, {
+     credentials: 'include',
+     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+     toast.error('Error', `No se pudo descargar el PDF (HTTP ${res.status})`);
+     return;
+    }
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = `${inv.invoiceNumber}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objUrl);
+   } catch (err) {
+    toast.error('Error', err instanceof Error ? err.message : 'No se pudo descargar el PDF');
+   } finally {
+    setDownloadingId(null);
+   }
+  },
+  [downloadingId],
+ );
+
+ return (
+  <section className="rounded-xl border border-border bg-card">
+   <header className="flex items-center justify-between border-b border-border px-5 py-4">
+    <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-foreground">
+     <Clock className="h-4 w-4" /> Facturas de horas
+    </h2>
+    {invoices && invoices.length > 0 && (
+     <Badge variant="secondary" className="text-xs">
+      {invoices.length}
+     </Badge>
+    )}
+   </header>
+
+   {invoices === null ? (
+    <div className="space-y-3 p-5">
+     {Array.from({ length: 2 }).map((_, i) => (
+      <Skeleton key={i} className="h-20 rounded-lg" />
+     ))}
+    </div>
+   ) : invoices.length === 0 ? (
+    <div className="px-5 py-12 text-center">
+     <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
+     <p className="text-sm text-muted-foreground">Todavía no se emitieron facturas.</p>
+    </div>
+   ) : (
+    <ul className="divide-y divide-border">
+     {invoices.map((inv) => {
+      const st = INVOICE_STATUS[inv.status];
+      const cancelled = inv.status === 'CANCELLED';
+      return (
+       <li key={inv.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+        <div className="min-w-0">
+         <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-sm font-medium text-foreground">{inv.invoiceNumber}</span>
+          <Badge className={`${st.className} text-[10px]`}>{st.label}</Badge>
+          {inv.kind === 'ACCUMULATED' && (
+           <span className="text-[10px] text-muted-foreground">Acumulada</span>
+          )}
+         </div>
+         <p className="mt-0.5 text-xs text-muted-foreground">{invoicePeriodLabel(inv)}</p>
+         {cancelled && inv.cancelReason && (
+          <p className="mt-1 text-[11px] text-destructive/80">Motivo: {inv.cancelReason}</p>
+         )}
+        </div>
+        <div className="flex items-center gap-4">
+         <div className="text-right">
+          <p className="font-mono text-sm font-semibold text-foreground">
+           {formatCurrency(inv.totalAmount, inv.currency)}
+          </p>
+          <p className="font-mono text-[11px] text-muted-foreground">{inv.totalHours.toFixed(2)}h</p>
+         </div>
+         {!cancelled && (
+          <Button
+           variant="outline"
+           size="sm"
+           className="gap-1.5"
+           onClick={() => handleDownload(inv)}
+           disabled={downloadingId === inv.id}
+          >
+           {downloadingId === inv.id ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+           ) : (
+            <Download className="h-4 w-4" />
+           )}
+           Descargar
+          </Button>
+         )}
+        </div>
+       </li>
+      );
+     })}
+    </ul>
+   )}
+  </section>
+ );
+}
+
 export default function PortalBillingPage() {
  const router = useRouter();
  const { user, loading } = useAuth();
@@ -293,6 +467,9 @@ export default function PortalBillingPage() {
      </div>
     </div>
    </section>
+
+   {/* H8f — Facturas de horas emitidas (motor de horas), junto al mock de Botmaker */}
+   <HoursInvoicesSection />
 
   </div>
  );

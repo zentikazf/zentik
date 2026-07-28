@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Clock, DollarSign, TrendingUp } from 'lucide-react';
+import { Clock, DollarSign, TrendingUp, CheckCircle2, Circle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
@@ -17,6 +17,7 @@ interface HoursTransaction {
  priceAmount: string | null;
  priceRate: string | null;
  priceCurrency: string | null;
+ billedCycleId: string | null;
  task?: {
   id: string;
   title: string;
@@ -100,10 +101,7 @@ export default function PortalHoursPage() {
      <p className="text-2xl font-bold text-primary">
       {formatCurrency(data.totalAmount, data.currency)}
      </p>
-     <p className="text-[11px] text-muted-foreground">
-      {data.transactions.filter((t) => t.priceAmount !== null).length} con costo · {' '}
-      {data.transactions.filter((t) => t.priceAmount === null).length} sin costo
-     </p>
+     <p className="text-[11px] text-muted-foreground">Pendiente de facturar</p>
     </div>
     <div className="rounded-xl border border-border bg-card p-5">
      <div className="flex items-center gap-2 mb-2">
@@ -136,7 +134,7 @@ export default function PortalHoursPage() {
          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tarea</th>
          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tipo</th>
          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Horas</th>
-         <th className="text-right px-4 py-3 font-medium text-muted-foreground">Tarifa</th>
+         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Estado</th>
          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Costo</th>
         </tr>
        </thead>
@@ -170,8 +168,16 @@ export default function PortalHoursPage() {
           <td className="px-4 py-3 text-right font-mono text-sm text-foreground">
            {t.hours.toFixed(2)}h
           </td>
-          <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">
-           {formatCurrency(t.priceRate, t.priceCurrency ?? data.currency)}
+          <td className="px-4 py-3">
+           {t.billedCycleId ? (
+            <Badge className="inline-flex items-center gap-1 bg-success/15 text-success text-[10px]">
+             <CheckCircle2 className="h-3 w-3" /> Facturado
+            </Badge>
+           ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+             <Circle className="h-3 w-3" /> Pendiente
+            </span>
+           )}
           </td>
           <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground">
            {formatCurrency(t.priceAmount, t.priceCurrency ?? data.currency)}
