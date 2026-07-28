@@ -119,6 +119,19 @@ export interface CycleTransactionsResponse {
   grupos: Array<{ workedMonth: string; label: string; subtotal: string; horas: number }>; // H8d: desglose por mes
 }
 
+// H9b — resumen de una nota de crédito emitida sobre una factura (banner staff del detalle).
+// Respuesta de GET .../billing/cycles/:cycleId/credit-notes (orden issuedAt desc). Montos como STRING
+// (Decimal del backend); totalAmount/totalHours ya vienen NEGATIVOS.
+export interface CreditNoteSummary {
+  id: string;
+  number: string; // NC-YYYY-NNNNN
+  reason: string;
+  totalAmount: string; // NEGATIVO
+  totalHours: number; // NEGATIVO
+  returnHoursToBillable: boolean;
+  issuedAt: string;
+}
+
 // Config de estado de la factura (español) — compartida entre builder y detalle.
 export const CYCLE_STATUS_CONFIG: Record<
   CycleStatus,

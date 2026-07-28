@@ -3,20 +3,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Clock, Ban, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Clock, Ban, Download, Loader2, FileMinus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, getToken } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate, formatWorkedOn } from '@/lib/utils';
 import {
   CYCLE_STATUS_CONFIG,
+  CreditNoteSummary,
   CycleTransactionLine,
   CycleTransactionsResponse,
   formatPeriodLabel,
 } from '@/components/client-billing/types';
+import { CreditNoteDialog } from '@/components/client-billing/credit-note-dialog';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -88,18 +91,28 @@ export default function CycleDetailPage() {
   const { clientId, cycleId } = useParams<{ clientId: string; cycleId: string }>();
   const { orgId } = useOrg();
 
+  const { hasPermission } = usePermissions();
+
   const [data, setData] = useState<CycleTransactionsResponse | null>(null);
+  const [creditNotes, setCreditNotes] = useState<CreditNoteSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingNcId, setDownloadingNcId] = useState<string | null>(null);
+  const [ncOpen, setNcOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgId || !clientId || !cycleId) return;
     setLoading(true);
+    const cycleBase = `/organizations/${orgId}/clients/${clientId}/billing/cycles/${cycleId}`;
     try {
-      const res = await api.get<CycleTransactionsResponse>(
-        `/organizations/${orgId}/clients/${clientId}/billing/cycles/${cycleId}/transactions`,
-      );
-      setData(res.data);
+      // Las NC alimentan el banner "esta factura tiene N nota(s) de crédito"; su fetch tolera fallo
+      // (p. ej. sin read:billing) sin romper la carga principal de la factura.
+      const [txRes, ncRes] = await Promise.all([
+        api.get<CycleTransactionsResponse>(`${cycleBase}/transactions`),
+        api.get<CreditNoteSummary[]>(`${cycleBase}/credit-notes`).catch(() => null),
+      ]);
+      setData(txRes.data);
+      setCreditNotes(ncRes?.data ?? []);
     } catch {
       toast.error('Error', 'No se pudo cargar la factura');
     } finally {
@@ -148,6 +161,40 @@ export default function CycleDetailPage() {
     }
   }, [orgId, clientId, cycleId, downloading, data]);
 
+  // Descarga del PDF de una nota de crédito (ruta staff), mismo patrón blob que la factura.
+  const handleDownloadCreditNote = useCallback(
+    async (nc: CreditNoteSummary) => {
+      if (!orgId || !clientId || downloadingNcId) return;
+      setDownloadingNcId(nc.id);
+      try {
+        const url = `${API_URL}/api/v1/organizations/${orgId}/clients/${clientId}/billing/credit-notes/${nc.id}/pdf`;
+        const token = getToken();
+        const res = await fetch(url, {
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (!res.ok) {
+          toast.error('Error', `No se pudo descargar el PDF (HTTP ${res.status})`);
+          return;
+        }
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = `${nc.number}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objUrl);
+      } catch (err) {
+        toast.error('Error', err instanceof Error ? err.message : 'No se pudo descargar el PDF');
+      } finally {
+        setDownloadingNcId(null);
+      }
+    },
+    [orgId, clientId, downloadingNcId],
+  );
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -190,10 +237,17 @@ export default function CycleDetailPage() {
         >
           <ArrowLeft className="h-4 w-4" /> Volver a facturación
         </Link>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownloadPdf} disabled={downloading}>
-          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          Descargar PDF
-        </Button>
+        <div className="flex items-center gap-2">
+          {hasPermission('manage:billing') && (cycle.status === 'SENT' || cycle.status === 'PAID') && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setNcOpen(true)}>
+              <FileMinus className="h-4 w-4" /> Nota de crédito
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownloadPdf} disabled={downloading}>
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Descargar PDF
+          </Button>
+        </div>
       </div>
 
       {/* Header con totales congelados */}
@@ -240,6 +294,41 @@ export default function CycleDetailPage() {
         </div>
       )}
 
+      {/* Banner: esta factura tiene nota(s) de crédito */}
+      {creditNotes.length > 0 && (
+        <div className="rounded-xl border border-info/30 bg-info/10 px-4 py-3 text-sm text-info">
+          <div className="flex items-center gap-2">
+            <FileMinus className="h-4 w-4 shrink-0" />
+            <span className="font-medium">
+              Esta factura tiene {creditNotes.length} nota{creditNotes.length === 1 ? '' : 's'} de crédito.
+            </span>
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {creditNotes.map((nc) => (
+              <li key={nc.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono text-xs">
+                  {nc.number} · {formatCurrency(nc.totalAmount, cycle.currency)} · {nc.totalHours.toFixed(2)}h
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 text-info hover:text-info"
+                  onClick={() => handleDownloadCreditNote(nc)}
+                  disabled={downloadingNcId === nc.id}
+                >
+                  {downloadingNcId === nc.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Descargar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Líneas facturadas */}
       <div className="rounded-xl border border-border bg-card">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
@@ -275,6 +364,20 @@ export default function CycleDetailPage() {
           <LinesTable txs={transactions} currency={cycle.currency} />
         )}
       </div>
+
+      {orgId && (
+        <CreditNoteDialog
+          orgId={orgId}
+          clientId={clientId}
+          cycleId={cycleId}
+          invoiceNumber={cycle.invoiceNumber}
+          currency={cycle.currency}
+          lines={transactions}
+          open={ncOpen}
+          onOpenChange={setNcOpen}
+          onDone={load}
+        />
+      )}
     </div>
   );
 }
