@@ -32,6 +32,22 @@ export interface BillingRow {
 
 export type CycleKind = 'MONTH' | 'ACCUMULATED';
 
+// #23 — Variable de facturación (Botmaker). Montos comerciales en USD (number, no monetario-string:
+// son cents con 2 decimales; el subtotal/total viene calculado del backend).
+export interface VariableLine {
+  label: string;
+  commercialValue: number; // USD
+}
+
+// #23 — Estampado inmutable de variables + tasa en una factura ya emitida.
+export interface VariablesBillingStamp {
+  amountPyg: string;
+  currency: string;
+  rate: string;
+  rateDate: string;
+  lines: Array<{ label: string; commercialUsd: string; convertedPyg: string }>;
+}
+
 export interface BillingCycle {
   id: string;
   status: CycleStatus;
@@ -49,6 +65,7 @@ export interface BillingCycle {
   paidAt: string | null;
   cancelReason: string | null; // H8d/A3: motivo de anulación
   cancelledAt: string | null; // H8d/A3: cuándo se anuló
+  variablesBilling?: VariablesBillingStamp | null; // #23: variables + tasa estampadas (null = sin variables)
   createdAt: string;
 }
 
@@ -68,6 +85,11 @@ export interface CyclePreview {
   }>;
   total: string;
   currency: string;
+  // #23 — Variables (Botmaker) que se sumarán (convertidas) al total. `suggestedRate` prefill del campo
+  // editable de conversión (null → el admin la pega a mano). Montos en USD.
+  variables: VariableLine[];
+  variablesSubtotalUsd: number;
+  suggestedRate: number | null;
   bloqueos: {
     sinTarifaRate: boolean;
     sinFechaTrabajo: { count: number; ids: string[] };
@@ -81,6 +103,7 @@ export interface MonthSummary {
   period: string;
   estado: CycleEstado;
   totalFacturable: string;
+  variablesUsd: number; // #23: comercial USD no facturado del mes (para ofrecer meses solo-variables)
   currency: string;
   cycles: BillingCycle[];
 }
@@ -90,12 +113,27 @@ export interface CycleBuilder {
   soporte: BillingRow[];
   proyecto: BillingRow[];
   interno: BillingRow[];
+  variables: VariableLine[]; // #23: reemplazan la columna Proyecto/Interno (comerciales USD del mes)
+  variablesSubtotalUsd: number; // #23
   subtotalSoporte: string;
   subtotalFueraCupo: string;
   totalFacturable: string;
   currency: string;
   sinFechaTrabajo: number; // H8b: filas facturables con precio pero sin worked_on (bloquean el cierre)
   cycles: BillingCycle[];
+}
+
+// #23 — Formateo USD con 2 decimales (formatCurrency del proyecto es PYG 0-decimales). Las variables son USD.
+export function formatUsd(amount: number | string | null | undefined): string {
+  if (amount === null || amount === undefined) return '—';
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (Number.isNaN(num)) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num);
 }
 
 // Respuesta de GET .../billing/cycles/:cycleId/transactions (T24 — líneas facturadas).

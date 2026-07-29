@@ -32,6 +32,7 @@ import {
  DollarSign,
  ChevronRight,
  Receipt,
+ Sliders,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
@@ -271,6 +272,25 @@ export default function ClientDetailPage() {
  </div>
  <ChevronRight className="h-5 w-5 text-muted-foreground"/>
  </Link>
+
+ {/* Acceso a Variables de facturación (#23 — Botmaker) — gate manage:billing */}
+ {hasPermission('manage:billing') && (
+ <Link
+ href={`/clients/${clientId}/variables`}
+ className="flex items-center justify-between rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/40"
+ >
+ <div className="flex items-center gap-3">
+ <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+ <Sliders className="h-5 w-5 text-primary"/>
+ </div>
+ <div>
+ <p className="text-[15px] font-semibold text-card-foreground">Variables</p>
+ <p className="text-sm text-muted-foreground">Consumo de Botmaker con precio comercial, por mes</p>
+ </div>
+ </div>
+ <ChevronRight className="h-5 w-5 text-muted-foreground"/>
+ </Link>
+ )}
 
  <div className="grid gap-6 lg:grid-cols-2">
  {/* Sub-users — only if portal is enabled */}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, AlertTriangle, Receipt, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Receipt, CheckCircle2, RefreshCw, Sliders } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import { useOrg } from '@/providers/org-provider';
 import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate, formatWorkedOn } from '@/lib/utils';
-import { CyclePreview, MonthSummary, formatPeriodLabel } from '@/components/client-billing/types';
+import { CyclePreview, MonthSummary, formatPeriodLabel, formatUsd } from '@/components/client-billing/types';
 
 type Mode = 'MES' | 'ACUMULADO';
 
@@ -46,9 +46,15 @@ export default function GenerarFacturaPage() {
   const [preview, setPreview] = useState<CyclePreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [emitting, setEmitting] = useState(false);
+  // #23: tasa USD→PYG editable (prefill = suggestedRate del preview; el admin la corrige a mano).
+  const [rate, setRate] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
 
-  // Meses con algo por facturar (remanente > 0). El backend ya excluye lo estampado.
-  const facturableMonths = months.filter((m) => m.totalFacturable !== '0' && m.estado !== 'SIN_TRABAJO');
+  // Meses con algo por facturar: remanente de Soporte (Gs) O variables no facturadas (USD). El backend ya
+  // excluye lo estampado. #23: un mes solo-variables (sin soporte) también se ofrece.
+  const facturableMonths = months.filter(
+    (m) => (m.totalFacturable !== '0' || (m.variablesUsd ?? 0) > 0) && m.estado !== 'SIN_TRABAJO',
+  );
 
   const loadMonths = useCallback(async () => {
     if (!orgId || !clientId) return;
@@ -77,6 +83,15 @@ export default function GenerarFacturaPage() {
 
   const canPreview = mode === 'MES' ? !!selectedPeriod : selectedMonths.length > 0;
 
+  // #23: conversión de variables — ESTIMACIÓN del preview. El backend recomputa con la misma tasa al emitir
+  // (fuente de verdad). preview.total es Soporte (Gs); las variables (USD) se suman convertidas.
+  const hasVars = (preview?.variablesSubtotalUsd ?? 0) > 0;
+  const rateNum = Number(rate);
+  const rateValid = rateNum > 0;
+  const convertedVarsGs = hasVars && rateValid ? Math.round(preview!.variablesSubtotalUsd * rateNum) : 0;
+  const supportGs = preview ? Number(preview.total) : 0;
+  const grandTotalGs = supportGs + convertedVarsGs;
+
   const goPreview = async () => {
     if (!orgId || !clientId || !canPreview) return;
     setStep('preview');
@@ -88,6 +103,8 @@ export default function GenerarFacturaPage() {
         buildParams(),
       );
       setPreview(res.data);
+      // #23: prefill del campo de tasa con la sugerida (si hay variables).
+      setRate(res.data.suggestedRate != null ? String(res.data.suggestedRate) : '');
     } catch (err) {
       toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo calcular el preview');
       setStep('tipo');
@@ -96,11 +113,39 @@ export default function GenerarFacturaPage() {
     }
   };
 
+  // #23: "Convertir al día de hoy" — trae la tasa sugerida (simulada v1) y la pega en el campo editable.
+  const refreshRate = async () => {
+    if (!orgId) return;
+    setSuggesting(true);
+    try {
+      const res = await api.get<{ rate: number | null }>(
+        `/organizations/${orgId}/billing/exchange-rate/suggest?date=${new Date().toISOString()}`,
+      );
+      if (res.data.rate != null) setRate(String(res.data.rate));
+      else toast.error('Sin tasa sugerida', 'No hay tasa configurada. Ingresala a mano (tasa DNIT del día).');
+    } catch (err) {
+      toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo traer la tasa');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const emit = async () => {
     if (!orgId || !clientId || !preview?.puedeEmitir) return;
+    const hasVars = preview.variablesSubtotalUsd > 0;
+    const rateNum = Number(rate);
+    if (hasVars && !(rateNum > 0)) {
+      toast.error('Error', 'Ingresá la tasa USD→PYG para convertir las variables antes de emitir');
+      return;
+    }
     setEmitting(true);
     try {
-      const body = { ...buildParams(), notes: notes.trim() || undefined };
+      const body = {
+        ...buildParams(),
+        notes: notes.trim() || undefined,
+        // #23: la tasa+fecha se estampan en la factura; el backend convierte y suma las variables.
+        ...(hasVars && { exchangeRate: rateNum, exchangeRateDate: new Date().toISOString() }),
+      };
       const res = await api.post<{ id: string; invoiceNumber: string }>(
         `/organizations/${orgId}/clients/${clientId}/billing/cycles/emit`,
         body,
@@ -224,9 +269,16 @@ export default function GenerarFacturaPage() {
                           <Badge variant="warning">Parcial</Badge>
                         )}
                       </div>
-                      <span className="font-mono text-sm font-semibold text-foreground">
-                        {formatCurrency(m.totalFacturable, m.currency)}
-                      </span>
+                      <div className="text-right">
+                        <span className="font-mono text-sm font-semibold text-foreground">
+                          {formatCurrency(m.totalFacturable, m.currency)}
+                        </span>
+                        {(m.variablesUsd ?? 0) > 0 && (
+                          <p className="font-mono text-[11px] text-muted-foreground">
+                            + {formatUsd(m.variablesUsd)} variables
+                          </p>
+                        )}
+                      </div>
                     </button>
                   );
                 })}
@@ -353,14 +405,91 @@ export default function GenerarFacturaPage() {
                     ))}
                   </div>
 
+                  {/* #23: Variables (Botmaker) + conversión USD→PYG */}
+                  {hasVars && (
+                    <div className="rounded-xl border border-border bg-card">
+                      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+                        <Sliders className="h-4 w-4 text-primary" />
+                        <h3 className="text-sm font-semibold text-foreground">Variables (Botmaker)</h3>
+                        <span className="ml-auto font-mono text-sm font-semibold text-foreground">
+                          {formatUsd(preview.variablesSubtotalUsd)}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-border">
+                        {preview.variables.map((v, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-3 px-4 py-2">
+                            <p className="min-w-0 truncate text-sm text-foreground">{v.label}</p>
+                            <div className="flex shrink-0 items-center gap-4">
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {formatUsd(v.commercialValue)}
+                              </span>
+                              <span className="w-28 text-right font-mono text-sm text-foreground">
+                                {rateValid ? formatCurrency(Math.round(v.commercialValue * rateNum), preview.currency) : '—'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Tasa editable + convertir */}
+                      <div className="flex flex-wrap items-end gap-3 border-t border-border bg-muted/30 px-4 py-3">
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs">Tasa USD→PYG (1 USD = ? Gs) — pegá la de DNIT del día</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={rate}
+                            onChange={(e) => setRate(e.target.value)}
+                            placeholder="Ej: 7300"
+                            className="max-w-[180px] font-mono"
+                          />
+                        </div>
+                        <Button variant="outline" onClick={refreshRate} disabled={suggesting}>
+                          <RefreshCw className={`mr-1.5 h-4 w-4 ${suggesting ? 'animate-spin' : ''}`} />
+                          Convertir al día de hoy
+                        </Button>
+                      </div>
+                      {!rateValid && (
+                        <p className="border-t border-border px-4 py-2 text-xs text-warning">
+                          Ingresá la tasa para convertir las variables y poder emitir.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Total + hint */}
                   <div className="rounded-xl border border-border bg-card p-5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Total a facturar</p>
-                        <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
-                          {formatCurrency(preview.total, preview.currency)}
-                        </p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        {hasVars ? (
+                          <>
+                            <div className="flex items-center gap-6 text-sm">
+                              <span className="text-muted-foreground">Soporte</span>
+                              <span className="font-mono text-foreground">
+                                {formatCurrency(preview.total, preview.currency)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-6 text-sm">
+                              <span className="text-muted-foreground">Variables (convertidas)</span>
+                              <span className="font-mono text-foreground">
+                                {rateValid ? formatCurrency(convertedVarsGs, preview.currency) : '—'}
+                              </span>
+                            </div>
+                            <div className="pt-1">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Total estimado</p>
+                              <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
+                                {rateValid ? formatCurrency(grandTotalGs, preview.currency) : '—'}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Total a facturar</p>
+                            <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
+                              {formatCurrency(preview.total, preview.currency)}
+                            </p>
+                          </div>
+                        )}
                       </div>
                       {preview.cutoffDate && (
                         <p className="text-xs text-muted-foreground">
@@ -370,6 +499,7 @@ export default function GenerarFacturaPage() {
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground">
                       Se asignará el próximo número ({preview.nextInvoiceHint}) al emitir.
+                      {hasVars && ' El total se recalcula en el backend con la tasa que estampás.'}
                     </p>
                   </div>
 
@@ -390,7 +520,7 @@ export default function GenerarFacturaPage() {
                 <Button variant="outline" onClick={() => setStep('tipo')} disabled={emitting}>
                   Volver
                 </Button>
-                <Button onClick={emit} disabled={!preview.puedeEmitir || emitting}>
+                <Button onClick={emit} disabled={!preview.puedeEmitir || emitting || (hasVars && !rateValid)}>
                   <CheckCircle2 className="mr-1.5 h-4 w-4" />
                   {emitting ? 'Emitiendo...' : 'Emitir factura (Borrador)'}
                 </Button>

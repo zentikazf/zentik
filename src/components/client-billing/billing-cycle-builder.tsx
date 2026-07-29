@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Eye, EyeOff, Lock, AlertTriangle, Ban, History } from 'lucide-react';
+import { ArrowLeft, Lock, AlertTriangle, Ban, History, Sliders } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api-client';
@@ -10,7 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import { CloseCycleDialog } from './close-cycle-dialog';
 import { CancelCycleDialog } from './cancel-cycle-dialog';
-import { BillingCycle, BillingRow, CycleBuilder, CycleStatus, formatPeriodLabel } from './types';
+import { BillingCycle, BillingRow, CycleBuilder, CycleStatus, formatPeriodLabel, formatUsd } from './types';
 
 const CYCLE_STATUS: Record<CycleStatus, { label: string; variant: 'muted' | 'info' | 'success' | 'destructive' }> = {
   DRAFT: { label: 'Borrador', variant: 'muted' },
@@ -70,13 +70,13 @@ function RowLine({ row, currency }: { row: BillingRow; currency: string }) {
 }
 
 export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBack, onChanged }: Props) {
-  const [showVisibleOnly, setShowVisibleOnly] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<BillingCycle | null>(null);
 
   const hasFacturable = builder.soporte.some((r) => r.billable);
-  const visibleOnly = [...builder.proyecto, ...builder.interno];
+  const hasVariables = builder.variables.length > 0; // #23
+  const hasVariablesValue = builder.variablesSubtotalUsd > 0; // #23: hay comercial > 0 → conversión al generar
 
   const updateStatus = async (cycle: BillingCycle, status: 'SENT' | 'PAID') => {
     setActingId(cycle.id);
@@ -103,25 +103,42 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
         <h2 className="text-[15px] font-semibold text-foreground">{formatPeriodLabel(builder.period)}</h2>
       </div>
 
-      {/* Total en vivo */}
+      {/* Total en vivo — Soporte (Gs) + Variables (USD, se convierte al generar) */}
       <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Total facturable</p>
-            <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
-              {formatCurrency(builder.totalFacturable, builder.currency)}
-            </p>
-            {builder.subtotalFueraCupo !== '0' && (
-              <p className="mt-1 text-xs text-warning">
-                Incluye {formatCurrency(builder.subtotalFueraCupo, builder.currency)} fuera de cupo
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-x-10 gap-y-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Soporte (facturable)</p>
+              <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
+                {formatCurrency(builder.totalFacturable, builder.currency)}
               </p>
+              {builder.subtotalFueraCupo !== '0' && (
+                <p className="mt-1 text-xs text-warning">
+                  Incluye {formatCurrency(builder.subtotalFueraCupo, builder.currency)} fuera de cupo
+                </p>
+              )}
+            </div>
+            {hasVariablesValue && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Variables (Botmaker)</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
+                  {formatUsd(builder.variablesSubtotalUsd)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">se convierte a Gs al generar</p>
+              </div>
             )}
           </div>
-          {canManage && (
-            <Button onClick={() => setCloseOpen(true)} disabled={!hasFacturable}>
-              Generar factura (Borrador)
-            </Button>
-          )}
+          {canManage &&
+            (hasVariablesValue ? (
+              // Con variables, la emisión pasa por el flujo de conversión (tasa editable) de /generar.
+              <Link href={`/clients/${clientId}/facturacion/generar`}>
+                <Button>Generar factura (convertir)</Button>
+              </Link>
+            ) : (
+              <Button onClick={() => setCloseOpen(true)} disabled={!hasFacturable}>
+                Generar factura (Borrador)
+              </Button>
+            ))}
         </div>
       </div>
 
@@ -157,28 +174,36 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
 
         <div className="rounded-xl border border-border bg-card">
           <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-            <button
-              onClick={() => setShowVisibleOnly((v) => !v)}
-              className="flex items-center gap-2 text-sm font-semibold text-foreground"
-              title="Solo se muestra, no cobra"
-            >
-              {showVisibleOnly ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4 text-muted-foreground" />}
-              Proyecto / Interno
-            </button>
-            <span className="ml-auto text-xs text-muted-foreground">no cobra</span>
+            <Sliders className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">Variables</h3>
+            <span className="ml-auto text-xs text-muted-foreground">cobra (Botmaker)</span>
           </div>
-          {!showVisibleOnly ? (
+          {!hasVariables ? (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-              {visibleOnly.length} movimiento(s) oculto(s). El ojito solo los muestra.
+              Sin variables en este mes. Cargalas en la sección Variables del cliente.
             </p>
-          ) : visibleOnly.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-muted-foreground">Sin proyecto/interno en este mes</p>
           ) : (
-            <div className="divide-y divide-border">
-              {visibleOnly.map((r) => (
-                <RowLine key={r.id} row={r} currency={builder.currency} />
-              ))}
-            </div>
+            <>
+              <div className="divide-y divide-border">
+                {builder.variables.map((v, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <p className="min-w-0 truncate text-sm text-foreground">{v.label}</p>
+                    <span className="shrink-0 font-mono text-sm font-semibold text-foreground">
+                      {formatUsd(v.commercialValue)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between border-t border-border px-3 py-2.5">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">Subtotal variables</span>
+                <span className="font-mono text-sm font-semibold text-foreground">
+                  {formatUsd(builder.variablesSubtotalUsd)}
+                </span>
+              </div>
+              <p className="px-3 pb-3 text-[11px] text-muted-foreground">
+                En USD — se convierte a Gs al generar la factura.
+              </p>
+            </>
           )}
         </div>
       </div>
