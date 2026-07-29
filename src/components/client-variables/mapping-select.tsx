@@ -3,12 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Sliders, AlertTriangle, Check, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
-import { formatUsd } from '@/components/client-billing/types';
 
 interface AccountOption {
   accountId: string;
@@ -23,19 +20,19 @@ interface Props {
   clientId: string;
   currentAccountId?: string | null;
   onMapped: () => void;
-  onSkip?: () => void; // seguir sin mapear (variables 100% manuales)
 }
 
+// Mes actual (interno, oculto): solo se usa para LISTAR las cuentas Botmaker. Las cuentas existen
+// independientemente del mes; el admin no elige período acá, solo mapea.
 function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
 /**
- * #23 — Selector de cuenta Botmaker para mapear (fija Client.botmakerAccountId). Lista las cuentas del
- * período elegido, marca las ya mapeadas a otro cliente. Estética del sistema (cards/bordes).
+ * #23 — Selector de cuenta Botmaker para mapear (fija Client.botmakerAccountId). Marca las ya mapeadas a
+ * otro cliente. Sin selector de período: mapear es lo único que se hace acá.
  */
-export function MappingSelect({ orgId, clientId, currentAccountId, onMapped, onSkip }: Props) {
-  const [period, setPeriod] = useState(currentMonth());
+export function MappingSelect({ orgId, clientId, currentAccountId, onMapped }: Props) {
   const [enabled, setEnabled] = useState(true);
   const [accounts, setAccounts] = useState<AccountOption[] | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -44,7 +41,7 @@ export function MappingSelect({ orgId, clientId, currentAccountId, onMapped, onS
     setAccounts(null);
     try {
       const res = await api.get<{ enabled: boolean; accounts: AccountOption[] }>(
-        `/organizations/${orgId}/billing/botmaker/accounts?period=${period}`,
+        `/organizations/${orgId}/billing/botmaker/accounts?period=${currentMonth()}`,
       );
       setEnabled(res.data.enabled);
       setAccounts(res.data.accounts);
@@ -52,7 +49,7 @@ export function MappingSelect({ orgId, clientId, currentAccountId, onMapped, onS
       toast.error('Error', err instanceof ApiError ? err.message : 'No se pudieron cargar las cuentas de Botmaker');
       setAccounts([]);
     }
-  }, [orgId, period]);
+  }, [orgId]);
 
   useEffect(() => {
     load();
@@ -81,25 +78,11 @@ export function MappingSelect({ orgId, clientId, currentAccountId, onMapped, onS
         <p className="mt-1 text-sm text-muted-foreground">
           Elegí la cuenta del cliente para traer su consumo. Se guarda el identificador; podés recambiarlo cuando quieras.
         </p>
-
-        <div className="mx-auto mt-4 flex max-w-xs items-end gap-2">
-          <div className="flex-1 space-y-1 text-left">
-            <Label className="text-xs">Período (para listar consumo)</Label>
-            <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
-          </div>
-          <Button variant="outline" size="icon" onClick={load} title="Recargar">
-            <RefreshCw className="h-4 w-4" />
+        <div className="mt-3">
+          <Button variant="ghost" size="sm" onClick={load} className="text-xs text-muted-foreground">
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Recargar cuentas
           </Button>
         </div>
-
-        {onSkip && (
-          <button
-            onClick={onSkip}
-            className="mt-3 text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-primary hover:underline"
-          >
-            Seguir sin mapear (cargar variables manuales)
-          </button>
-        )}
       </div>
 
       {accounts === null ? (
@@ -113,12 +96,12 @@ export function MappingSelect({ orgId, clientId, currentAccountId, onMapped, onS
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span>
             La facturación de Botmaker está deshabilitada. Configurá <code>BOTMAKER_BILLING_ENABLED=true</code> y el
-            token en el backend para listar cuentas. Igual podés cargar variables manuales sin mapear.
+            token en el backend para listar las cuentas.
           </span>
         </div>
       ) : accounts.length === 0 ? (
         <p className="rounded-xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-          Sin cuentas con consumo en {period}. Probá otro período.
+          No aparecieron cuentas de Botmaker. Probá recargar.
         </p>
       ) : (
         <div className="rounded-xl border border-border bg-card">
@@ -152,7 +135,6 @@ export function MappingSelect({ orgId, clientId, currentAccountId, onMapped, onS
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <span className="font-mono text-xs text-muted-foreground">{formatUsd(a.totalSpend)}</span>
                     {saving === a.accountId ? (
                       <RefreshCw className="h-4 w-4 animate-spin text-primary" />
                     ) : (

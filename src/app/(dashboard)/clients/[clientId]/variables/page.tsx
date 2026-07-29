@@ -29,7 +29,6 @@ export default function ClientVariablesPage() {
   const [loading, setLoading] = useState(true);
   const [openPeriod, setOpenPeriod] = useState<string | null>(null);
   const [forceMapping, setForceMapping] = useState(false);
-  const [manualMode, setManualMode] = useState(false);
 
   const loadClient = useCallback(async () => {
     if (!orgId) return;
@@ -82,7 +81,7 @@ export default function ClientVariablesPage() {
   }
 
   const mapped = !!client.botmakerAccountId;
-  const showMapping = forceMapping || (!mapped && !manualMode);
+  const showMapping = forceMapping || !mapped;
 
   return (
     <div className="space-y-5">
@@ -104,18 +103,14 @@ export default function ClientVariablesPage() {
           currentAccountId={client.botmakerAccountId}
           onMapped={() => {
             setForceMapping(false);
-            setManualMode(false);
             loadClient();
-          }}
-          onSkip={() => {
-            setForceMapping(false);
-            setManualMode(true);
           }}
         />
       ) : (
         <MonthList
           orgId={orgId!}
           clientId={clientId}
+          clientName={client.name}
           accountId={client.botmakerAccountId ?? null}
           onOpenMonth={(period) => setOpenPeriod(period)}
           onChangeAccount={() => setForceMapping(true)}

@@ -55,18 +55,33 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
   const load = useCallback(async () => {
     setItems(null);
     try {
-      const res = await api.get<{ items: StatementItem[]; note: string | null; billed: boolean }>(
+      const res = await api.get<{ items: StatementItem[]; note: string | null; billed: boolean; exists: boolean }>(
         `/organizations/${orgId}/clients/${clientId}/billing/variables/${period}`,
       );
-      setItems(res.data.items.map(toEdit));
       setNote(res.data.note ?? '');
       setBilled(res.data.billed);
+      if (res.data.exists) {
+        // Mes ya guardado → cargar SOLO lo guardado (nunca pisar los comerciales ya cargados).
+        setItems(res.data.items.map(toEdit));
+      } else if (accountId) {
+        // Mes nuevo → auto-import de Botmaker (crudo USD, comercial 0). 0 variables = sin consumo ese mes.
+        try {
+          const imp = await api.get<StatementItem[]>(
+            `/organizations/${orgId}/clients/${clientId}/billing/variables/${period}/import`,
+          );
+          setItems(imp.data.map(toEdit));
+        } catch {
+          setItems([]); // Botmaker sin datos o error → vacío; podés agregar variables manuales.
+        }
+      } else {
+        setItems([]);
+      }
     } catch (err) {
       toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo cargar el período');
       setItems([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, clientId, period]);
+  }, [orgId, clientId, period, accountId]);
 
   useEffect(() => {
     load();
@@ -172,7 +187,7 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={onImportClick} disabled={importing || !accountId} title={!accountId ? 'Mapeá una cuenta Botmaker para importar' : 'Traer del consumo de Botmaker'}>
               <Download className="mr-1.5 h-4 w-4" />
-              {importing ? 'Importando...' : 'Importar de Botmaker'}
+              {importing ? 'Re-importando...' : 'Re-importar'}
             </Button>
             <Button onClick={save} disabled={saving}>
               <Save className="mr-1.5 h-4 w-4" />
@@ -186,7 +201,7 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
           <span className="flex items-center gap-2 text-muted-foreground">
             <AlertTriangle className="h-4 w-4 text-warning" />
-            Importar reemplaza los ítems actuales por el consumo de Botmaker. ¿Seguir?
+            Re-importar reemplaza los ítems actuales por el consumo de Botmaker. ¿Seguir?
           </span>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => setConfirmImport(false)}>
