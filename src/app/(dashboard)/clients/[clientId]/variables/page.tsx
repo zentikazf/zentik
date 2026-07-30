@@ -94,7 +94,7 @@ export default function ClientVariablesPage() {
           period={openPeriod}
           accountId={client.botmakerAccountId ?? null}
           onBack={() => setOpenPeriod(null)}
-          onSaved={() => setOpenPeriod(null)}
+          onSaved={() => {}}
         />
       ) : showMapping ? (
         <MappingSelect
