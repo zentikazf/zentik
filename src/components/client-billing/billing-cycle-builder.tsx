@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Lock, AlertTriangle, Ban, History, Sliders } from 'lucide-react';
+import { ArrowLeft, Lock, AlertTriangle, Ban, History, Sliders, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api, ApiError } from '@/lib/api-client';
@@ -178,7 +178,29 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
             <h3 className="text-sm font-semibold text-foreground">Variables</h3>
             <span className="ml-auto text-xs text-muted-foreground">cobra (Botmaker)</span>
           </div>
-          {!hasVariables ? (
+          {builder.variablesBilled ? (
+            // #23: dinámico — ya facturadas → factura al día + link directo a la factura emitida.
+            <div className="px-4 py-6 text-center">
+              <p className="inline-flex items-center gap-1.5 text-sm font-medium text-success">
+                <CheckCircle2 className="h-4 w-4" /> Factura al día — nada pendiente
+              </p>
+              {builder.variablesBilledCycleId && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  <Link
+                    href={`/clients/${clientId}/facturacion/${builder.variablesBilledCycleId}`}
+                    className="text-primary underline-offset-2 hover:underline"
+                  >
+                    Ver la factura emitida
+                    {(() => {
+                      const c = builder.cycles.find((x) => x.id === builder.variablesBilledCycleId);
+                      return c ? ` (${c.invoiceNumber})` : '';
+                    })()}
+                    {' '}→
+                  </Link>
+                </p>
+              )}
+            </div>
+          ) : !hasVariables ? (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               Sin variables en este mes. Cargalas en la sección Variables del cliente.
             </p>

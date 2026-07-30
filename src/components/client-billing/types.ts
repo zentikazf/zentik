@@ -115,6 +115,8 @@ export interface CycleBuilder {
   interno: BillingRow[];
   variables: VariableLine[]; // #23: reemplazan la columna Proyecto/Interno (comerciales USD del mes)
   variablesSubtotalUsd: number; // #23
+  variablesBilled: boolean; // #23: statement ya facturado → "Factura al día, nada pendiente"
+  variablesBilledCycleId: string | null; // #23: link a la factura que las incluyó
   subtotalSoporte: string;
   subtotalFueraCupo: string;
   totalFacturable: string;

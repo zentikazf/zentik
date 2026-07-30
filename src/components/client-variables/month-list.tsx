@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronRight, Lock, Pencil } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight, Lock, Pencil, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api-client';
@@ -14,6 +15,7 @@ interface SavedRow {
   totalCommercial: number;
   note: string | null;
   billed: boolean;
+  billedCycleId: string | null; // #23: link directo a la factura que incluyó este mes
 }
 
 interface Props {
@@ -88,12 +90,15 @@ export function MonthList({ orgId, clientId, clientName, accountId, onOpenMonth,
             {periods.map((period) => {
               const s = savedMap.get(period);
               return (
-                <button
+                <div
                   key={period}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onOpenMonth(period)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                  onKeyDown={(e) => e.key === 'Enter' && onOpenMonth(period)}
+                  className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span className="text-sm font-medium text-foreground">{formatPeriodLabel(period)}</span>
                     {s ? (
                       s.billed ? (
@@ -111,6 +116,16 @@ export function MonthList({ orgId, clientId, clientName, accountId, onOpenMonth,
                       </span>
                     )}
                     {s && <span className="text-xs text-muted-foreground">{s.itemCount} ítem(s)</span>}
+                    {/* #23: mes ya facturado → link directo a la factura (sin abrir el editor) */}
+                    {s?.billed && s.billedCycleId && (
+                      <Link
+                        href={`/clients/${clientId}/facturacion/${s.billedCycleId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+                      >
+                        <Receipt className="h-3 w-3" /> Ver factura →
+                      </Link>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     {s && (
@@ -118,7 +133,7 @@ export function MonthList({ orgId, clientId, clientName, accountId, onOpenMonth,
                     )}
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

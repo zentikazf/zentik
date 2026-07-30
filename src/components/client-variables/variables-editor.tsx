@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, Download, Save, Lock, ArrowRightLeft, AlertTriangle, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,7 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
   const [items, setItems] = useState<EditItem[] | null>(null);
   const [note, setNote] = useState('');
   const [billed, setBilled] = useState(false);
+  const [billedCycleId, setBilledCycleId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [confirmImport, setConfirmImport] = useState(false);
@@ -88,11 +90,16 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
   const load = useCallback(async () => {
     setItems(null);
     try {
-      const res = await api.get<{ items: StatementItem[]; note: string | null; billed: boolean; exists: boolean }>(
-        `/organizations/${orgId}/clients/${clientId}/billing/variables/${period}`,
-      );
+      const res = await api.get<{
+        items: StatementItem[];
+        note: string | null;
+        billed: boolean;
+        billedCycleId: string | null;
+        exists: boolean;
+      }>(`/organizations/${orgId}/clients/${clientId}/billing/variables/${period}`);
       setNote(res.data.note ?? '');
       setBilled(res.data.billed);
+      setBilledCycleId(res.data.billedCycleId ?? null);
       if (res.data.exists) {
         setItems(res.data.items.map(toEdit)); // mes guardado → SOLO lo guardado
       } else if (accountId) {
@@ -208,6 +215,17 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
           <span>
             Estas variables ya se facturaron y quedaron congeladas. Para editarlas, reabrí (anulá) la factura del ciclo
             que las incluye.
+            {billedCycleId && (
+              <>
+                {' '}
+                <Link
+                  href={`/clients/${clientId}/facturacion/${billedCycleId}`}
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Ver la factura →
+                </Link>
+              </>
+            )}
           </span>
         </div>
       )}
