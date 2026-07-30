@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Clock, DollarSign, TrendingUp, CheckCircle2, Circle, ChevronDown } from 'lucide-react';
+import { Clock, DollarSign, TrendingUp, CheckCircle2, Circle, ChevronDown, Sliders } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
+import { PortalVariablesBlock, PortalVariableItem, splitVariables } from '@/components/portal/portal-variables-block';
 
 interface HoursTransaction {
  id: string;
@@ -40,6 +41,15 @@ interface HoursResponse {
  transactions: HoursTransaction[];
 }
 
+// #23 — statement de variables del portal (solo comerciales, scopeado por cliente).
+interface PortalVariableStatement {
+ period: string;
+ items: PortalVariableItem[];
+ total: number;
+}
+
+const fmtUSD = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 // Mes de trabajo real del registro (workedOn date-only, sin day-shift por TZ); fallback a la fecha de carga
 // (createdAt, mes en Asunción). Devuelve la clave 'YYYY-MM'.
 function monthKeyOf(t: HoursTransaction): string {
@@ -71,31 +81,37 @@ function rowDateShort(t: HoursTransaction): string {
  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short' });
 }
 
-// Agrupa por mes (clave desc = más reciente primero). Dentro del grupo conserva el orden que ya trae el backend
-// (createdAt desc).
-function groupByMonth(txs: HoursTransaction[]): { key: string; txs: HoursTransaction[] }[] {
- const map = new Map<string, HoursTransaction[]>();
- for (const t of txs) {
-  const k = monthKeyOf(t);
-  const arr = map.get(k);
-  if (arr) arr.push(t);
-  else map.set(k, [t]);
- }
- return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([key, list]) => ({ key, txs: list }));
-}
-
 export default function PortalHoursPage() {
  const [data, setData] = useState<HoursResponse | null>(null);
+ const [vars, setVars] = useState<Map<string, PortalVariableStatement>>(new Map());
  const [loading, setLoading] = useState(true);
 
  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
+ // #23: sub-card de variables COLAPSADAS (default = todas abiertas → el consumo se ve al abrir el mes).
+ const [collapsedVars, setCollapsedVars] = useState<Set<string>>(new Set());
 
- const monthGroups = useMemo(() => groupByMonth(data?.transactions ?? []), [data]);
+ // Registros de horas agrupados por mes.
+ const txsByMonth = useMemo(() => {
+  const map = new Map<string, HoursTransaction[]>();
+  for (const t of data?.transactions ?? []) {
+   const k = monthKeyOf(t);
+   const arr = map.get(k);
+   if (arr) arr.push(t);
+   else map.set(k, [t]);
+  }
+  return map;
+ }, [data]);
+
+ // Meses a mostrar = unión de meses con horas + meses con variables, desc (más reciente primero).
+ const monthKeys = useMemo(() => {
+  const set = new Set<string>([...txsByMonth.keys(), ...vars.keys()]);
+  return [...set].sort((a, b) => b.localeCompare(a));
+ }, [txsByMonth, vars]);
 
  // Default: abrir el mes más reciente cuando llegan los datos.
  useEffect(() => {
-  if (monthGroups.length > 0) setOpenMonths(new Set([monthGroups[0].key]));
- }, [monthGroups.length]);
+  if (monthKeys.length > 0) setOpenMonths(new Set([monthKeys[0]]));
+ }, [monthKeys.length]);
 
  const toggleMonth = (key: string) =>
   setOpenMonths((prev) => {
@@ -105,9 +121,23 @@ export default function PortalHoursPage() {
    return next;
   });
 
+ const toggleVars = (key: string) =>
+  setCollapsedVars((prev) => {
+   const next = new Set(prev);
+   if (next.has(key)) next.delete(key);
+   else next.add(key);
+   return next;
+  });
+
  useEffect(() => {
-  api.get<HoursResponse>('/portal/hours')
-   .then((r) => setData(r.data))
+  Promise.all([
+   api.get<HoursResponse>('/portal/hours'),
+   api.get<{ statements: PortalVariableStatement[] }>('/portal/variables').catch(() => ({ data: { statements: [] } })),
+  ])
+   .then(([hoursRes, varsRes]) => {
+    setData(hoursRes.data);
+    setVars(new Map((varsRes.data.statements ?? []).map((s) => [s.period, s])));
+   })
    .catch((err) => {
     const msg = err instanceof ApiError ? err.message : 'Error al cargar horas';
     toast.error('Error', msg);
@@ -141,7 +171,7 @@ export default function PortalHoursPage() {
    <div>
     <h1 className="text-2xl font-bold tracking-tight text-foreground">Mis horas</h1>
     <p className="mt-1 text-sm text-muted-foreground">
-     Detalle de tiempo registrado y costo asociado.
+     Detalle de consumo y tiempo registrado por mes.
     </p>
    </div>
 
@@ -177,20 +207,24 @@ export default function PortalHoursPage() {
     </div>
    </div>
 
-   {/* Registros por mes (acordeón) */}
-   {data.transactions.length === 0 ? (
+   {/* Acordeón por mes: consumo (variables) + registros de horas */}
+   {monthKeys.length === 0 ? (
     <div className="rounded-xl border border-border bg-card py-12 text-center">
      <Clock className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50"/>
      <p className="text-sm text-muted-foreground">No hay registros aún</p>
     </div>
    ) : (
     <div className="space-y-3">
-     {monthGroups.map(({ key, txs }) => {
+     {monthKeys.map((key) => {
+      const txs = txsByMonth.get(key) ?? [];
+      const statement = vars.get(key);
       const open = openMonths.has(key);
+      const varsOpen = !collapsedVars.has(key);
       const monthHours = txs.reduce((s, t) => s + t.hours, 0);
       const monthPending = txs
        .filter((t) => t.priceAmount !== null && t.billedCycleId === null)
        .reduce((s, t) => s + parseFloat(t.priceAmount!), 0);
+      const varsTotal = statement ? splitVariables(statement.items).total : 0;
       return (
        <div key={key} className="rounded-xl border border-border bg-card overflow-hidden">
         <button
@@ -207,72 +241,112 @@ export default function PortalHoursPage() {
            <p className="text-sm font-semibold text-foreground">{monthLabelEs(key)}</p>
            <p className="text-[11px] text-muted-foreground">
             {txs.length} {txs.length === 1 ? 'registro' : 'registros'} · {monthHours.toFixed(2)}h
+            {statement && ` · ${statement.items.length} variable(s)`}
            </p>
           </div>
          </div>
-         {monthPending > 0 && (
-          <div className="text-right">
-           <p className="font-mono text-sm font-semibold text-primary">
-            {formatCurrency(monthPending, data.currency)}
-           </p>
-           <p className="text-[10px] text-muted-foreground">pendiente</p>
-          </div>
-         )}
+         <div className="flex items-center gap-4 text-right">
+          {varsTotal > 0 && (
+           <div>
+            <p className="font-mono text-sm font-semibold text-foreground">{fmtUSD(varsTotal)}</p>
+            <p className="text-[10px] text-muted-foreground">consumo</p>
+           </div>
+          )}
+          {monthPending > 0 && (
+           <div>
+            <p className="font-mono text-sm font-semibold text-primary">
+             {formatCurrency(monthPending, data.currency)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">pendiente</p>
+           </div>
+          )}
+         </div>
         </button>
 
         {open && (
-         <div className="border-t border-border overflow-x-auto animate-fade-in">
-          <table className="w-full text-sm">
-           <thead className="bg-muted/30 text-xs">
-            <tr>
-             <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Fecha</th>
-             <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Tarea</th>
-             <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Tipo</th>
-             <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Horas</th>
-             <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Estado</th>
-             <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Costo</th>
-            </tr>
-           </thead>
-           <tbody className="divide-y divide-border">
-            {txs.map((t) => (
-             <tr key={t.id} className="hover:bg-muted/30 transition-colors">
-              <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{rowDateShort(t)}</td>
-              <td className="px-4 py-3">
-               <p className="text-sm text-foreground truncate max-w-xs">
-                {t.task?.title ?? t.note ?? '—'}
-               </p>
-               {t.task?.project && (
-                <p className="text-[11px] text-muted-foreground">{t.task.project.name}</p>
-               )}
-              </td>
-              <td className="px-4 py-3">
-               {t.task?.type === 'SUPPORT' && (
-                <Badge className="bg-warning/15 text-warning text-[10px]">Soporte</Badge>
-               )}
-               {t.task?.type === 'PROJECT' && (
-                <Badge className="bg-info/10 text-info text-[10px]">Desarrollo</Badge>
-               )}
-               {!t.task?.type && <span className="text-xs text-muted-foreground">—</span>}
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-sm text-foreground">{t.hours.toFixed(2)}h</td>
-              <td className="px-4 py-3">
-               {t.billedCycleId ? (
-                <Badge className="inline-flex items-center gap-1 bg-success/15 text-success text-[10px]">
-                 <CheckCircle2 className="h-3 w-3" /> Facturado
-                </Badge>
-               ) : (
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                 <Circle className="h-3 w-3" /> Pendiente
-                </span>
-               )}
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground">
-               {formatCurrency(t.priceAmount, t.priceCurrency ?? data.currency)}
-              </td>
-             </tr>
-            ))}
-           </tbody>
-          </table>
+         <div className="border-t border-border animate-fade-in">
+          {/* #23 — Sub-card de consumo (variables) PRIMERO, colapsable hacia abajo */}
+          {statement && statement.items.length > 0 && (
+           <div className="border-b border-border bg-muted/10 px-4 py-3">
+            <button
+             type="button"
+             onClick={() => toggleVars(key)}
+             aria-expanded={varsOpen}
+             className="flex w-full items-center gap-2 text-left"
+            >
+             <ChevronDown
+              className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200', varsOpen && 'rotate-180')}
+             />
+             <Sliders className="h-3.5 w-3.5 text-primary" />
+             <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Consumo del período</span>
+             <span className="ml-auto font-mono text-xs font-semibold text-foreground">{fmtUSD(varsTotal)}</span>
+            </button>
+            {varsOpen && (
+             <div className="mt-3">
+              <PortalVariablesBlock items={statement.items} />
+             </div>
+            )}
+           </div>
+          )}
+
+          {/* Registros de horas */}
+          {txs.length > 0 ? (
+           <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+             <thead className="bg-muted/30 text-xs">
+              <tr>
+               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Fecha</th>
+               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Tarea</th>
+               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Tipo</th>
+               <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Horas</th>
+               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Estado</th>
+               <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Costo</th>
+              </tr>
+             </thead>
+             <tbody className="divide-y divide-border">
+              {txs.map((t) => (
+               <tr key={t.id} className="hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{rowDateShort(t)}</td>
+                <td className="px-4 py-3">
+                 <p className="text-sm text-foreground truncate max-w-xs">
+                  {t.task?.title ?? t.note ?? '—'}
+                 </p>
+                 {t.task?.project && (
+                  <p className="text-[11px] text-muted-foreground">{t.task.project.name}</p>
+                 )}
+                </td>
+                <td className="px-4 py-3">
+                 {t.task?.type === 'SUPPORT' && (
+                  <Badge className="bg-warning/15 text-warning text-[10px]">Soporte</Badge>
+                 )}
+                 {t.task?.type === 'PROJECT' && (
+                  <Badge className="bg-info/10 text-info text-[10px]">Desarrollo</Badge>
+                 )}
+                 {!t.task?.type && <span className="text-xs text-muted-foreground">—</span>}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-sm text-foreground">{t.hours.toFixed(2)}h</td>
+                <td className="px-4 py-3">
+                 {t.billedCycleId ? (
+                  <Badge className="inline-flex items-center gap-1 bg-success/15 text-success text-[10px]">
+                   <CheckCircle2 className="h-3 w-3" /> Facturado
+                  </Badge>
+                 ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                   <Circle className="h-3 w-3" /> Pendiente
+                  </span>
+                 )}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground">
+                 {formatCurrency(t.priceAmount, t.priceCurrency ?? data.currency)}
+                </td>
+               </tr>
+              ))}
+             </tbody>
+            </table>
+           </div>
+          ) : (
+           <p className="px-5 py-4 text-xs text-muted-foreground">Sin registros de horas en este mes.</p>
+          )}
          </div>
         )}
        </div>
@@ -282,7 +356,7 @@ export default function PortalHoursPage() {
    )}
 
    <p className="text-[11px] text-muted-foreground italic">
-    Acá podés ver el detalle del tiempo que el equipo dedicó a tus proyectos.
+    Acá podés ver el consumo del período y el detalle del tiempo que el equipo dedicó a tus proyectos.
    </p>
   </div>
  );

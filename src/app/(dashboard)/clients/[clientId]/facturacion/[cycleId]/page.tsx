@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Clock, Ban, Download, Loader2, FileMinus } from 'lucide-react';
+import { ArrowLeft, Clock, Ban, Download, Loader2, FileMinus, Sliders } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -329,11 +329,57 @@ export default function CycleDetailPage() {
         </div>
       )}
 
+      {/* #23: Variables (Botmaker) estampadas en la factura — consumo primero, tiempo después */}
+      {cycle.variablesBilling && cycle.variablesBilling.lines.length > 0 && (
+        <div className="rounded-xl border border-border bg-card">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+            <Sliders className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Variables (Botmaker)</h2>
+            <span className="ml-auto text-xs text-muted-foreground">
+              1 USD ≈ {formatCurrency(cycle.variablesBilling.rate, cycle.currency)} ·{' '}
+              {formatDate(cycle.variablesBilling.rateDate)}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="px-3 py-2.5 font-medium text-muted-foreground">Variable</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Comercial (USD)</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Convertido</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {cycle.variablesBilling.lines.map((l, idx) => (
+                  <tr key={idx} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2.5 font-mono text-xs text-foreground">{l.label}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-muted-foreground">
+                      US$ {l.commercialUsd}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
+                      {formatCurrency(l.convertedPyg, cycle.currency)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-border bg-muted/30">
+                  <td className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground" colSpan={2}>
+                    Subtotal variables
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
+                    {formatCurrency(cycle.variablesBilling.amountPyg, cycle.currency)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Líneas facturadas */}
       <div className="rounded-xl border border-border bg-card">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Clock className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">Líneas facturadas</h2>
+          <h2 className="text-sm font-semibold text-foreground">Tiempo facturado</h2>
           <span className="ml-auto text-xs text-muted-foreground">{transactions.length} movimiento(s)</span>
         </div>
         {transactions.length === 0 ? (
