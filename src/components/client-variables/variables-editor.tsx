@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Download, Save, Lock, ArrowRightLeft, AlertTriangle, Calculator } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Download, Save, Lock, ArrowRightLeft, AlertTriangle, Calculator, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,6 +12,7 @@ import { toast } from '@/hooks/use-toast';
 import { formatUsd, formatPeriodLabel } from '@/components/client-billing/types';
 
 type PricingMode = 'DIRECTO' | 'CALCULO' | 'MANUAL';
+type PricingOp = 'MULT' | 'DIV';
 
 interface StatementItem {
   label: string;
@@ -22,6 +23,8 @@ interface StatementItem {
   mode?: PricingMode | null;
   incluidas?: number | null;
   unitPrice?: number | null;
+  op?: PricingOp | null;
+  enabled?: boolean | null; // ojito: false = deshabilitada (no cobra, el portal no la muestra)
 }
 
 interface EditItem {
@@ -33,7 +36,9 @@ interface EditItem {
   source: 'BOTMAKER' | 'MANUAL';
   mode: PricingMode | null;
   incluidas: string; // solo CALCULO
-  unitPrice: string; // solo CALCULO
+  unitPrice: string; // solo CALCULO (precio unitario en MULT; divisor unidades/USD en DIV)
+  op: PricingOp; // solo CALCULO (default MULT)
+  enabled: boolean; // ojito (default true)
 }
 
 interface Props {
@@ -47,13 +52,15 @@ interface Props {
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-// Fórmula ÚNICA (espeja computeCommercial del backend): DIRECTO = crudo; CALCULO = max(0, usage−incluidas)×precio;
-// MANUAL/sin regla = valor tipeado.
+// Fórmula ÚNICA (espeja computeCommercial del backend): DIRECTO = crudo; CALCULO = op(cobrables, precio)
+// con MULT (×) o DIV (÷, unidades por USD; divisor 0 → 0); MANUAL/sin regla = valor tipeado.
 function effectiveCommercial(i: EditItem): number {
   if (i.mode === 'DIRECTO') return round2(i.rawValue ?? 0);
   if (i.mode === 'CALCULO') {
     const cobrable = Math.max(0, (i.usage ?? 0) - (parseFloat(i.incluidas) || 0));
-    return round2(cobrable * (parseFloat(i.unitPrice) || 0));
+    const factor = parseFloat(i.unitPrice) || 0;
+    if (i.op === 'DIV') return factor > 0 ? round2(cobrable / factor) : 0;
+    return round2(cobrable * factor);
   }
   return parseFloat(i.commercial) || 0;
 }
@@ -85,6 +92,8 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
     mode: i.mode ?? null,
     incluidas: i.incluidas != null ? String(i.incluidas) : '0',
     unitPrice: i.unitPrice != null ? String(i.unitPrice) : '',
+    op: i.op ?? 'MULT',
+    enabled: i.enabled !== false,
   });
 
   const load = useCallback(async () => {
@@ -126,7 +135,8 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
     load();
   }, [load]);
 
-  const total = (items ?? []).reduce((s, i) => s + effectiveCommercial(i), 0);
+  // Ojito: las deshabilitadas no suman al total en vivo (espeja el backend).
+  const total = (items ?? []).filter((i) => i.enabled).reduce((s, i) => s + effectiveCommercial(i), 0);
 
   const update = (key: string, patch: Partial<EditItem>) =>
     setItems((prev) => (prev ?? []).map((i) => (i._key === key ? { ...i, ...patch } : i)));
@@ -134,7 +144,7 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
   const addManual = () =>
     setItems((prev) => [
       ...(prev ?? []),
-      { _key: nextKey(), label: '', usage: null, rawValue: null, commercial: '0', source: 'MANUAL', mode: 'MANUAL', incluidas: '0', unitPrice: '' },
+      { _key: nextKey(), label: '', usage: null, rawValue: null, commercial: '0', source: 'MANUAL', mode: 'MANUAL', incluidas: '0', unitPrice: '', op: 'MULT', enabled: true },
     ]);
 
   const remove = (key: string) => setItems((prev) => (prev ?? []).filter((i) => i._key !== key));
@@ -180,8 +190,13 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
           ...(i.rawValue != null && { rawValue: i.rawValue }),
           commercialValue: effectiveCommercial(i),
           source: i.source,
+          enabled: i.enabled, // ojito
           ...(i.mode && { mode: i.mode }),
-          ...(i.mode === 'CALCULO' && { incluidas: parseFloat(i.incluidas) || 0, unitPrice: parseFloat(i.unitPrice) || 0 }),
+          ...(i.mode === 'CALCULO' && {
+            incluidas: parseFloat(i.incluidas) || 0,
+            unitPrice: parseFloat(i.unitPrice) || 0,
+            op: i.op,
+          }),
         })),
         note: note.trim() || undefined,
       });
@@ -278,7 +293,7 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
             <span className="text-right">Cantidad</span>
             <span className="text-right">Crudo (USD)</span>
             <span className="text-right">Comercial (USD)</span>
-            <span className="w-[92px]" />
+            <span className="w-[124px]" />
           </div>
           {items.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -290,7 +305,7 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
                 const isCalc = i.mode === 'CALCULO';
                 const isAuto = i.mode === 'DIRECTO' || i.mode === 'CALCULO';
                 return (
-                  <div key={i._key} className="px-4 py-2">
+                  <div key={i._key} className={`px-4 py-2 ${!i.enabled ? 'opacity-50' : ''}`}>
                     <div className="grid grid-cols-[1fr_90px_100px_120px_auto] items-center gap-2">
                       <div className="flex min-w-0 items-center gap-1.5">
                         <Input
@@ -323,7 +338,17 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
                         className={`h-8 text-right font-mono ${isAuto ? 'bg-muted/40' : ''}`}
                         title={isAuto ? 'Calculado por la regla. Escribí para pasarlo a manual.' : 'Valor manual'}
                       />
-                      <div className="flex w-[92px] items-center justify-end gap-1">
+                      <div className="flex w-[124px] items-center justify-end gap-1">
+                        {/* Ojito: apagado = no se cobra ni se muestra en el portal (la regla queda guardada) */}
+                        {!readOnly && (
+                          <button
+                            onClick={() => update(i._key, { enabled: !i.enabled })}
+                            title={i.enabled ? 'Deshabilitar: no se cobra ni se muestra en el portal' : 'Habilitar: vuelve a cobrarse y mostrarse'}
+                            className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-primary/10 hover:text-primary ${i.enabled ? 'text-muted-foreground' : 'bg-warning/15 text-warning'}`}
+                          >
+                            {i.enabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
                         {!readOnly && i.rawValue != null && (
                           <button
                             onClick={() => pasar(i._key)}
@@ -365,14 +390,26 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
                           onChange={(e) => update(i._key, { incluidas: e.target.value })}
                           className="h-7 w-24 font-mono"
                         />
-                        <span className="text-muted-foreground">× Precio unitario (USD)</span>
+                        {/* Operación: × precio unitario o ÷ divisor (p. ej. tokens por USD) */}
+                        <select
+                          value={i.op}
+                          onChange={(e) => update(i._key, { op: e.target.value as PricingOp })}
+                          className="h-7 rounded-md border border-input bg-background px-1.5 font-mono text-xs text-foreground"
+                          title="Multiplicar por precio unitario o dividir por un divisor"
+                        >
+                          <option value="MULT">× Multiplicar</option>
+                          <option value="DIV">÷ Dividir</option>
+                        </select>
+                        <span className="text-muted-foreground">
+                          {i.op === 'DIV' ? 'Divisor (unidades por USD)' : 'Precio unitario (USD)'}
+                        </span>
                         <Input
                           type="number"
                           min={0}
                           step="0.0001"
                           value={i.unitPrice}
                           onChange={(e) => update(i._key, { unitPrice: e.target.value })}
-                          placeholder="0.00"
+                          placeholder={i.op === 'DIV' ? 'ej: 625000' : '0.00'}
                           className="h-7 w-28 font-mono"
                         />
                         <span className="ml-auto font-mono text-foreground">
