@@ -57,7 +57,13 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [savingMatrix, setSavingMatrix] = useState(false);
 
-  const load = useCallback(async () => {
+  /**
+   * @param preserveDraft no pisar las selecciones de la matriz que el usuario aún
+   *   no guardó. Se usa al cambiar el SLA propio del proyecto: ese flujo recarga
+   *   para reflejar el cambio, pero sin `preserveDraft` borraba en silencio lo que
+   *   el usuario venía eligiendo en la matriz.
+   */
+  const load = useCallback(async (opts?: { preserveDraft?: boolean }) => {
     if (!orgId || !canManageSla) return;
     try {
       const [policiesRes, contractsRes] = await Promise.all([
@@ -66,11 +72,13 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
       ]);
       setPolicies(policiesRes.data);
       setContracts(contractsRes.data);
-      setDraft(
-        Object.fromEntries(
-          contractsRes.data.items.map((item) => [item.ticketTypeId, item.slaPolicyId ?? NO_POLICY]),
-        ),
-      );
+      if (!opts?.preserveDraft) {
+        setDraft(
+          Object.fromEntries(
+            contractsRes.data.items.map((item) => [item.ticketTypeId, item.slaPolicyId ?? NO_POLICY]),
+          ),
+        );
+      }
     } catch (err) {
       toast.error('Error', getApiErrorMessage(err, 'No se pudo cargar el SLA del proyecto'));
     } finally {
@@ -98,7 +106,9 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
           ? 'El proyecto vuelve a heredar el SLA del cliente'
           : 'Se aplicará a los tickets sin contrato para su tipo',
       );
-      await load();
+      // preserveDraft: cambiar el SLA del proyecto no debe borrar las selecciones
+      // de la matriz que el usuario todavía no guardó.
+      await load({ preserveDraft: true });
       router.refresh();
     } catch (err) {
       toast.error('Error', getApiErrorMessage(err, 'No se pudo asignar la política al proyecto'));
@@ -133,8 +143,14 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
       }
     }
 
+    // Nada que mandar = el proyecto no tenía contratos y sigue sin tenerlos. NO es
+    // un error: "todo sin contrato" es un estado válido (el ticket resuelve por el
+    // SLA del proyecto/cliente/criticidad). Se avisa como info, no como fallo.
     if (items.length === 0) {
-      toast.error('Sin cambios', 'Elegí al menos una política para guardar la matriz');
+      toast.success(
+        'Sin contratos por tipo',
+        'Este proyecto no tiene contratos: los tickets resolverán su SLA por el proyecto, el cliente o su criticidad.',
+      );
       return;
     }
 
