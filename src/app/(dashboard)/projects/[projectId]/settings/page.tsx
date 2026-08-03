@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { LabelManager } from '@/components/labels/label-manager';
+import { ProjectSlaSection } from '@/components/sla/project-sla-section';
 import { useProject } from '@/providers/project-provider';
 
 const PROJECT_STATUSES = [
@@ -146,6 +147,9 @@ export default function ProjectSettingsPage() {
  <Button type="submit"disabled={saving} className="rounded-full">{saving ? 'Guardando...' : 'Guardar Cambios'}</Button>
  </form>
  </div>
+
+ {/* SLA del proyecto (#42 Fase 1): politica propia + matriz tipo -> politica */}
+ <ProjectSlaSection projectId={projectId} />
 
  {/* Labels */}
  <div className="rounded-xl border border-border bg-card p-6">

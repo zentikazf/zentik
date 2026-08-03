@@ -1,3 +1,5 @@
+import type { SlaCriticality, SlaSource } from '@/types/sla.types';
+
 // ─── Tickets — tipos compartidos ──────────────────────────
 
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED';
@@ -78,6 +80,12 @@ export interface TicketListItem {
   categoryConfig?: { id: string; name: string; criticality: string } | null;
   createdByUser?: { id: string; name: string } | null;
   createdAt: string;
+
+  // Motor de SLA con cascada (#42 Fase 1). Se congelan al crear el ticket y
+  // NUNCA se recalculan. Ausentes en los tickets históricos y mientras el flag
+  // `SLA_CASCADE_ENABLED` esté apagado → la UI no muestra el badge.
+  slaPolicy?: { id: string; name: string; criticality: SlaCriticality } | null;
+  slaSource?: SlaSource | null;
 }
 
 export interface TicketDetail extends TicketListItem {

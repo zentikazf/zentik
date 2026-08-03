@@ -41,6 +41,7 @@ import { ticketService } from '@/services/ticket.service';
 import { TicketActionBar } from './ticket-action-bar';
 import { TicketEventTimeline } from './ticket-event-timeline';
 import { TicketChat } from './ticket-chat';
+import { SlaSourceBadge } from './sla-source-badge';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from './ticket-status-machine';
 import type { TicketDetail, TicketStatus } from '@/types/ticket.types';
 
@@ -422,6 +423,20 @@ export function TicketSidePanel({
                       <Badge className={cn(criticalityStyle.className, 'text-[10px]')}>
                         {criticalityStyle.label}
                       </Badge>
+                    </div>
+                  )}
+
+                  {/* SLA aplicado + origen de la cascada (#42 Fase 1). No se
+                      renderiza en tickets históricos (sin slaSource). */}
+                  {ticket.slaSource && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
+                        <ShieldAlert className="h-3.5 w-3.5" /> SLA
+                      </span>
+                      <SlaSourceBadge
+                        policyName={ticket.slaPolicy?.name}
+                        source={ticket.slaSource}
+                      />
                     </div>
                   )}
 
