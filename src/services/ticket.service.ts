@@ -1,5 +1,8 @@
 import { api } from '@/lib/api-client';
 import type {
+  ReclassifyTicketInput,
+  TicketCategoryConfigItem,
+  TicketClassification,
   TicketDetail,
   TicketEvent,
   TicketsListResponse,
@@ -47,6 +50,21 @@ export const ticketService = {
 
   update: (ticketId: string, input: UpdateTicketInput) =>
     api.patch<TicketDetail>(`/tickets/${ticketId}`, input),
+
+  /** Categorías internas activas de la org (las tipifica el equipo, no el cliente). */
+  categories: (orgId: string) =>
+    api.get<TicketCategoryConfigItem[]>(`/organizations/${orgId}/ticket-categories`),
+
+  /**
+   * Tipificación interna (#42 Fase 2): cambia tipo / criticidad / categoría con
+   * motivo obligatorio. Deja un evento `RECLASSIFIED` en el timeline y **NO**
+   * recalcula los deadlines (quedan congelados con lo resuelto al crear).
+   */
+  reclassify: (orgId: string, ticketId: string, input: ReclassifyTicketInput) =>
+    api.patch<TicketClassification>(
+      `/organizations/${orgId}/tickets/${ticketId}/classification`,
+      input,
+    ),
 
   create: (
     orgId: string,

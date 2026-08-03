@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, CalendarDays, ListChecks, Settings2, ShieldCheck, Tags } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Gauge, ListChecks, Settings2, ShieldCheck, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 const slaNav = [
   { name: 'Políticas SLA', href: '/settings/sla/politicas', icon: ShieldCheck },
   { name: 'Tipos de solicitud', href: '/settings/sla/tipos', icon: Tags },
+  { name: 'Criticidades', href: '/settings/sla/criticidades', icon: Gauge },
   { name: 'Cobertura', href: '/settings/sla/cobertura', icon: ListChecks },
   { name: 'Calendario', href: '/settings/sla/calendario', icon: CalendarDays },
   { name: 'Configuración actual (legacy)', href: '/settings/sla/legacy', icon: Settings2 },

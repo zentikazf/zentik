@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowRight, GitBranch, MessageSquare, UserPlus, UserMinus, Lock, RefreshCcw,
-  Send, CheckCircle2, Clock, AlertTriangle, AlertOctagon,
+  Send, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Tags,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ticketService } from '@/services/ticket.service';
@@ -29,7 +29,15 @@ const EVENT_ICON: Record<string, React.ElementType> = {
   SLA_WARNING: Clock,
   SLA_BREACH_RESPONSE: AlertTriangle,
   SLA_BREACH_RESOLUTION: AlertOctagon,
+  RECLASSIFIED: Tags,
 };
+
+/** Un campo de clasificación que cambió (`metadata.changes` del evento RECLASSIFIED). */
+interface ReclassifyChange {
+  label: string;
+  from: string | null;
+  to: string;
+}
 
 const SOURCE_LABEL: Record<string, string> = {
   TICKET: 'Tickets',
@@ -72,6 +80,18 @@ function describeEvent(ev: TicketEvent): string {
   }
   if (ev.type === 'SLA_BREACH_RESPONSE') return 'SLA de respuesta vencido';
   if (ev.type === 'SLA_BREACH_RESOLUTION') return 'SLA de resolución vencido';
+  if (ev.type === 'RECLASSIFIED') {
+    // Tipificación interna (#42 Fase 2). `metadata.changes` trae los campos ya
+    // legibles; `fromValue`/`toValue` son el respaldo (mismo dato, aplanado).
+    const meta = ev.metadata as { reason?: string; changes?: ReclassifyChange[] } | null;
+    const changes = Array.isArray(meta?.changes) ? meta.changes : [];
+    const detail =
+      changes.length > 0
+        ? changes.map((c) => `${c.label}: ${c.from ?? '—'} → ${c.to}`).join(' · ')
+        : [ev.fromValue, ev.toValue].filter(Boolean).join(' → ');
+    const base = detail ? `Reclasificado: ${detail}` : 'Reclasificado';
+    return meta?.reason ? `${base} · motivo: ${meta.reason}` : base;
+  }
   return ev.type;
 }
 

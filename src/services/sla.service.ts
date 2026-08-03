@@ -1,14 +1,18 @@
 import { api } from '@/lib/api-client';
 import type {
   AssignSlaPolicyInput,
+  AvailableTicketTypes,
   CreateSlaPolicyInput,
   CreateTicketTypeInput,
+  CriticalityConfig,
   ProjectSlaContractsResponse,
   SlaCoverage,
+  SlaCriticality,
   SlaPolicy,
   SlaReadiness,
   SlaSeedResult,
   TicketType,
+  UpdateCriticalityConfigInput,
   UpdateSlaPolicyInput,
   UpdateTicketTypeInput,
   UpsertProjectContractsInput,
@@ -54,6 +58,26 @@ export const slaService = {
   deactivateType: (orgId: string, typeId: string) =>
     api.delete<TicketType>(`/organizations/${orgId}/ticket-types/${typeId}`),
 
+  // ── Criticidades: etiqueta / visibilidad / orden (#42 Fase 2) ────────────
+
+  /** Config completa (incluye las NO visibles): es la vista del admin. */
+  listCriticalityConfigs: (orgId: string) =>
+    api.get<CriticalityConfig[]>(`/organizations/${orgId}/criticality-configs`),
+
+  /**
+   * Upsert de UNA criticidad: si la org no tiene la fila, el backend la crea.
+   * `isDefault: true` es excluyente — desmarca las demás en la misma transacción.
+   */
+  updateCriticalityConfig: (
+    orgId: string,
+    criticality: SlaCriticality,
+    input: UpdateCriticalityConfigInput,
+  ) =>
+    api.patch<CriticalityConfig>(
+      `/organizations/${orgId}/criticality-configs/${criticality}`,
+      input,
+    ),
+
   // ── Contratos por proyecto ───────────────────────────────────────────────
 
   getProjectContracts: (orgId: string, projectId: string) =>
@@ -70,6 +94,17 @@ export const slaService = {
     api.put<ProjectSlaContractsResponse>(
       `/organizations/${orgId}/projects/${projectId}/sla-contracts`,
       input,
+    ),
+
+  /**
+   * Tipos ofrecibles en un proyecto: los CONTRATADOS, o todos los activos con
+   * `fallback: true` si el proyecto no tiene contratos. Es la vista admin del
+   * mismo dato que consume el portal.
+   */
+  getAvailableTicketTypes: (orgId: string, projectId: string, criticality?: SlaCriticality) =>
+    api.get<AvailableTicketTypes>(
+      `/organizations/${orgId}/projects/${projectId}/available-ticket-types` +
+        (criticality ? `?criticality=${criticality}` : ''),
     ),
 
   /** Paso 2 de la cascada. `slaPolicyId: null` desasigna. */

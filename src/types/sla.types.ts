@@ -106,6 +106,67 @@ export interface SlaSeedResult {
   alreadyExisting: number;
 }
 
+// ─── Criticidad: presentación y visibilidad (#42 — Fase 2) ──────────────────
+
+/**
+ * Config de UNA criticidad de la organización (modelo `TicketCriticalityConfig`).
+ * NO es una criticidad nueva: el enum sigue siendo la fuente. Esta fila solo dice
+ * cómo se ve, si el cliente la puede elegir, en qué orden y cuál es la default.
+ */
+export interface CriticalityConfig {
+  id: string;
+  organizationId: string;
+  criticality: SlaCriticality;
+  /** Nombre interno (lo ve el equipo). */
+  displayName: string;
+  /** Cómo lo ve el cliente. `null` ⇒ se muestra el `displayName`. */
+  clientLabel: string | null;
+  clientVisible: boolean;
+  /** Orden de urgencia: mayor = más urgente. */
+  level: number;
+  /** La que entra si el cliente no elige. Es EXCLUYENTE en toda la organización. */
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** PATCH parcial. `clientLabel: null` limpia la etiqueta y vuelve al nombre interno. */
+export interface UpdateCriticalityConfigInput {
+  displayName?: string;
+  clientLabel?: string | null;
+  clientVisible?: boolean;
+  level?: number;
+  isDefault?: boolean;
+}
+
+/**
+ * Criticidad tal como la ve el CLIENTE (`GET /portal/criticalities`).
+ * Un array vacío es un estado válido: significa "el cliente no elige" (modo 2B)
+ * y el portal NO renderiza el selector.
+ */
+export interface ClientVisibleCriticality {
+  criticality: SlaCriticality;
+  label: string;
+  level: number;
+}
+
+/** Un tipo de solicitud ofrecible en el selector (subset de `TicketType`). */
+export interface AvailableTicketType {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+/**
+ * Respuesta de los endpoints de disponibilidad (portal y admin).
+ * `fallback: true` ⇒ el proyecto no tiene contratos aplicables y se devolvieron
+ * TODOS los tipos activos (modo permisivo): la UI lo avisa con una nota discreta.
+ */
+export interface AvailableTicketTypes {
+  types: AvailableTicketType[];
+  fallback: boolean;
+}
+
 // ─── Inputs (espejo de los DTOs del backend) ────────────────────────────────
 
 export interface CreateSlaPolicyInput {

@@ -31,6 +31,7 @@ import {
   Save,
   ShieldAlert,
   Tag,
+  Tags,
   User,
   UserCheck,
 } from 'lucide-react';
@@ -42,6 +43,8 @@ import { TicketActionBar } from './ticket-action-bar';
 import { TicketEventTimeline } from './ticket-event-timeline';
 import { TicketChat } from './ticket-chat';
 import { SlaSourceBadge } from './sla-source-badge';
+import { ReclassifyTicketDialog } from './reclassify-ticket-dialog';
+import { useCanReclassifyTicket } from './use-can-reclassify-ticket';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from './ticket-status-machine';
 import type { TicketDetail, TicketStatus } from '@/types/ticket.types';
 
@@ -71,6 +74,10 @@ export function TicketSidePanel({
   const [loading, setLoading] = useState(false);
   const [eventsKey, setEventsKey] = useState(0);
   const [expanded, setExpanded] = useState(false);
+
+  // Tipificación interna (#42 Fase 2): solo roles del equipo.
+  const canReclassify = useCanReclassifyTicket();
+  const [showReclassify, setShowReclassify] = useState(false);
 
   // Notas del admin
   const [adminNotes, setAdminNotes] = useState('');
@@ -138,6 +145,21 @@ export function TicketSidePanel({
     setAdminNotes(updated.adminNotes ?? '');
     setEventsKey((k) => k + 1);
     onTicketUpdated?.(updated);
+  };
+
+  // El PATCH de clasificación devuelve solo el subset de clasificación, así que
+  // se refetchea el detalle completo y se refresca el timeline (el evento nuevo).
+  const handleReclassified = async () => {
+    setEventsKey((k) => k + 1);
+    if (!ticket) return;
+    try {
+      const res = await ticketService.detail(ticket.id);
+      setTicket(res.data);
+      onTicketUpdated?.(res.data);
+    } catch {
+      // El cambio ya quedó guardado; si el refetch falla el panel sigue con el
+      // estado previo y el usuario puede reabrirlo.
+    }
   };
 
   const handleSaveNotes = async () => {
@@ -364,9 +386,23 @@ export function TicketSidePanel({
 
                 {/* 3) Detalles enriquecidos */}
                 <div className="rounded-xl border border-border bg-card p-3 space-y-2.5 text-sm">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Detalles
-                  </h4>
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Detalles
+                    </h4>
+                    {/* Tipificación interna (#42 Fase 2): el cliente reporta, el
+                        equipo tipifica. Los plazos NO se recalculan. */}
+                    {canReclassify && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 gap-1.5 px-2 text-[11px]"
+                        onClick={() => setShowReclassify(true)}
+                      >
+                        <Tags className="h-3 w-3" /> Reclasificar
+                      </Button>
+                    )}
+                  </div>
 
                   {ticket.client && (
                     <div className="flex items-start justify-between gap-2">
@@ -546,6 +582,15 @@ export function TicketSidePanel({
                 </div>
               </div>
             </div>
+
+            {canReclassify && (
+              <ReclassifyTicketDialog
+                open={showReclassify}
+                onOpenChange={setShowReclassify}
+                ticket={ticket}
+                onReclassified={handleReclassified}
+              />
+            )}
           </>
         )}
       </SheetContent>

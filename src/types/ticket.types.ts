@@ -23,7 +23,10 @@ export type TicketEventType =
   | 'RESOLVED'
   | 'SLA_WARNING'
   | 'SLA_BREACH_RESPONSE'
-  | 'SLA_BREACH_RESOLUTION';
+  | 'SLA_BREACH_RESOLUTION'
+  // Tipificación interna (#42 Fase 2): el equipo cambió tipo / criticidad /
+  // categoría del ticket. El motivo viaja en `metadata.reason`.
+  | 'RECLASSIFIED';
 
 export type TicketEventSource = 'TICKET' | 'KANBAN' | 'SYSTEM';
 
@@ -80,6 +83,11 @@ export interface TicketListItem {
   categoryConfig?: { id: string; name: string; criticality: string } | null;
   createdByUser?: { id: string; name: string } | null;
   createdAt: string;
+
+  // Tipo de solicitud elegido por el cliente (#42 Fase 2). El detalle devuelve el
+  // escalar; la relación solo viene en la respuesta de la reclasificación.
+  ticketTypeId?: string | null;
+  ticketType?: { id: string; name: string } | null;
 
   // Motor de SLA con cascada (#42 Fase 1). Se congelan al crear el ticket y
   // NUNCA se recalculan. Ausentes en los tickets históricos y mientras el flag
@@ -138,6 +146,43 @@ export interface UpdateTicketInput {
 export interface CloseTicketInput {
   reason: TicketCloseReason;
   note?: string;
+}
+
+/** Categoría interna configurable (`TicketCategoryConfig` del backend). */
+export interface TicketCategoryConfigItem {
+  id: string;
+  name: string;
+  criticality: SlaCriticality;
+  isActive?: boolean;
+}
+
+/**
+ * Tipificación interna (#42 Fase 2). Los tres campos de clasificación son
+ * opcionales (se manda solo lo que cambia) pero el `reason` es OBLIGATORIO:
+ * sin él la reclasificación no deja rastro auditable.
+ */
+export interface ReclassifyTicketInput {
+  ticketTypeId?: string;
+  criticality?: SlaCriticality;
+  categoryConfigId?: string;
+  reason: string;
+}
+
+/**
+ * Respuesta del endpoint de clasificación. Incluye los deadlines a propósito:
+ * reclasificar NO los recalcula y así se puede verificar que no se movieron.
+ */
+export interface TicketClassification {
+  id: string;
+  ticketTypeId: string | null;
+  criticality: SlaCriticality | null;
+  categoryConfigId: string | null;
+  responseDeadline: string | null;
+  resolutionDeadline: string | null;
+  slaPolicyId: string | null;
+  slaSource: SlaSource | null;
+  ticketType: { id: string; name: string } | null;
+  categoryConfig: { id: string; name: string; criticality: SlaCriticality } | null;
 }
 
 export interface ListTicketsQuery {

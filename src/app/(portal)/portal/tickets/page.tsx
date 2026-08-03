@@ -7,17 +7,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Ticket, Plus, Clock, ChevronRight, AlertCircle, Info, CircleDot, Search, MessageSquare, User } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { Ticket, Plus, Clock, ChevronRight, AlertCircle, CircleDot, Search, MessageSquare, User } from 'lucide-react';
+import { api } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { TicketsPagination } from '@/components/tickets/tickets-pagination';
+import {
+  CreateTicketModal,
+  type CreateTicketPrefill,
+  type PortalBusinessHours,
+  type PortalProjectOption,
+} from '@/components/portal/create-ticket-modal';
 import { STATUS_BADGE, STATUS_DOT, STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
 import type { TicketStatus } from '@/types/ticket.types';
 
@@ -55,36 +58,7 @@ interface TicketItem {
  createdByUser?: { id: string; name: string } | null;
 }
 
-interface ProjectOption {
- id: string;
- name: string;
-}
-
-interface DynamicCategory {
- id: string;
- name: string;
- description?: string;
-}
-
-interface BusinessHours {
- start: string;
- end: string;
- days: string[];
- timezone: string;
-}
-
 const DEFAULT_PAGE_SIZE = 15;
-
-const EMPTY_FORM = {
- projectId: '',
- title: '',
- description: '',
- category: '',
- priority: 'MEDIUM',
- projectName: '',
- projectDescription: '',
- relatedTicketId: '',
-};
 
 export default function PortalTicketsPage() {
  const { user } = useAuth();
@@ -98,18 +72,16 @@ export default function PortalTicketsPage() {
  const [page, setPage] = useState(1);
  // Items por página configurable (feature #12 P3): 10/15/20/50, default 15.
  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
- const [projects, setProjects] = useState<ProjectOption[]>([]);
- const [dynamicCategories, setDynamicCategories] = useState<DynamicCategory[]>([]);
- const [businessHours, setBusinessHours] = useState<BusinessHours | null>(null);
+ const [projects, setProjects] = useState<PortalProjectOption[]>([]);
+ const [businessHours, setBusinessHours] = useState<PortalBusinessHours | null>(null);
  const [loading, setLoading] = useState(true);
  const [activeTab, setActiveTab] = useState<StatusTab>('all');
  const [search, setSearch] = useState('');
  const [filterProject, setFilterProject] = useState('');
  const [onlyMine, setOnlyMine] = useState(false);
  const [showCreate, setShowCreate] = useState(false);
- const [creating, setCreating] = useState(false);
- const [attachFile, setAttachFile] = useState<File | null>(null);
- const [form, setForm] = useState({ ...EMPTY_FORM });
+ // Precarga desde un ticket previo (feature #11). `null` = alta manual desde cero.
+ const [prefill, setPrefill] = useState<CreateTicketPrefill | null>(null);
 
  // Carga inicial: trae TODOS los tickets del cliente una sola vez.
  useEffect(() => {
@@ -135,21 +107,21 @@ export default function PortalTicketsPage() {
  const sameTopic = searchParams.get('same') === '1';
 
  const prefillFromRelated = async () => {
- // category SUPPORT_REQUEST porque el flujo arranca desde un ticket de soporte
- // del portal; el cliente puede ajustar el tipo antes de enviar.
- setForm({ ...EMPTY_FORM, relatedTicketId, category: 'SUPPORT_REQUEST' });
+ // El modal arranca siempre en la rama de soporte: el flujo nace desde un
+ // ticket de soporte del portal. El cliente ajusta criticidad y tipo antes de enviar.
+ let next: CreateTicketPrefill = { relatedTicketId };
 
  if (sameTopic) {
  try {
  const res = await api.get<any>(`/portal/tickets/${relatedTicketId}`);
  const related = res.data;
  if (related) {
- setForm((prev) => ({
- ...prev,
+ next = {
+ relatedTicketId,
  title: related.title || '',
  description: related.description || '',
  projectId: related.project?.id || '',
- }));
+ };
  }
  } catch {
  // Si no se puede traer el ticket relacionado, abrimos el form vacio igual
@@ -158,6 +130,7 @@ export default function PortalTicketsPage() {
  }
  }
 
+ setPrefill(next);
  setShowCreate(true);
  // Limpiar los query params consumidos (evita re-disparo en reload).
  router.replace(pathname);
@@ -169,10 +142,9 @@ export default function PortalTicketsPage() {
 
  const loadData = async () => {
  try {
- const [ticketsRes, projectsRes, catRes, bhRes] = await Promise.all([
+ const [ticketsRes, projectsRes, bhRes] = await Promise.all([
  api.get<any>('/portal/tickets'),
  api.get<any>('/portal/projects'),
- api.get<any>('/portal/ticket-categories').catch(() => ({ data: [] })),
  api.get<any>('/portal/business-hours').catch(() => ({ data: null })),
  ]);
  // El endpoint devuelve { data, meta: { total } } con TODOS los tickets del
@@ -181,8 +153,6 @@ export default function PortalTicketsPage() {
  const list: TicketItem[] = Array.isArray(body) ? body : body?.data || [];
  setTickets(list);
  setProjects(Array.isArray(projectsRes.data) ? projectsRes.data : projectsRes.data?.data || []);
- const cats = Array.isArray(catRes.data) ? catRes.data : catRes.data?.data || [];
- setDynamicCategories(cats);
  setBusinessHours(bhRes.data || null);
  } catch {
  toast.error('Error', 'Error al cargar los tickets');
@@ -197,77 +167,16 @@ export default function PortalTicketsPage() {
  window.scrollTo({ top: 0, behavior: 'smooth' });
  };
 
- const handleCreate = async (e: React.FormEvent) => {
- e.preventDefault();
-
- if (form.category === 'NEW_PROJECT') {
- if (!form.projectName.trim()) {
- toast.error('Error', 'El nombre del proyecto es requerido');
- return;
- }
- setCreating(true);
- try {
- await api.post<any>('/portal/project-requests', {
- name: form.projectName.trim(),
- description: form.projectDescription.trim() || undefined,
- });
- toast.success('Solicitud enviada', 'Tu solicitud de nuevo proyecto fue enviada al equipo');
- setShowCreate(false);
- setForm({ ...EMPTY_FORM });
+ // El modal ya cerro y mostro su toast: aca solo se refresca la lista.
+ const handleCreated = async () => {
  setPage(1);
  await loadData();
- } catch (err) {
- toast.error('Error', err instanceof ApiError ? err.message : 'Error al enviar la solicitud');
- } finally {
- setCreating(false);
- }
- return;
- }
+ };
 
- if (form.category === 'SUPPORT_REQUEST' && dynamicCategories.length > 0) {
- toast.error('Error', 'Selecciona una categoria de soporte');
- return;
- }
-
- if (!form.projectId || !form.title.trim() || !form.category) {
- toast.error('Error', 'Completa todos los campos requeridos');
- return;
- }
-
- setCreating(true);
- try {
- const res = await api.post<any>(`/portal/projects/${form.projectId}/tickets`, {
- title: form.title.trim(),
- description: form.description.trim() || undefined,
- category: form.category,
- priority: form.priority,
- relatedTicketId: form.relatedTicketId || undefined,
- });
-
- // Upload optional attachment to the ticket channel
- if (attachFile && res.data?.channel?.id) {
- const fd = new FormData();
- fd.append('file', attachFile);
- const uploadRes = await api.upload<any>('/files/upload?category=ATTACHMENT', fd).catch(() => null);
- const fileId = uploadRes?.data?.id;
- await api.post(`/channels/${res.data.channel.id}/messages`, {
- content: `📎 ${attachFile.name}`,
- ...(fileId && { fileIds: [fileId] }),
- }).catch(() => {});
- }
-
- const ticketNum = res.data?.ticketNumber || res.data?.id?.slice(-8).toUpperCase();
- toast.success('Ticket creado', `Tu ticket #${ticketNum} fue enviado al equipo`);
- setShowCreate(false);
- setAttachFile(null);
- setForm({ ...EMPTY_FORM });
- setPage(1);
- await loadData();
- } catch (err) {
- toast.error('Error', err instanceof ApiError ? err.message : 'Error al crear el ticket');
- } finally {
- setCreating(false);
- }
+ // Alta manual: sin prefill (el de #11 se setea desde los query params).
+ const openCreate = () => {
+ setPrefill(null);
+ setShowCreate(true);
  };
 
  // Filtros NO-tab (search + proyecto + "Mis tickets") sobre el set COMPLETO.
@@ -424,152 +333,9 @@ export default function PortalTicketsPage() {
  <CircleDot className="h-3 w-3"/> {counts.OPEN} abiertos
  </div>
  )}
- <Dialog open={showCreate} onOpenChange={setShowCreate}>
- <DialogTrigger asChild>
- <Button size="sm" className="rounded-full h-9 px-3 sm:px-4">
+ <Button size="sm" className="rounded-full h-9 px-3 sm:px-4" onClick={openCreate}>
  <Plus className="h-4 w-4 sm:mr-2"/> <span className="hidden sm:inline">Nuevo Ticket</span>
  </Button>
- </DialogTrigger>
- <DialogContent className="sm:max-w-md">
- <DialogHeader>
- <DialogTitle>Crear Ticket</DialogTitle>
- </DialogHeader>
- <form onSubmit={handleCreate} className="space-y-4 pt-2">
- <div className="space-y-2">
- <Label className="text-muted-foreground">Tipo de solicitud</Label>
- <Select
- value={form.category.startsWith('dynamic:') ? 'SUPPORT_REQUEST' : form.category}
- onValueChange={(v) => setForm({ ...form, category: v })}
- >
- <SelectTrigger>
- <SelectValue placeholder="Selecciona el tipo"/>
- </SelectTrigger>
- <SelectContent>
- <SelectItem value="SUPPORT_REQUEST">Soporte / Error</SelectItem>
- <SelectItem value="NEW_PROJECT">Nuevo Proyecto</SelectItem>
- </SelectContent>
- </Select>
- </div>
-
- {(form.category === 'SUPPORT_REQUEST' || form.category.startsWith('dynamic:')) && dynamicCategories.length > 0 && (
- <div className="space-y-2">
- <Label className="text-muted-foreground">Categoria</Label>
- <Select
- value={form.category.startsWith('dynamic:') ? form.category : ''}
- onValueChange={(v) => setForm({ ...form, category: v })}
- >
- <SelectTrigger>
- <SelectValue placeholder="Selecciona una categoria"/>
- </SelectTrigger>
- <SelectContent>
- {dynamicCategories.map((dc) => (
- <SelectItem key={dc.id} value={`dynamic:${dc.id}`}>{dc.name}</SelectItem>
- ))}
- </SelectContent>
- </Select>
- </div>
- )}
-
- {form.category === 'NEW_PROJECT' ? (
- <>
- <div className="space-y-2">
- <Label className="text-muted-foreground">Nombre del proyecto</Label>
- <Input
- value={form.projectName}
- onChange={(e) => setForm({ ...form, projectName: e.target.value })}
- placeholder="Nombre del nuevo proyecto"
- required
- />
- </div>
- <div className="space-y-2">
- <Label className="text-muted-foreground">Descripcion del proyecto</Label>
- <Textarea
- value={form.projectDescription}
- onChange={(e) => setForm({ ...form, projectDescription: e.target.value })}
- placeholder="Describe que necesitas en este proyecto..."
- rows={4}
- />
- </div>
- </>
- ) : form.category && form.category !== 'NEW_PROJECT' ? (
- /* Proyecto + Titulo + Descripcion: se renderizan tambien para
-    SUPPORT_REQUEST (y categorias dynamic:) — fix pre-fill del #11
-    (feature #12 T11). Antes el guard excluia SUPPORT_REQUEST y el
-    pre-llenado de "Crear nueva consulta / Si" no se veia. */
- <>
- <div className="space-y-2">
- <Label className="text-muted-foreground">Proyecto</Label>
- <Select value={form.projectId} onValueChange={(v) => setForm({ ...form, projectId: v })}>
- <SelectTrigger>
- <SelectValue placeholder="Selecciona un proyecto"/>
- </SelectTrigger>
- <SelectContent>
- {projects.map((p) => (
- <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
- ))}
- </SelectContent>
- </Select>
- </div>
- <div className="space-y-2">
- <Label className="text-muted-foreground">Titulo</Label>
- <Input
- value={form.title}
- onChange={(e) => setForm({ ...form, title: e.target.value })}
- placeholder="Describe brevemente tu solicitud"
- required
- />
- </div>
- <div className="space-y-2">
- <Label className="text-muted-foreground">Descripcion detallada</Label>
- <Textarea
- value={form.description}
- onChange={(e) => setForm({ ...form, description: e.target.value })}
- placeholder="Explica con mas detalle el problema o funcionalidad que necesitas..."
- rows={4}
- />
- </div>
- </>
- ) : null}
-
- {form.category && form.category !== 'NEW_PROJECT' && (
- <div className="space-y-2">
- <Label className="text-muted-foreground">Archivo adjunto <span className="text-muted-foreground/50">(opcional)</span></Label>
- <div className="flex items-center gap-2">
- <Input
- type="file"
- className="text-xs"
- onChange={(e) => setAttachFile(e.target.files?.[0] || null)}
- />
- {attachFile && (
- <Button type="button" variant="ghost" size="sm" className="text-xs shrink-0" onClick={() => setAttachFile(null)}>
- Quitar
- </Button>
- )}
- </div>
- {attachFile && (
- <p className="text-[10px] text-muted-foreground">Se adjuntara al chat del ticket despues de crearlo.</p>
- )}
- </div>
- )}
-
- {form.category && (
- <Button type="submit" className="w-full rounded-full" disabled={creating}>
- {creating ? 'Enviando...' : form.category === 'NEW_PROJECT' ? 'Solicitar Proyecto' : 'Enviar Ticket'}
- </Button>
- )}
-
- {businessHours && (
- <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
- <Info className="h-3.5 w-3.5 mt-0.5 shrink-0"/>
- <span>
- Horario de atencion: {businessHours.days.join(', ')} de {businessHours.start} a {businessHours.end} ({businessHours.timezone}).
- Los tickets fuera de horario seran atendidos en el siguiente dia habil.
- </span>
- </div>
- )}
- </form>
- </DialogContent>
- </Dialog>
  </div>
  </div>
 
@@ -637,6 +403,18 @@ export default function PortalTicketsPage() {
  </p>
  </div>
  )}
+
+ {/* Alta de tickets (#42 Fase 2): proyecto → criticidad → tipo → asunto →
+     descripcion. Vive en su propio componente porque esta pagina ya estaba
+     en su limite con el modal adentro. */}
+ <CreateTicketModal
+ open={showCreate}
+ onOpenChange={setShowCreate}
+ projects={projects}
+ businessHours={businessHours}
+ prefill={prefill}
+ onCreated={handleCreated}
+ />
  </div>
  );
 }
