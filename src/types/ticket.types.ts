@@ -84,10 +84,19 @@ export interface TicketListItem {
   createdByUser?: { id: string; name: string } | null;
   createdAt: string;
 
-  // Tipo de solicitud elegido por el cliente (#42 Fase 2). El detalle devuelve el
-  // escalar; la relación solo viene en la respuesta de la reclasificación.
+  // Tipo de solicitud VIGENTE del ticket (#42 Fase 2): arranca con lo que eligió
+  // el cliente y el equipo lo puede cambiar al reclasificar. El detalle devuelve
+  // el escalar; la relación puede no venir en respuestas viejas → siempre opcional.
   ticketTypeId?: string | null;
   ticketType?: { id: string; name: string } | null;
+
+  // Declaración CONGELADA del cliente (#42 Fase 2.1). Se graba una sola vez al
+  // crear el ticket desde el portal y NO se toca al reclasificar: es "qué reportó
+  // el cliente". Null en tickets creados por admin y en todo lo histórico, así que
+  // la UI solo pinta la línea cuando existe Y difiere de lo vigente.
+  reportedTicketTypeId?: string | null;
+  reportedTicketType?: { id: string; name: string } | null;
+  reportedCriticality?: SlaCriticality | null;
 
   // Motor de SLA con cascada (#42 Fase 1). Se congelan al crear el ticket y
   // NUNCA se recalculan. Ausentes en los tickets históricos y mientras el flag
@@ -148,11 +157,33 @@ export interface CloseTicketInput {
   note?: string;
 }
 
-/** Categoría interna configurable (`TicketCategoryConfig` del backend). */
+/**
+ * Categoría interna configurable (`TicketCategoryConfig` del backend).
+ *
+ * En el modelo nuevo NO es lo que elige el cliente: es la clasificación que el
+ * equipo asigna al tipificar el ticket. Se administra en
+ * `/settings/sla/categorias-internas` (#42 Fase 2.1).
+ */
 export interface TicketCategoryConfigItem {
   id: string;
   name: string;
+  description?: string | null;
   criticality: SlaCriticality;
+  isActive?: boolean;
+}
+
+/** Alta de categoría interna (espejo de `CreateCategoryConfigDto`). */
+export interface CreateTicketCategoryConfigInput {
+  name: string;
+  description?: string;
+  criticality: SlaCriticality;
+}
+
+/** PATCH parcial de categoría interna (`isActive: true` la reactiva). */
+export interface UpdateTicketCategoryConfigInput {
+  name?: string;
+  description?: string;
+  criticality?: SlaCriticality;
   isActive?: boolean;
 }
 

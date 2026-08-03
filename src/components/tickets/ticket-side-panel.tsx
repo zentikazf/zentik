@@ -24,8 +24,10 @@ import {
   Clock,
   ExternalLink,
   FolderKanban,
+  Layers,
   Loader2,
   Maximize2,
+  Megaphone,
   Minimize2,
   RefreshCw,
   Save,
@@ -210,6 +212,29 @@ export function TicketSidePanel({
   const assignee = ticket?.task?.assignments?.[0]?.user;
   const criticality = ticket?.criticality || ticket?.categoryConfig?.criticality || ticket?.priority;
   const criticalityStyle = criticality ? CRITICALITY_BADGE[criticality] : null;
+
+  // ── Declaración del cliente vs. tipificación del equipo (#42 Fase 2.1) ──────
+  //
+  // `reportedTicketType` / `reportedCriticality` se congelan al crear el ticket
+  // desde el portal y NO cambian al reclasificar. La línea solo aparece si algo
+  // DIFIERE de lo vigente: si el equipo dejó lo que el cliente declaró, repetirlo
+  // es ruido. En tickets históricos o creados por admin no existen → no se pinta.
+  //
+  // Se compara por id (`reportedTicketTypeId` vs `ticketTypeId`) porque el escalar
+  // siempre viaja, aunque la relación `reportedTicketType` no venga incluida.
+  const reportedTypeDiffers = Boolean(
+    ticket?.reportedTicketTypeId && ticket.reportedTicketTypeId !== (ticket.ticketTypeId ?? null),
+  );
+  const reportedCriticalityDiffers = Boolean(
+    ticket?.reportedCriticality && ticket.reportedCriticality !== (ticket.criticality ?? null),
+  );
+  const reportedParts = [
+    ticket?.reportedTicketType?.name,
+    ticket?.reportedCriticality ? CRITICALITY_BADGE[ticket.reportedCriticality]?.label : null,
+  ].filter((part): part is string => Boolean(part));
+  const showReported =
+    (reportedTypeDiffers || reportedCriticalityDiffers) && reportedParts.length > 0;
+
   const formatFull = (iso: string) => {
     try {
       return new Date(iso).toLocaleString('es-PY', {
@@ -451,6 +476,17 @@ export function TicketSidePanel({
                     )}
                   </div>
 
+                  {/* Tipo de solicitud VIGENTE (#42 Fase 2.1). Ausente en tickets
+                      históricos → la fila no se pinta. */}
+                  {ticket.ticketType?.name && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
+                        <Tag className="h-3.5 w-3.5" /> Tipo de solicitud
+                      </span>
+                      <span className="font-medium truncate">{ticket.ticketType.name}</span>
+                    </div>
+                  )}
+
                   {criticalityStyle && (
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
@@ -467,7 +503,7 @@ export function TicketSidePanel({
                   {ticket.slaSource && (
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
-                        <ShieldAlert className="h-3.5 w-3.5" /> SLA
+                        <ShieldAlert className="h-3.5 w-3.5" /> SLA aplicado
                       </span>
                       <SlaSourceBadge
                         policyName={ticket.slaPolicy?.name}
@@ -476,15 +512,35 @@ export function TicketSidePanel({
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
-                      <Tag className="h-3.5 w-3.5" /> Tipo
-                    </span>
-                    <span className="font-medium">
-                      {ticket.categoryConfig?.name ||
-                        (ticket.category === 'SUPPORT_REQUEST' ? 'Soporte' : 'Desarrollo')}
-                    </span>
-                  </div>
+                  {/* Clasificación interna del equipo — el cliente no la elige. */}
+                  {ticket.categoryConfig?.name && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
+                        <Layers className="h-3.5 w-3.5" /> Categoría interna
+                      </span>
+                      <span className="font-medium truncate">{ticket.categoryConfig.name}</span>
+                    </div>
+                  )}
+
+                  {showReported && (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex cursor-help items-center justify-between gap-2">
+                            <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
+                              <Megaphone className="h-3.5 w-3.5" /> Reportado por el cliente
+                            </span>
+                            <span className="truncate text-xs text-muted-foreground">
+                              {reportedParts.join(' · ')}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-[260px] text-xs leading-relaxed">
+                          Lo que declaró el cliente al crear el ticket; no cambia al reclasificar.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
 
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">

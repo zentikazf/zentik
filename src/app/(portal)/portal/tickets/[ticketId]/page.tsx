@@ -24,12 +24,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  CLOSED: { label: 'Cerrado', color: 'bg-muted text-muted-foreground' },
 };
 
-const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
- SUPPORT_REQUEST: { label: 'Soporte', color: 'bg-warning/10 text-warning ' },
- NEW_DEVELOPMENT: { label: 'Desarrollo', color: 'bg-info/10 text-info ' },
-};
-
-const PRIORITY_LABEL: Record<string, string> = {
+const CRITICALITY_LABEL: Record<string, string | undefined> = {
  LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta',
 };
 
@@ -47,6 +42,16 @@ interface TicketDetail {
  task: { id: string; title: string; status: string } | null;
  channel: { id: string; name: string } | null;
  createdByUser: { id: string; name: string } | null;
+
+ // #42 Fase 2.1 — datos reales del modelo nuevo. TODOS opcionales: los tickets
+ // históricos no los tienen y la relación `ticketType` / `slaPolicy` puede no venir
+ // incluida en la respuesta del portal. La UI degrada ocultando la fila.
+ criticality?: string | null;
+ ticketTypeId?: string | null;
+ ticketType?: { id: string; name: string } | null;
+ slaPolicy?: { id: string; name: string } | null;
+ responseDeadline?: string | null;
+ resolutionDeadline?: string | null;
 }
 
 interface ChatMessage {
@@ -252,8 +257,28 @@ export default function PortalTicketDetailPage() {
  }
 
  const statusConf = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
- const catConf = CATEGORY_CONFIG[ticket.category] || CATEGORY_CONFIG.SUPPORT_REQUEST;
  const isResolved = ticket.status === 'RESOLVED';
+
+ // #42 Fase 2.1 — antes se pintaba el enum viejo `category` ("Soporte"/"Desarrollo")
+ // con un mapa hardcodeado que ya no representa nada. Ahora se muestran los datos
+ // reales que eligió el cliente: tipo de solicitud + criticidad. La categoría
+ // interna NO se muestra acá: es la clasificación del equipo.
+ const typeName = ticket.ticketType?.name ?? null;
+ const criticalityValue = ticket.criticality ?? ticket.priority ?? null;
+ const criticalityLabel = criticalityValue
+ ? CRITICALITY_LABEL[criticalityValue] ?? criticalityValue
+ : null;
+
+ // Plazos comprometidos: solo si el backend los expone (tickets sin SLA vienen en null).
+ const formatDeadline = (iso: string) => {
+ try {
+ return new Date(iso).toLocaleString('es-PY', {
+ day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+ });
+ } catch {
+ return iso;
+ }
+ };
 
  const TASK_STATUS_LABELS: Record<string, string> = {
  BACKLOG: 'Nuevo', TODO: 'Pendiente', IN_PROGRESS: 'En Desarrollo',
@@ -276,16 +301,20 @@ export default function PortalTicketDetailPage() {
  <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{ticket.ticketNumber || ticket.id.slice(-8).toUpperCase()}</span>
  <h1 className="text-xl font-bold text-foreground">{ticket.title}</h1>
  </div>
- <div className="flex items-center gap-2 mt-2">
- <Badge className={`${catConf.color} border-none text-[10px] uppercase tracking-wider font-bold`}>
- {catConf.label}
+ <div className="flex flex-wrap items-center gap-2 mt-2">
+ {typeName && (
+ <Badge className="bg-info/10 text-info border-none text-[10px] uppercase tracking-wider font-bold">
+ {typeName}
  </Badge>
+ )}
  <Badge className={`${statusConf.color} border-none text-[10px] font-semibold`}>
  {statusConf.label}
  </Badge>
+ {criticalityLabel && (
  <span className="text-xs text-muted-foreground">
- Criticidad: <span className="font-medium text-muted-foreground">{PRIORITY_LABEL[ticket.priority] || ticket.priority}</span>
+ Criticidad: <span className="font-medium text-muted-foreground">{criticalityLabel}</span>
  </span>
+ )}
  </div>
  </div>
 
@@ -338,6 +367,36 @@ export default function PortalTicketDetailPage() {
  <div className="flex items-center justify-between text-sm">
  <span className="text-muted-foreground">Proyecto</span>
  <span className="font-medium text-foreground">{ticket.project.name}</span>
+ </div>
+ )}
+ {typeName && (
+ <div className="flex items-center justify-between text-sm">
+ <span className="text-muted-foreground">Tipo de solicitud</span>
+ <span className="font-medium text-foreground">{typeName}</span>
+ </div>
+ )}
+ {criticalityLabel && (
+ <div className="flex items-center justify-between text-sm">
+ <span className="text-muted-foreground">Criticidad</span>
+ <span className="font-medium text-foreground">{criticalityLabel}</span>
+ </div>
+ )}
+ {ticket.slaPolicy?.name && (
+ <div className="flex items-center justify-between text-sm">
+ <span className="text-muted-foreground">SLA</span>
+ <span className="font-medium text-foreground">{ticket.slaPolicy.name}</span>
+ </div>
+ )}
+ {ticket.responseDeadline && (
+ <div className="flex items-center justify-between text-sm">
+ <span className="text-muted-foreground">Respuesta comprometida</span>
+ <span className="font-medium text-foreground">{formatDeadline(ticket.responseDeadline)}</span>
+ </div>
+ )}
+ {ticket.resolutionDeadline && (
+ <div className="flex items-center justify-between text-sm">
+ <span className="text-muted-foreground">Resolucion comprometida</span>
+ <span className="font-medium text-foreground">{formatDeadline(ticket.resolutionDeadline)}</span>
  </div>
  )}
  <div className="flex items-center justify-between text-sm">

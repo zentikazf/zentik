@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Info } from 'lucide-react';
+import { Info, Search } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/api-error-message';
 import { toast } from '@/hooks/use-toast';
@@ -85,6 +85,15 @@ const EMPTY_FORM: TicketForm = {
 };
 
 /**
+ * A partir de cuántos tipos aparece el buscador (#42 Fase 2.1).
+ *
+ * Sin contratos cargados el endpoint responde `fallback: true` con TODOS los
+ * tipos activos de la organización: con ~100 el selector es inusable. Debajo del
+ * umbral el buscador sería ruido, así que se muestra solo cuando hace falta.
+ */
+const TYPE_SEARCH_MIN_OPTIONS = 8;
+
+/**
  * Creación de tickets del portal (#42 Fase 2).
  *
  * Vive fuera de la página porque la lista ya ocupaba 642 líneas con el modal
@@ -118,6 +127,7 @@ export function CreateTicketModal({
   const [types, setTypes] = useState<AvailableTicketType[]>([]);
   const [typesFallback, setTypesFallback] = useState(false);
   const [typesLoading, setTypesLoading] = useState(false);
+  const [typeSearch, setTypeSearch] = useState('');
 
   // Sembrar el form cada vez que se abre: con prefill (feature #11) arranca en la
   // rama de soporte con los datos del ticket anterior; sin prefill, vacío.
@@ -161,6 +171,8 @@ export function CreateTicketModal({
   // Select dependiente: el tipo se recarga al cambiar proyecto O criticidad
   // (mismo patrón que cliente → proyecto en el dashboard admin).
   useEffect(() => {
+    // Cambiar de proyecto/criticidad trae otra lista: el filtro anterior ya no aplica.
+    setTypeSearch('');
     if (!open || !form.projectId) {
       setTypes([]);
       setTypesFallback(false);
@@ -192,6 +204,29 @@ export function CreateTicketModal({
       cancelled = true;
     };
   }, [open, form.projectId, form.criticality]);
+
+  /**
+   * Filtrado en memoria del selector de tipo (#42 Fase 2.1).
+   *
+   * DECISIÓN: el buscador va **arriba del `Select`**, no dentro del
+   * `SelectContent`. El repo no tiene `command`/`combobox` de shadcn, y meter un
+   * `Input` dentro del popup de Radix Select obliga a pelear con su gestión de
+   * foco y su typeahead nativo (al abrir enfoca el ítem seleccionado y captura
+   * las teclas), lo que rompe el tipeo de forma difícil de testear. Un input
+   * afuera es el patrón más simple que funciona y no toca la primitiva.
+   *
+   * El tipo YA seleccionado queda siempre en la lista aunque no matchee: si se
+   * desmonta su `SelectItem`, el trigger de Radix se queda sin texto que mostrar.
+   */
+  const filteredTypes = useMemo(() => {
+    const query = typeSearch.trim().toLowerCase();
+    if (!query) return types;
+    return types.filter(
+      (type) => type.name.toLowerCase().includes(query) || type.id === form.ticketTypeId,
+    );
+  }, [types, typeSearch, form.ticketTypeId]);
+
+  const showTypeSearch = types.length > TYPE_SEARCH_MIN_OPTIONS;
 
   // Cambiar el padre resetea al hijo: un tipo elegido para otro proyecto (u otra
   // criticidad) puede no estar contratado, y el backend lo rechazaría.
@@ -382,6 +417,20 @@ export function CreateTicketModal({
               {/* 3) Tipo — depende del proyecto y de la criticidad */}
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Tipo de solicitud</Label>
+
+                {showTypeSearch && (
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={typeSearch}
+                      onChange={(e) => setTypeSearch(e.target.value)}
+                      placeholder="Buscar tipo..."
+                      className="h-8 pl-8 text-xs"
+                      aria-label="Buscar tipo de solicitud"
+                    />
+                  </div>
+                )}
+
                 <Select
                   value={form.ticketTypeId}
                   onValueChange={(v) => setForm({ ...form, ticketTypeId: v })}
@@ -391,13 +440,26 @@ export function CreateTicketModal({
                     <SelectValue placeholder={typePlaceholder} />
                   </SelectTrigger>
                   <SelectContent>
-                    {types.map((t) => (
+                    {filteredTypes.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {t.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+
+                {types.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {typeSearch.trim()
+                      ? `${filteredTypes.length} de ${types.length} tipos`
+                      : `${types.length} tipo${types.length === 1 ? '' : 's'} disponible${types.length === 1 ? '' : 's'}`}
+                  </p>
+                )}
+                {typeSearch.trim() && filteredTypes.length === 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Ningun tipo coincide con &quot;{typeSearch.trim()}&quot;.
+                  </p>
+                )}
                 {typesFallback && types.length > 0 && (
                   <p className="text-[10px] text-muted-foreground">
                     Mostrando todos los tipos disponibles.

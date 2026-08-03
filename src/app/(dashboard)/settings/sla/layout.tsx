@@ -2,16 +2,31 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Gauge, ListChecks, Settings2, ShieldCheck, Tags } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarDays,
+  Gauge,
+  Layers,
+  ListChecks,
+  Settings2,
+  ShieldCheck,
+  Tags,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 // Tabs por subruta (patrón de `profile/layout.tsx`). Reemplaza el monolito de
 // 4 secciones apiladas de `/settings/sla` (#42 Fase 1).
+//
+// "Categorías internas" va junto a Políticas / Tipos / Criticidades y NO dentro
+// de legacy (#42 Fase 2.1): es configuración VIGENTE del modelo nuevo — la
+// clasificación que el equipo asigna al tipificar — y escondida en "legacy"
+// nadie la encontraba (el selector del diálogo de reclasificación quedaba vacío).
 const slaNav = [
   { name: 'Políticas SLA', href: '/settings/sla/politicas', icon: ShieldCheck },
   { name: 'Tipos de solicitud', href: '/settings/sla/tipos', icon: Tags },
   { name: 'Criticidades', href: '/settings/sla/criticidades', icon: Gauge },
+  { name: 'Categorías internas', href: '/settings/sla/categorias-internas', icon: Layers },
   { name: 'Cobertura', href: '/settings/sla/cobertura', icon: ListChecks },
   { name: 'Calendario', href: '/settings/sla/calendario', icon: CalendarDays },
   { name: 'Configuración actual (legacy)', href: '/settings/sla/legacy', icon: Settings2 },

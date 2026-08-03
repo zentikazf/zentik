@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Search, ShieldCheck } from 'lucide-react';
 import { getApiErrorMessage } from '@/lib/api-error-message';
 import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
@@ -36,6 +37,15 @@ import { useCanManageSla } from './use-can-manage-sla';
 
 /** Valor centinela del select: Radix no admite `value=""`. */
 const NO_POLICY = 'NONE';
+
+/** Filtro de la matriz por estado de contrato (#42 Fase 2.1). */
+type ContractFilter = 'ALL' | 'WITH' | 'WITHOUT';
+
+const CONTRACT_FILTER_LABEL: Record<ContractFilter, string> = {
+  ALL: 'Todos',
+  WITH: 'Con contrato',
+  WITHOUT: 'Sin contrato',
+};
 
 /**
  * SLA del proyecto (#42 Fase 1): política propia (paso 2 de la cascada) +
@@ -56,6 +66,9 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [savingMatrix, setSavingMatrix] = useState(false);
+  /** Filtros de la matriz. Son SOLO de vista: no tocan `draft` ni lo que se guarda. */
+  const [search, setSearch] = useState('');
+  const [contractFilter, setContractFilter] = useState<ContractFilter>('ALL');
 
   /**
    * @param preserveDraft no pisar las selecciones de la matriz que el usuario aún
@@ -90,6 +103,39 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
     load();
   }, [load]);
 
+  /**
+   * Vista filtrada de la matriz (#42 Fase 2.1). Con ~100 tipos la tabla es
+   * interminable, así que se filtra por nombre y por estado de contrato.
+   *
+   * ⚠️ INVARIANTE: esto es SOLO presentación. `handleSaveMatrix` arma el payload
+   * recorriendo `contracts.items` (la lista COMPLETA) y leyendo `draft`, que
+   * tampoco se toca al filtrar. Así, ocultar filas NO desactiva ni pierde los
+   * contratos de los tipos no visibles. No cambiar el guardado para que use esta
+   * lista: sería exactamente el bug que este filtro debe evitar.
+   */
+  const allItems = useMemo(() => contracts?.items ?? [], [contracts]);
+
+  const hasContract = useCallback(
+    (ticketTypeId: string) => (draft[ticketTypeId] ?? NO_POLICY) !== NO_POLICY,
+    [draft],
+  );
+
+  const visibleItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return allItems.filter((row) => {
+      if (query && !row.ticketTypeName.toLowerCase().includes(query)) return false;
+      if (contractFilter === 'WITH') return hasContract(row.ticketTypeId);
+      if (contractFilter === 'WITHOUT') return !hasContract(row.ticketTypeId);
+      return true;
+    });
+  }, [allItems, search, contractFilter, hasContract]);
+
+  /** Se cuenta sobre el borrador, no sobre lo persistido: refleja lo que se va a guardar. */
+  const draftContractCount = useMemo(
+    () => allItems.filter((row) => hasContract(row.ticketTypeId)).length,
+    [allItems, hasContract],
+  );
+
   // El backend gatea la configuración de SLA por rol: para el resto la sección no existe.
   if (!canManageSla) return null;
 
@@ -120,6 +166,9 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
   const handleSaveMatrix = async () => {
     if (!orgId || !contracts) return;
 
+    // ⚠️ Se recorre `contracts.items` (TODOS los tipos), NUNCA la lista filtrada
+    // de la vista: el backend persiste la matriz completa en una transacción, así
+    // que mandar solo lo visible desactivaría los contratos de las filas ocultas.
     const items: ProjectContractItemInput[] = [];
     for (const row of contracts.items) {
       const selected = draft[row.ticketTypeId] ?? NO_POLICY;
@@ -257,6 +306,39 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
               </p>
             ) : (
               <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative min-w-[200px] flex-1">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Buscar tipo de solicitud..."
+                      className="h-9 pl-8 text-sm"
+                      aria-label="Buscar tipo de solicitud"
+                    />
+                  </div>
+                  <Select
+                    value={contractFilter}
+                    onValueChange={(value) => setContractFilter(value as ContractFilter)}
+                  >
+                    <SelectTrigger className="h-9 w-[170px] text-sm" aria-label="Filtrar por contrato">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(CONTRACT_FILTER_LABEL) as ContractFilter[]).map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {CONTRACT_FILTER_LABEL[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  {visibleItems.length} de {allItems.length} tipos · {draftContractCount} con
+                  contrato
+                </p>
+
                 <div className="rounded-lg border border-border">
                   <Table>
                     <TableHeader>
@@ -266,31 +348,40 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {contracts.items.map((row) => (
-                        <TableRow key={row.ticketTypeId}>
-                          <TableCell className="font-medium">{row.ticketTypeName}</TableCell>
-                          <TableCell>
-                            <Select
-                              value={draft[row.ticketTypeId] ?? NO_POLICY}
-                              onValueChange={(value) =>
-                                setDraft((prev) => ({ ...prev, [row.ticketTypeId]: value }))
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Sin contrato" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={NO_POLICY}>Sin contrato</SelectItem>
-                                {policies.map((policy) => (
-                                  <SelectItem key={policy.id} value={policy.id}>
-                                    {policy.name} · {SLA_CRITICALITY_LABEL[policy.criticality]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                      {visibleItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center text-xs text-muted-foreground">
+                            Ningún tipo coincide con el filtro. Los contratos de las filas ocultas se
+                            conservan al guardar.
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : (
+                        visibleItems.map((row) => (
+                          <TableRow key={row.ticketTypeId}>
+                            <TableCell className="font-medium">{row.ticketTypeName}</TableCell>
+                            <TableCell>
+                              <Select
+                                value={draft[row.ticketTypeId] ?? NO_POLICY}
+                                onValueChange={(value) =>
+                                  setDraft((prev) => ({ ...prev, [row.ticketTypeId]: value }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Sin contrato" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={NO_POLICY}>Sin contrato</SelectItem>
+                                  {policies.map((policy) => (
+                                    <SelectItem key={policy.id} value={policy.id}>
+                                      {policy.name} · {SLA_CRITICALITY_LABEL[policy.criticality]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
