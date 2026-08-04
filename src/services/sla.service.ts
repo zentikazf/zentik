@@ -5,6 +5,7 @@ import type {
   CreateSlaPolicyInput,
   CreateTicketTypeInput,
   CriticalityConfig,
+  DeactivateTicketTypeResult,
   ProjectSlaContractsResponse,
   SlaCoverage,
   SlaCriticality,
@@ -12,6 +13,7 @@ import type {
   SlaReadiness,
   SlaSeedResult,
   TicketType,
+  TicketTypeNode,
   UpdateCriticalityConfigInput,
   UpdateSlaPolicyInput,
   UpdateTicketTypeInput,
@@ -44,9 +46,24 @@ export const slaService = {
 
   // ── Tipos de solicitud ───────────────────────────────────────────────────
 
+  /**
+   * Catálogo PLANO, ya ordenado por el `path` del árbol (cada padre justo antes
+   * de su rama). Es el que alimenta los SELECTORES: se recorre una sola vez y el
+   * camino legible se arma con `@/lib/ticket-type-path`.
+   */
   listTypes: (orgId: string, includeInactive = false) =>
     api.get<TicketType[]>(
       `/organizations/${orgId}/ticket-types${includeInactive ? '?includeInactive=true' : ''}`,
+    ),
+
+  /**
+   * La MISMA lectura, anidada (`children[]` recursivo) — #42 Fase 3.
+   * Es la que alimenta la pantalla de administración del árbol; para un selector
+   * conviene `listTypes` (plano y ya ordenado).
+   */
+  listTypeTree: (orgId: string, includeInactive = false) =>
+    api.get<TicketTypeNode[]>(
+      `/organizations/${orgId}/ticket-types/tree${includeInactive ? '?includeInactive=true' : ''}`,
     ),
 
   createType: (orgId: string, input: CreateTicketTypeInput) =>
@@ -55,8 +72,12 @@ export const slaService = {
   updateType: (orgId: string, typeId: string, input: UpdateTicketTypeInput) =>
     api.patch<TicketType>(`/organizations/${orgId}/ticket-types/${typeId}`, input),
 
+  /**
+   * Baja lógica EN CASCADA: apaga el tipo y TODA su rama. Devuelve
+   * `{ deactivated }` (no el tipo), así que la UI puede informar cuántos cayeron.
+   */
   deactivateType: (orgId: string, typeId: string) =>
-    api.delete<TicketType>(`/organizations/${orgId}/ticket-types/${typeId}`),
+    api.delete<DeactivateTicketTypeResult>(`/organizations/${orgId}/ticket-types/${typeId}`),
 
   // ── Criticidades: etiqueta / visibilidad / orden (#42 Fase 2) ────────────
 

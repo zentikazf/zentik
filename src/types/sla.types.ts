@@ -33,15 +33,58 @@ export interface SlaPolicy {
   updatedAt: string;
 }
 
-/** Tipo de solicitud (modelo `TicketType` de Prisma — plano en Fase 1). */
+/**
+ * Tope de profundidad del árbol de tipos. **Espejo de `MAX_TICKET_TYPE_DEPTH`**
+ * del backend (`ticket-type.service.ts`): 3 niveles ⇒ `level` 0, 1 y 2.
+ *
+ * Acá se duplica SOLO para no ofrecer en la UI un padre que el backend va a
+ * rechazar con `TICKET_TYPE_MAX_DEPTH`. La autoridad sigue siendo el service.
+ */
+export const MAX_TICKET_TYPE_DEPTH = 3;
+export const MAX_TICKET_TYPE_LEVEL = MAX_TICKET_TYPE_DEPTH - 1;
+
+/**
+ * Tipo de solicitud (modelo `TicketType` de Prisma).
+ *
+ * #42 Fase 3 (ÁRBOL): `parentId` / `path` / `level` son DERIVADOS — los calcula
+ * el backend al crear, mover o renombrar, y NUNCA se mandan desde el front.
+ * `path` son los **slugs** desde la raíz (`incidencia/error-del-sistema`), no los
+ * nombres; para el camino legible se usa `@/lib/ticket-type-path`.
+ *
+ * `GET ticket-types` ya viene ordenado por `path`, así que la lista plana sale en
+ * orden de árbol (cada padre inmediatamente antes de su rama) sin post-procesar.
+ */
 export interface TicketType {
   id: string;
   organizationId: string;
   name: string;
   slug: string;
   isActive: boolean;
+  /** `null` = tipo raíz. */
+  parentId: string | null;
+  /** Slugs desde la raíz unidos por "/". */
+  path: string;
+  /** Profundidad: 0 = raíz, máximo `MAX_TICKET_TYPE_LEVEL`. */
+  level: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Nodo de `GET ticket-types/tree`: el tipo + su rama anidada.
+ * `children: []` = hoja (el backend siempre manda el array, nunca `undefined`).
+ */
+export interface TicketTypeNode extends TicketType {
+  children: TicketTypeNode[];
+}
+
+/**
+ * Respuesta de `DELETE ticket-types/:typeId`. La baja lógica es EN CASCADA:
+ * `deactivated` cuenta los tipos que se apagaron **incluido el propio**, y es 0
+ * si ya estaban todos inactivos (la operación es idempotente).
+ */
+export interface DeactivateTicketTypeResult {
+  deactivated: number;
 }
 
 /**
@@ -157,11 +200,23 @@ export interface ClientVisibleCriticality {
   level: number;
 }
 
-/** Un tipo de solicitud ofrecible en el selector (subset de `TicketType`). */
+/**
+ * Un tipo de solicitud ofrecible en el selector (subset de `TicketType`).
+ *
+ * ⚠️ `parentId`/`path`/`level` son OPCIONALES a propósito: los endpoints de
+ * disponibilidad (`/portal/projects/:id/ticket-types` y su gemelo admin)
+ * proyectan hoy `{ id, name, slug }`. El selector del portal muestra el camino
+ * del padre **solo si viene** y degrada al nombre suelto si no — así el día que
+ * el backend agregue la proyección no hay que tocar la UI, y mientras tanto el
+ * cliente ve exactamente lo de siempre.
+ */
 export interface AvailableTicketType {
   id: string;
   name: string;
   slug: string;
+  parentId?: string | null;
+  path?: string;
+  level?: number;
 }
 
 /**
@@ -197,12 +252,20 @@ export interface CreateTicketTypeInput {
   name: string;
   /** Si no viene, el backend lo genera del nombre (sin tildes). */
   slug?: string;
+  /** Ausente o `null` = tipo raíz. Máximo `MAX_TICKET_TYPE_DEPTH` niveles. */
+  parentId?: string | null;
 }
 
 export interface UpdateTicketTypeInput {
   name?: string;
   slug?: string;
   isActive?: boolean;
+  /**
+   * Mover el tipo. Semántica de TRES estados (la del DTO del backend):
+   * · ausente → no se mueve · `null` → se mueve a raíz · id → bajo ese padre.
+   * Mover arrastra la rama completa (el backend recalcula `path`/`level`).
+   */
+  parentId?: string | null;
 }
 
 /** Una fila del upsert de la matriz. `isActive:false` desactiva el contrato. */

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import {
 import { Info, Search } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/api-error-message';
+import { buildTicketTypeAncestorNames, ticketTypeFullLabel } from '@/lib/ticket-type-path';
 import { toast } from '@/hooks/use-toast';
 import type {
   AvailableTicketType,
@@ -218,13 +219,31 @@ export function CreateTicketModal({
    * El tipo YA seleccionado queda siempre en la lista aunque no matchee: si se
    * desmonta su `SelectItem`, el trigger de Radix se queda sin texto que mostrar.
    */
+  /**
+   * Contexto del padre en el selector (#42 Fase 3): con el árbol puede haber dos
+   * tipos que se llamen igual en ramas distintas, y el cliente tiene que poder
+   * distinguirlos (`Incidencia › Error del sistema`).
+   *
+   * ⚠️ Hoy el endpoint del portal (`/portal/projects/:id/ticket-types`) proyecta
+   * `{ id, name, slug }`: sin `parentId` el helper devuelve el nombre pelado y el
+   * selector se ve EXACTAMENTE como antes. Queda listo para el día que la
+   * disponibilidad incluya la jerarquía, sin tocar este componente.
+   */
+  const ancestorNames = useMemo(() => buildTicketTypeAncestorNames(types), [types]);
+
+  const typeLabel = useCallback(
+    (type: AvailableTicketType) => ticketTypeFullLabel(ancestorNames, type),
+    [ancestorNames],
+  );
+
   const filteredTypes = useMemo(() => {
     const query = typeSearch.trim().toLowerCase();
     if (!query) return types;
+    // Se busca sobre el camino completo: "incidencia" trae también sus subtipos.
     return types.filter(
-      (type) => type.name.toLowerCase().includes(query) || type.id === form.ticketTypeId,
+      (type) => typeLabel(type).toLowerCase().includes(query) || type.id === form.ticketTypeId,
     );
-  }, [types, typeSearch, form.ticketTypeId]);
+  }, [types, typeSearch, form.ticketTypeId, typeLabel]);
 
   const showTypeSearch = types.length > TYPE_SEARCH_MIN_OPTIONS;
 
@@ -442,7 +461,7 @@ export function CreateTicketModal({
                   <SelectContent>
                     {filteredTypes.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
-                        {t.name}
+                        {typeLabel(t)}
                       </SelectItem>
                     ))}
                   </SelectContent>

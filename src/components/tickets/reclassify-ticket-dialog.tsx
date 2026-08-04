@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getApiErrorMessage } from '@/lib/api-error-message';
+import { buildTicketTypeAncestorNames, ticketTypeFullLabel } from '@/lib/ticket-type-path';
 import { slaService } from '@/services/sla.service';
 import { ticketService } from '@/services/ticket.service';
 import { toast } from '@/hooks/use-toast';
@@ -119,6 +120,14 @@ export function ReclassifyTicketDialog({
     };
   }, [open, orgId]);
 
+  /**
+   * Contexto del padre para desambiguar tipos homónimos en distintas ramas
+   * (#42 Fase 3): el selector muestra `Incidencia › Error del sistema`.
+   * `listTypes` viene ordenado por el `path` del árbol, así que la lista ya sale
+   * agrupada por rama y los nombres se derivan trepando por `parentId`.
+   */
+  const ancestorNames = useMemo(() => buildTicketTypeAncestorNames(types), [types]);
+
   const reason = form.reason.trim();
 
   const handleSubmit = async () => {
@@ -194,10 +203,12 @@ export function ReclassifyTicketDialog({
                 />
               </SelectTrigger>
               <SelectContent>
-                {/* `listTypes` sin `includeInactive` ya devuelve solo los activos. */}
+                {/* `listTypes` sin `includeInactive` ya devuelve solo los activos.
+                    Un hijo cuyo padre esté inactivo queda sin contexto (el padre
+                    no vino en la lista) y se muestra con su nombre pelado. */}
                 {types.map((type) => (
                   <SelectItem key={type.id} value={type.id}>
-                    {type.name}
+                    {ticketTypeFullLabel(ancestorNames, type)}
                   </SelectItem>
                 ))}
               </SelectContent>

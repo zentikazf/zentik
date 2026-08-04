@@ -22,8 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { AlertTriangle, CheckCircle2, Search, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, Search, ShieldCheck } from 'lucide-react';
 import { getApiErrorMessage } from '@/lib/api-error-message';
+import { buildTicketTypeAncestorNames, ticketTypeContext } from '@/lib/ticket-type-path';
 import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
@@ -32,6 +33,7 @@ import type {
   ProjectContractItemInput,
   ProjectSlaContractsResponse,
   SlaPolicy,
+  TicketType,
 } from '@/types/sla.types';
 import { useCanManageSla } from './use-can-manage-sla';
 
@@ -62,6 +64,13 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const [policies, setPolicies] = useState<SlaPolicy[]>([]);
   const [contracts, setContracts] = useState<ProjectSlaContractsResponse | null>(null);
+  /**
+   * Catálogo de tipos, SOLO para mostrar el camino del padre en la matriz
+   * (#42 Fase 3): las filas de contratos traen `ticketTypeName` pelado y con un
+   * árbol hay homónimos en ramas distintas ("Error del sistema" bajo Incidencia
+   * y bajo Consulta). No participa del guardado.
+   */
+  const [types, setTypes] = useState<TicketType[]>([]);
   /** Borrador de la matriz: ticketTypeId → policyId | NO_POLICY. */
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [savingPolicy, setSavingPolicy] = useState(false);
@@ -79,12 +88,16 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
   const load = useCallback(async (opts?: { preserveDraft?: boolean }) => {
     if (!orgId || !canManageSla) return;
     try {
-      const [policiesRes, contractsRes] = await Promise.all([
+      const [policiesRes, contractsRes, typesRes] = await Promise.all([
         slaService.listPolicies(orgId),
         slaService.getProjectContracts(orgId, projectId),
+        // El árbol de tipos es SOLO contexto visual: si falla, la matriz se
+        // pinta igual con los nombres pelados (degradación, no error).
+        slaService.listTypes(orgId).catch(() => null),
       ]);
       setPolicies(policiesRes.data);
       setContracts(contractsRes.data);
+      setTypes(Array.isArray(typesRes?.data) ? typesRes.data : []);
       if (!opts?.preserveDraft) {
         setDraft(
           Object.fromEntries(
@@ -115,6 +128,14 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
    */
   const allItems = useMemo(() => contracts?.items ?? [], [contracts]);
 
+  const ancestorNames = useMemo(() => buildTicketTypeAncestorNames(types), [types]);
+
+  /** Camino del padre (`"Incidencia"`), o cadena vacía si el tipo es raíz. */
+  const typeContext = useCallback(
+    (ticketTypeId: string) => ticketTypeContext(ancestorNames, ticketTypeId),
+    [ancestorNames],
+  );
+
   const hasContract = useCallback(
     (ticketTypeId: string) => (draft[ticketTypeId] ?? NO_POLICY) !== NO_POLICY,
     [draft],
@@ -123,12 +144,15 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
   const visibleItems = useMemo(() => {
     const query = search.trim().toLowerCase();
     return allItems.filter((row) => {
-      if (query && !row.ticketTypeName.toLowerCase().includes(query)) return false;
+      // Se busca también por el camino del padre: escribir "incidencia" trae la
+      // rama entera, no solo el tipo que se llama así.
+      const haystack = `${typeContext(row.ticketTypeId)} ${row.ticketTypeName}`.toLowerCase();
+      if (query && !haystack.includes(query)) return false;
       if (contractFilter === 'WITH') return hasContract(row.ticketTypeId);
       if (contractFilter === 'WITHOUT') return !hasContract(row.ticketTypeId);
       return true;
     });
-  }, [allItems, search, contractFilter, hasContract]);
+  }, [allItems, search, contractFilter, hasContract, typeContext]);
 
   /** Se cuenta sobre el borrador, no sobre lo persistido: refleja lo que se va a guardar. */
   const draftContractCount = useMemo(
@@ -306,6 +330,22 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
               </p>
             ) : (
               <>
+                {/*
+                  ⚠️ Regla contraintuitiva y DELIBERADA del backend (paridad con
+                  OSD): la cascada de SLA y la disponibilidad del portal buscan el
+                  `ticketTypeId` tal cual, sin trepar por los ancestros. Heredar
+                  contratos haría que agregar un subtipo cambie en silencio el SLA
+                  de tickets que ya estaban cubiertos. Se avisa acá porque el árbol
+                  invita justo a suponer lo contrario.
+                */}
+                <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Los contratos son <strong>por tipo exacto</strong>: contratar un tipo padre NO
+                    cubre a sus hijos. Cada subtipo necesita su propia fila.
+                  </span>
+                </div>
+
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative min-w-[200px] flex-1">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -358,7 +398,16 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
                       ) : (
                         visibleItems.map((row) => (
                           <TableRow key={row.ticketTypeId}>
-                            <TableCell className="font-medium">{row.ticketTypeName}</TableCell>
+                            <TableCell>
+                              {/* Camino del padre como CONTEXTO, nunca como
+                                  cobertura: el contrato es de este tipo exacto. */}
+                              {typeContext(row.ticketTypeId) && (
+                                <span className="block truncate text-[10px] text-muted-foreground">
+                                  {typeContext(row.ticketTypeId)}
+                                </span>
+                              )}
+                              <span className="font-medium">{row.ticketTypeName}</span>
+                            </TableCell>
                             <TableCell>
                               <Select
                                 value={draft[row.ticketTypeId] ?? NO_POLICY}
