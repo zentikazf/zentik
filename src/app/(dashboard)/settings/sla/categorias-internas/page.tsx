@@ -221,15 +221,9 @@ export default function InternalCategoriesPage() {
                     !isActive && 'opacity-50',
                   )}
                 >
+                  {/* Sin badge de criticidad: la categoría interna clasifica el
+                      problema, no define urgencia ni SLA (ver nota del formulario). */}
                   <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={cn(
-                        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                        CRITICALITY_BADGE[category.criticality],
-                      )}
-                    >
-                      {SLA_CRITICALITY_LABEL[category.criticality]}
-                    </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-medium">{category.name}</p>
@@ -317,24 +311,19 @@ export default function InternalCategoriesPage() {
                 className="resize-none text-sm"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Criticidad</Label>
-              <Select
-                value={form.criticality}
-                onValueChange={(v) => setForm({ ...form, criticality: v as SlaCriticality })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CRITICALITIES.map((criticality) => (
-                    <SelectItem key={criticality} value={criticality}>
-                      {SLA_CRITICALITY_LABEL[criticality]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/*
+              El selector de criticidad se OCULTA a propósito (#42 Fase 2.1).
+              `TicketCategoryConfig.criticality` es una herencia del modelo viejo,
+              donde la categoría que elegía el cliente determinaba la criticidad y
+              con ella el SLA. En el modelo nuevo la categoría es SOLO clasificación
+              interna: la criticidad la declara el cliente (o la ajusta el equipo al
+              reclasificar) y el SLA lo resuelve la cascada de políticas.
+
+              El campo NO se elimina del modelo ni del payload: lo sigue usando el
+              path legacy cuando `SLA_CASCADE_ENABLED` está apagado. Se envía el
+              default (`MEDIUM`) para no romper ese camino, pero pedirlo en pantalla
+              hacía creer que define algo — y hoy no define nada.
+            */}
             {editing && (
               <div className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div>
