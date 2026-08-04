@@ -69,7 +69,7 @@ export interface TicketListItem {
   status: TicketStatus;
   category: string;
   priority: string;
-  criticality?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  criticality?: SlaCriticality | null;
   slaResponseBreached?: boolean;
   slaResolutionBreached?: boolean;
   responseDeadline?: string | null;
@@ -229,7 +229,7 @@ export interface ListTicketsQuery {
 
   // Feature #10: facets extendidos para tab RESOLVED + panel "Mas filtros".
   // El backend (zentik-backend) los acepta como CSV / single value.
-  criticality?: string;        // "HIGH,MEDIUM,LOW"
+  criticality?: string;        // "CRITICAL,HIGH,MEDIUM,LOW"
   category?: string;           // "SUPPORT_REQUEST,NEW_DEVELOPMENT"
   slaOutcome?: string;         // "COMPLIED" | "BREACHED_RESPONSE" | "BREACHED_RESOLUTION" | "BREACHED_BOTH" | "NO_SLA" (csv)
   overshootBucket?: string;    // "LT_1H" | "BETWEEN_1_4H" | "BETWEEN_4_24H" | "GT_24H"

@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { ticketService } from '@/services/ticket.service';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
-import { SLA_CRITICALITY_LABEL, type SlaCriticality } from '@/types/sla.types';
+import type { SlaCriticality } from '@/types/sla.types';
 import type { TicketCategoryConfigItem } from '@/types/ticket.types';
 
 /**
@@ -36,17 +36,13 @@ import type { TicketCategoryConfigItem } from '@/types/ticket.types';
  * es lo que elige el cliente: es la clasificación con la que tipifica el equipo.
  */
 
-const CRITICALITIES: SlaCriticality[] = ['HIGH', 'MEDIUM', 'LOW'];
-
 /** Mismo tope que `CreateCategoryConfigDto` del backend. */
 const MAX_NAME = 100;
 const MAX_DESCRIPTION = 500;
 
-const CRITICALITY_BADGE: Record<SlaCriticality, string> = {
-  HIGH: 'bg-destructive/10 text-destructive',
-  MEDIUM: 'bg-warning/10 text-warning',
-  LOW: 'bg-muted text-muted-foreground',
-};
+// Sin lista ni badge de criticidad: esta pantalla dejó de mostrarla en Fase 2.1
+// (la categoría interna clasifica el problema, no define urgencia). Las dos
+// constantes que quedaron sin uso se borraron con la unificación de Fase 3.
 
 interface CategoryForm {
   name: string;

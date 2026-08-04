@@ -37,23 +37,17 @@ import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
 import {
-  SLA_CRITICALITY_LABEL,
-  type SlaCriticality,
-  type SlaPolicy,
-  type SlaReadiness,
-} from '@/types/sla.types';
+  CRITICALITY_BADGE_CLASS,
+  CRITICALITY_LABEL,
+  CRITICALITY_VALUES,
+} from '@/lib/criticality';
+import type { SlaCriticality, SlaPolicy, SlaReadiness } from '@/types/sla.types';
 
 /** Tope defensivo del backend (`MAX_SLA_HOURS` en create-sla-policy.dto.ts). */
 const MAX_SLA_HOURS = 8760;
 
 /** Nombres que el backend acepta como política de fallback global (paso 5). */
 const STANDARD_NAMES = ['Estándar', 'Estandar'];
-
-const CRITICALITY_STYLE: Record<SlaCriticality, string> = {
-  HIGH: 'bg-destructive/10 text-destructive',
-  MEDIUM: 'bg-warning/10 text-warning',
-  LOW: 'bg-muted text-muted-foreground',
-};
 
 interface PolicyForm {
   name: string;
@@ -329,10 +323,10 @@ export default function SlaPoliciesPage() {
                   <span
                     className={cn(
                       'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                      CRITICALITY_STYLE[policy.criticality],
+                      CRITICALITY_BADGE_CLASS[policy.criticality],
                     )}
                   >
-                    {SLA_CRITICALITY_LABEL[policy.criticality]}
+                    {CRITICALITY_LABEL[policy.criticality]}
                   </span>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -423,9 +417,11 @@ export default function SlaPoliciesPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="HIGH">Alta</SelectItem>
-                  <SelectItem value="MEDIUM">Media</SelectItem>
-                  <SelectItem value="LOW">Baja</SelectItem>
+                  {CRITICALITY_VALUES.map((criticality) => (
+                    <SelectItem key={criticality} value={criticality}>
+                      {CRITICALITY_LABEL[criticality]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">

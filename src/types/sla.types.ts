@@ -4,7 +4,14 @@
 // (`sla-config.controller.ts` + los services). Las fechas viajan como string ISO
 // porque el backend serializa a JSON.
 
-export type SlaCriticality = 'HIGH' | 'MEDIUM' | 'LOW';
+import type { Criticality } from '@/lib/criticality';
+
+/**
+ * Criticidad, con el nombre que usa el módulo SLA. Es un **alias** de
+ * `Criticality`: la unión (y su 4º valor `CRITICAL`, #42 Fase 3) vive en
+ * `@/lib/criticality`, la única fuente de valores/labels/colores del frontend.
+ */
+export type SlaCriticality = Criticality;
 
 /**
  * Paso de la cascada en el que se resolvió el SLA del ticket.
@@ -216,12 +223,9 @@ export interface AssignSlaPolicyInput {
 }
 
 // ─── Labels compartidos (UI) ────────────────────────────────────────────────
-
-export const SLA_CRITICALITY_LABEL: Record<SlaCriticality, string> = {
-  HIGH: 'Alta',
-  MEDIUM: 'Media',
-  LOW: 'Baja',
-};
+//
+// Los labels/colores de criticidad se mudaron a `@/lib/criticality`
+// (`CRITICALITY_LABEL`), la fuente única del frontend (#42 Fase 3, paso A).
 
 /** Cómo se lee el origen del SLA en el panel del ticket. */
 export const SLA_SOURCE_LABEL: Record<SlaSource, string> = {

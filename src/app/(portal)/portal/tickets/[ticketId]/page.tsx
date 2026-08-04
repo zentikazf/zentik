@@ -13,6 +13,7 @@ import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { useSocket } from '@/hooks/use-socket';
 import { getInitials, cn } from '@/lib/utils';
+import { criticalityStyle } from '@/lib/criticality';
 import { SameTopicDialog } from '@/components/tickets/same-topic-dialog';
 import { ChatImage } from '@/components/tickets/chat-image';
 
@@ -22,10 +23,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
  IN_REVIEW: { label: 'En Revision', color: 'bg-info/10 text-info' },
  RESOLVED: { label: 'Resuelto', color: 'bg-success/10 text-success' },
  CLOSED: { label: 'Cerrado', color: 'bg-muted text-muted-foreground' },
-};
-
-const CRITICALITY_LABEL: Record<string, string | undefined> = {
- LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta',
 };
 
 interface TicketDetail {
@@ -264,10 +261,10 @@ export default function PortalTicketDetailPage() {
  // reales que eligió el cliente: tipo de solicitud + criticidad. La categoría
  // interna NO se muestra acá: es la clasificación del equipo.
  const typeName = ticket.ticketType?.name ?? null;
+ // El label sale de la fuente única (`@/lib/criticality`), que ya devuelve el
+ // valor crudo si no reconoce la criticidad — mismo comportamiento que antes.
  const criticalityValue = ticket.criticality ?? ticket.priority ?? null;
- const criticalityLabel = criticalityValue
- ? CRITICALITY_LABEL[criticalityValue] ?? criticalityValue
- : null;
+ const criticalityLabel = criticalityValue ? criticalityStyle(criticalityValue).label : null;
 
  // Plazos comprometidos: solo si el backend los expone (tickets sin SLA vienen en null).
  const formatDeadline = (iso: string) => {

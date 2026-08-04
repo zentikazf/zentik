@@ -11,6 +11,7 @@ import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
 import { Clock, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { criticalityStyle, type Criticality } from '@/lib/criticality';
 
 // Tiempos de SLA del modelo VIEJO: minutos de respuesta/resolución por criticidad
 // (`SlaConfig`). Es el único path activo mientras `SLA_CASCADE_ENABLED` esté
@@ -21,16 +22,10 @@ import { cn } from '@/lib/utils';
 // son la clasificación interna que el equipo asigna al tipificar.
 
 interface SlaConfigItem {
-  criticality: 'HIGH' | 'MEDIUM' | 'LOW';
+  criticality: Criticality;
   responseTimeMinutes: number;
   resolutionTimeMinutes: number;
 }
-
-const critLabels: Record<string, { label: string; className: string }> = {
-  HIGH: { label: 'Alta', className: 'bg-destructive/10 text-destructive' },
-  MEDIUM: { label: 'Media', className: 'bg-warning/10 text-warning' },
-  LOW: { label: 'Baja', className: 'bg-muted text-muted-foreground' },
-};
 
 function formatMinutes(minutes: number): string {
   if (minutes < 60) return `${minutes}m`;
@@ -138,16 +133,16 @@ export default function SlaLegacyPage() {
 
         <div className="space-y-3">
           {slaForm.map((item, idx) => {
-            const crit = critLabels[item.criticality];
+            const crit = criticalityStyle(item.criticality);
             return (
               <div key={item.criticality} className="grid grid-cols-[120px_1fr_1fr] items-center gap-3">
                 <span
                   className={cn(
                     'inline-flex items-center justify-center gap-1 rounded-full px-2 py-1 text-xs font-medium',
-                    crit?.className,
+                    crit.badgeClass,
                   )}
                 >
-                  {crit?.label}
+                  {crit.label}
                 </span>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Respuesta (min)</Label>

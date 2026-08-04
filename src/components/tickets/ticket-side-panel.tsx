@@ -38,6 +38,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
+import { CRITICALITY_LABEL, criticalityStyle } from '@/lib/criticality';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { ticketService } from '@/services/ticket.service';
@@ -51,13 +52,6 @@ import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from './ticket-status
 import type { TicketDetail, TicketStatus } from '@/types/ticket.types';
 
 const PANEL_WIDTH_KEY = 'zentik:ticket-panel-width'; // 'standard' | 'expanded'
-
-// Mapping criticidad → label + color de badge
-const CRITICALITY_BADGE: Record<string, { label: string; className: string }> = {
-  HIGH:   { label: 'Alta',  className: 'bg-destructive/10 text-destructive border-transparent' },
-  MEDIUM: { label: 'Media', className: 'bg-warning/10 text-warning border-transparent' },
-  LOW:    { label: 'Baja',  className: 'bg-muted text-muted-foreground border-transparent' },
-};
 
 interface TicketSidePanelProps {
   ticketId: string | null;
@@ -211,7 +205,7 @@ export function TicketSidePanel({
   const todayStr = new Date().toLocaleDateString('en-CA');
   const assignee = ticket?.task?.assignments?.[0]?.user;
   const criticality = ticket?.criticality || ticket?.categoryConfig?.criticality || ticket?.priority;
-  const criticalityStyle = criticality ? CRITICALITY_BADGE[criticality] : null;
+  const criticalityBadge = criticality ? criticalityStyle(criticality) : null;
 
   // ── Declaración del cliente vs. tipificación del equipo (#42 Fase 2.1) ──────
   //
@@ -230,7 +224,7 @@ export function TicketSidePanel({
   );
   const reportedParts = [
     ticket?.reportedTicketType?.name,
-    ticket?.reportedCriticality ? CRITICALITY_BADGE[ticket.reportedCriticality]?.label : null,
+    ticket?.reportedCriticality ? CRITICALITY_LABEL[ticket.reportedCriticality] : null,
   ].filter((part): part is string => Boolean(part));
   const showReported =
     (reportedTypeDiffers || reportedCriticalityDiffers) && reportedParts.length > 0;
@@ -487,13 +481,17 @@ export function TicketSidePanel({
                     </div>
                   )}
 
-                  {criticalityStyle && (
+                  {criticalityBadge && (
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground flex items-center gap-1.5 shrink-0">
                         <AlertCircle className="h-3.5 w-3.5" /> Criticidad
                       </span>
-                      <Badge className={cn(criticalityStyle.className, 'text-[10px]')}>
-                        {criticalityStyle.label}
+                      {/* `border-transparent` mantiene el look del `Badge` de shadcn,
+                          que trae borde por defecto. */}
+                      <Badge
+                        className={cn(criticalityBadge.badgeClass, 'border-transparent text-[10px]')}
+                      >
+                        {criticalityBadge.label}
                       </Badge>
                     </div>
                   )}

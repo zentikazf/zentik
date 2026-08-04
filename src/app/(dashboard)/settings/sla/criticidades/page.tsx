@@ -19,19 +19,13 @@ import { getApiErrorMessage } from '@/lib/api-error-message';
 import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
-import { SLA_CRITICALITY_LABEL, type CriticalityConfig, type SlaCriticality } from '@/types/sla.types';
-
-/** Orden fijo de más a menos urgente (Fase 3 suma `CRITICAL`). */
-const CRITICALITIES: SlaCriticality[] = ['HIGH', 'MEDIUM', 'LOW'];
-
-/**
- * Espejo de `CRITICALITY_DEFAULTS` del backend. Se usa SOLO para pintar la fila de
- * una criticidad que la organización todavía no configuró: el PATCH es un upsert,
- * así que editarla la crea. Sin esto, una org sin seed corrido vería una tabla
- * vacía y no tendría por dónde empezar.
- */
-const DEFAULT_LEVEL: Record<SlaCriticality, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-const DEFAULT_CRITICALITY: SlaCriticality = 'MEDIUM';
+import {
+  CRITICALITY_DEFAULT_CONFIG,
+  CRITICALITY_LABEL,
+  CRITICALITY_VALUES,
+  FALLBACK_CRITICALITY,
+} from '@/lib/criticality';
+import type { CriticalityConfig, SlaCriticality } from '@/types/sla.types';
 
 /** Tope del backend (`MAX_CRITICALITY_LEVEL` en el DTO). */
 const MAX_LEVEL = 99;
@@ -44,11 +38,18 @@ interface CriticalityDraft {
 
 type DraftMap = Record<string, CriticalityDraft>;
 
+/**
+ * Draft de una fila. Si la organización todavía no configuró esa criticidad, se
+ * pinta con los defaults del backend (`CRITICALITY_DEFAULT_CONFIG`): el PATCH es
+ * un upsert, así que editarla la crea. Sin esto, una org sin seed corrido vería
+ * una tabla vacía y no tendría por dónde empezar.
+ */
 function toDraft(criticality: SlaCriticality, config?: CriticalityConfig): CriticalityDraft {
+  const defaults = CRITICALITY_DEFAULT_CONFIG[criticality];
   return {
     clientLabel: config?.clientLabel ?? '',
-    clientVisible: config?.clientVisible ?? true,
-    level: String(config?.level ?? DEFAULT_LEVEL[criticality]),
+    clientVisible: config?.clientVisible ?? defaults.clientVisible,
+    level: String(config?.level ?? defaults.level),
   };
 }
 
@@ -81,7 +82,7 @@ export default function CriticalityConfigPage() {
       const rows = Array.isArray(res.data) ? res.data : [];
       setConfigs(rows);
       setDrafts(
-        CRITICALITIES.reduce<DraftMap>((acc, criticality) => {
+        CRITICALITY_VALUES.reduce<DraftMap>((acc, criticality) => {
           acc[criticality] = toDraft(
             criticality,
             rows.find((row) => row.criticality === criticality),
@@ -131,7 +132,7 @@ export default function CriticalityConfigPage() {
         clientVisible: draft.clientVisible,
         level,
       });
-      toast.success('Guardado', `Criticidad "${SLA_CRITICALITY_LABEL[criticality]}" actualizada`);
+      toast.success('Guardado', `Criticidad "${CRITICALITY_LABEL[criticality]}" actualizada`);
       await load();
     } catch (err) {
       toast.error('Error', getApiErrorMessage(err, 'No se pudo guardar la criticidad'));
@@ -151,7 +152,7 @@ export default function CriticalityConfigPage() {
       await slaService.updateCriticalityConfig(orgId, criticality, { isDefault: true });
       toast.success(
         'Criticidad por defecto',
-        `Los tickets sin criticidad entrarán como "${SLA_CRITICALITY_LABEL[criticality]}"`,
+        `Los tickets sin criticidad entrarán como "${CRITICALITY_LABEL[criticality]}"`,
       );
       await load();
     } catch (err) {
@@ -170,9 +171,9 @@ export default function CriticalityConfigPage() {
     );
   }
 
-  const noneVisible = CRITICALITIES.every((c) => !drafts[c]?.clientVisible);
+  const noneVisible = CRITICALITY_VALUES.every((c) => !drafts[c]?.clientVisible);
   const defaultCriticality =
-    configs.find((row) => row.isDefault)?.criticality ?? DEFAULT_CRITICALITY;
+    configs.find((row) => row.isDefault)?.criticality ?? FALLBACK_CRITICALITY;
 
   return (
     <div className="space-y-6">
@@ -195,7 +196,7 @@ export default function CriticalityConfigPage() {
             {noneVisible && (
               <strong className="ml-1 text-warning">
                 Ahora mismo no hay ninguna habilitada: el portal no muestra el selector y todo entra
-                como &quot;{SLA_CRITICALITY_LABEL[defaultCriticality]}&quot;.
+                como &quot;{CRITICALITY_LABEL[defaultCriticality]}&quot;.
               </strong>
             )}
           </span>
@@ -213,7 +214,7 @@ export default function CriticalityConfigPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {CRITICALITIES.map((criticality) => {
+            {CRITICALITY_VALUES.map((criticality) => {
               const config = configOf(criticality);
               const draft = drafts[criticality] ?? toDraft(criticality, config);
               const dirty = isDirty(draft, toDraft(criticality, config));
@@ -223,7 +224,7 @@ export default function CriticalityConfigPage() {
                 <TableRow key={criticality}>
                   <TableCell className="font-medium">
                     <div className="flex flex-col gap-1">
-                      <span>{config?.displayName ?? SLA_CRITICALITY_LABEL[criticality]}</span>
+                      <span>{config?.displayName ?? CRITICALITY_LABEL[criticality]}</span>
                       {!config && (
                         <Badge variant="secondary" className="w-fit text-[10px]">
                           Sin configurar
@@ -236,10 +237,10 @@ export default function CriticalityConfigPage() {
                     <Input
                       value={draft.clientLabel}
                       onChange={(e) => patchDraft(criticality, { clientLabel: e.target.value })}
-                      placeholder={SLA_CRITICALITY_LABEL[criticality]}
+                      placeholder={CRITICALITY_LABEL[criticality]}
                       maxLength={60}
                       className="h-8 text-sm"
-                      aria-label={`Etiqueta para el cliente de ${SLA_CRITICALITY_LABEL[criticality]}`}
+                      aria-label={`Etiqueta para el cliente de ${CRITICALITY_LABEL[criticality]}`}
                     />
                   </TableCell>
 
@@ -251,7 +252,7 @@ export default function CriticalityConfigPage() {
                       value={draft.level}
                       onChange={(e) => patchDraft(criticality, { level: e.target.value })}
                       className="h-8 w-16 text-sm"
-                      aria-label={`Nivel de ${SLA_CRITICALITY_LABEL[criticality]}`}
+                      aria-label={`Nivel de ${CRITICALITY_LABEL[criticality]}`}
                     />
                   </TableCell>
 
@@ -261,7 +262,7 @@ export default function CriticalityConfigPage() {
                       onCheckedChange={(checked) =>
                         patchDraft(criticality, { clientVisible: checked })
                       }
-                      aria-label={`Visible para el cliente: ${SLA_CRITICALITY_LABEL[criticality]}`}
+                      aria-label={`Visible para el cliente: ${CRITICALITY_LABEL[criticality]}`}
                     />
                   </TableCell>
 

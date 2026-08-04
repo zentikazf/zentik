@@ -27,11 +27,11 @@ import { getApiErrorMessage } from '@/lib/api-error-message';
 import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
-import {
-  SLA_CRITICALITY_LABEL,
-  type ProjectContractItemInput,
-  type ProjectSlaContractsResponse,
-  type SlaPolicy,
+import { CRITICALITY_LABEL } from '@/lib/criticality';
+import type {
+  ProjectContractItemInput,
+  ProjectSlaContractsResponse,
+  SlaPolicy,
 } from '@/types/sla.types';
 import { useCanManageSla } from './use-can-manage-sla';
 
@@ -270,7 +270,7 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
                 <SelectItem value={NO_POLICY}>Sin SLA propio (hereda del cliente)</SelectItem>
                 {policies.map((policy) => (
                   <SelectItem key={policy.id} value={policy.id}>
-                    {policy.name} · {SLA_CRITICALITY_LABEL[policy.criticality]}
+                    {policy.name} · {CRITICALITY_LABEL[policy.criticality]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -373,7 +373,7 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
                                   <SelectItem value={NO_POLICY}>Sin contrato</SelectItem>
                                   {policies.map((policy) => (
                                     <SelectItem key={policy.id} value={policy.id}>
-                                      {policy.name} · {SLA_CRITICALITY_LABEL[policy.criticality]}
+                                      {policy.name} · {CRITICALITY_LABEL[policy.criticality]}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

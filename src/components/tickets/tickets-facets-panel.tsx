@@ -17,8 +17,12 @@ import { Filter, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
+import {
+  CRITICALITY_LABEL,
+  CRITICALITY_TEXT_CLASS,
+  CRITICALITY_VALUES,
+} from '@/lib/criticality';
 import type {
-  CriticalityLevel,
   OvershootBucket,
   SlaOutcome,
   TicketCategoryType,
@@ -33,12 +37,6 @@ const SLA_OUTCOMES: { value: SlaOutcome; label: string; color: string }[] = [
   { value: 'BREACHED_RESOLUTION', label: 'Breach Resolucion', color: 'text-destructive' },
   { value: 'BREACHED_BOTH', label: 'Breach Ambos', color: 'text-destructive' },
   { value: 'NO_SLA', label: 'Sin SLA', color: 'text-muted-foreground' },
-];
-
-const CRITICALITIES: { value: CriticalityLevel; label: string; color: string }[] = [
-  { value: 'HIGH', label: 'Alta', color: 'text-destructive' },
-  { value: 'MEDIUM', label: 'Media', color: 'text-warning' },
-  { value: 'LOW', label: 'Baja', color: 'text-muted-foreground' },
 ];
 
 const OVERSHOOT_BUCKETS: { value: OvershootBucket; label: string }[] = [
@@ -230,11 +228,11 @@ export function TicketsFacetsPanel({ filters, onApply, onClear, activeCount }: T
               Criticidad
             </Label>
             <div className="grid grid-cols-3 gap-2">
-              {CRITICALITIES.map((opt) => {
-                const checked = draft.criticality.includes(opt.value);
+              {CRITICALITY_VALUES.map((value) => {
+                const checked = draft.criticality.includes(value);
                 return (
                   <label
-                    key={opt.value}
+                    key={value}
                     className={cn(
                       'flex items-center gap-2 rounded-md border px-2.5 py-1.5 cursor-pointer text-xs',
                       checked ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted',
@@ -245,11 +243,13 @@ export function TicketsFacetsPanel({ filters, onApply, onClear, activeCount }: T
                       onCheckedChange={() =>
                         setDraft((d) => ({
                           ...d,
-                          criticality: toggleArrayValue(d.criticality, opt.value),
+                          criticality: toggleArrayValue(d.criticality, value),
                         }))
                       }
                     />
-                    <span className={cn('font-medium', opt.color)}>{opt.label}</span>
+                    <span className={cn('font-medium', CRITICALITY_TEXT_CLASS[value])}>
+                      {CRITICALITY_LABEL[value]}
+                    </span>
                   </label>
                 );
               })}

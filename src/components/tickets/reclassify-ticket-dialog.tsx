@@ -18,14 +18,13 @@ import { slaService } from '@/services/sla.service';
 import { ticketService } from '@/services/ticket.service';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
-import { SLA_CRITICALITY_LABEL, type SlaCriticality, type TicketType } from '@/types/sla.types';
+import { CRITICALITY_LABEL, CRITICALITY_VALUES } from '@/lib/criticality';
+import type { SlaCriticality, TicketType } from '@/types/sla.types';
 import type {
   ReclassifyTicketInput,
   TicketCategoryConfigItem,
   TicketDetail,
 } from '@/types/ticket.types';
-
-const CRITICALITIES: SlaCriticality[] = ['HIGH', 'MEDIUM', 'LOW'];
 
 interface ReclassifyTicketDialogProps {
   open: boolean;
@@ -215,9 +214,9 @@ export function ReclassifyTicketDialog({
                 <SelectValue placeholder="Selecciona la criticidad" />
               </SelectTrigger>
               <SelectContent>
-                {CRITICALITIES.map((criticality) => (
+                {CRITICALITY_VALUES.map((criticality) => (
                   <SelectItem key={criticality} value={criticality}>
-                    {SLA_CRITICALITY_LABEL[criticality]}
+                    {CRITICALITY_LABEL[criticality]}
                   </SelectItem>
                 ))}
               </SelectContent>

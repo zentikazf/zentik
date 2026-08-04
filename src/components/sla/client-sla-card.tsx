@@ -16,7 +16,8 @@ import { getApiErrorMessage } from '@/lib/api-error-message';
 import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
-import { SLA_CRITICALITY_LABEL, type SlaPolicy } from '@/types/sla.types';
+import { CRITICALITY_LABEL } from '@/lib/criticality';
+import type { SlaPolicy } from '@/types/sla.types';
 import { useCanManageSla } from './use-can-manage-sla';
 
 /** Valor centinela del select: Radix no admite `value=""`. */
@@ -120,7 +121,7 @@ export function ClientSlaCard({ clientId, defaultSlaPolicyId }: ClientSlaCardPro
                 <SelectItem value={NO_POLICY}>Sin SLA por defecto</SelectItem>
                 {policies.map((policy) => (
                   <SelectItem key={policy.id} value={policy.id}>
-                    {policy.name} · {SLA_CRITICALITY_LABEL[policy.criticality]}
+                    {policy.name} · {CRITICALITY_LABEL[policy.criticality]}
                   </SelectItem>
                 ))}
               </SelectContent>
