@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getCookie, setCookie } from '@/lib/cookies';
+import { parseCriticalityCsv, type Criticality } from '@/lib/criticality';
 import type { TicketStatus } from '@/types/ticket.types';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
 export type StatusTab = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'all';
-
-export type CriticalityLevel = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type TicketCategoryType = 'SUPPORT_REQUEST' | 'NEW_DEVELOPMENT';
 
@@ -34,7 +33,7 @@ export interface TicketsFilters {
   assigneeId: string | null;
 
   // Multi-select facets
-  criticality: CriticalityLevel[];
+  criticality: Criticality[];
   category: TicketCategoryType[];
 
   // Facets RESOLVED
@@ -62,7 +61,8 @@ const COOKIE_DAYS = 30;
 const PRESERVED_PARAMS = ['ticket', 'panel'] as const;
 
 const VALID_TABS: StatusTab[] = ['OPEN', 'IN_PROGRESS', 'IN_REVIEW', 'RESOLVED', 'all'];
-const VALID_CRITICALITIES: CriticalityLevel[] = ['HIGH', 'MEDIUM', 'LOW'];
+// Las criticidades válidas NO se listan acá: el parseo (y el descarte de valores
+// desconocidos) vive en `parseCriticalityCsv` — fuente única (#42 Fase 3, paso A).
 const VALID_CATEGORIES: TicketCategoryType[] = ['SUPPORT_REQUEST', 'NEW_DEVELOPMENT'];
 const VALID_SLA_OUTCOMES: SlaOutcome[] = [
   'COMPLIED',
@@ -109,7 +109,7 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): TicketsFilter
     projectId: sp.get('projectId'),
     categoryConfigId: sp.get('categoryConfigId'),
     assigneeId: sp.get('assigneeId'),
-    criticality: parseEnumArray(sp.get('criticality'), VALID_CRITICALITIES),
+    criticality: parseCriticalityCsv(sp.get('criticality')),
     category: parseEnumArray(sp.get('category'), VALID_CATEGORIES),
     slaOutcome: parseEnumArray(sp.get('slaOutcome'), VALID_SLA_OUTCOMES),
     overshootBucket: parseEnum(sp.get('overshootBucket'), VALID_OVERSHOOT_BUCKETS),

@@ -21,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  AlertTriangle,
   CheckCircle2,
   CircleDot,
   Clock,
@@ -50,7 +49,8 @@ import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
 import { TicketsFacetsPanel, countActiveFacets } from '@/components/tickets/tickets-facets-panel';
 import { TicketsPagination } from '@/components/tickets/tickets-pagination';
 import { OnnixSyncButton } from '@/components/tickets/onnix-sync-button';
-import { SlaBadge, CriticalityBadge } from '@/components/tickets/ticket-resolved-badges';
+import { SlaBadge } from '@/components/tickets/ticket-resolved-badges';
+import { CriticalityBadge } from '@/components/tickets/criticality-badge';
 import { STATUS_BADGE, STATUS_LABEL, KANBAN_STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
 import {
   useTicketsFilters,
@@ -58,12 +58,19 @@ import {
   type StatusTab,
 } from '@/hooks/use-tickets-filters';
 import { humanizeDelta, diffMin } from '@/lib/format/humanize-delta';
+import {
+  CRITICALITY_LABEL,
+  CRITICALITY_TEXT_CLASS,
+  CRITICALITY_VALUES,
+  criticalityStyle,
+} from '@/lib/criticality';
+import type { Criticality } from '@/lib/criticality';
 import type { TicketListItem, TicketStats } from '@/types/ticket.types';
 
 interface CategoryConfig {
   id: string;
   name: string;
-  criticality: 'HIGH' | 'MEDIUM' | 'LOW';
+  criticality: Criticality;
 }
 
 const tabConfig: { value: StatusTab; label: string; icon: React.ElementType; dotColor: string }[] = [
@@ -76,12 +83,6 @@ const tabConfig: { value: StatusTab; label: string; icon: React.ElementType; dot
 const categoryLabelMap: Record<string, string> = {
   SUPPORT_REQUEST: 'Soporte',
   NEW_DEVELOPMENT: 'Desarrollo',
-};
-
-const criticalityConfig: Record<string, { label: string; className: string; bg: string }> = {
-  HIGH: { label: 'Alta', className: 'text-destructive', bg: 'bg-destructive/10 text-destructive' },
-  MEDIUM: { label: 'Media', className: 'text-warning', bg: 'bg-warning/10 text-warning' },
-  LOW: { label: 'Baja', className: 'text-muted-foreground', bg: 'bg-muted text-muted-foreground' },
 };
 
 const DEFAULT_PAGE_SIZE = 15;
@@ -497,7 +498,9 @@ export default function TicketsPage() {
     const status = STATUS_BADGE[ticket.status];
     const catLabel = ticket.categoryConfig?.name || categoryLabelMap[ticket.category] || ticket.category;
     const crit = ticket.criticality || ticket.categoryConfig?.criticality || ticket.priority;
-    const critStyle = criticalityConfig[crit] || criticalityConfig.MEDIUM;
+    // `crit` puede traer un `priority` heredado que no sea una criticidad conocida:
+    // el fallback neutro vive en `criticalityStyle`, ya no se disfraza de "Media".
+    const critStyle = criticalityStyle(crit);
     const breached = isSlaBreached(ticket);
     const kanbanStatus = ticket.task?.boardColumn?.mappedStatus;
     const kanbanLabel = kanbanStatus ? KANBAN_STATUS_LABEL[kanbanStatus] : null;
@@ -523,7 +526,10 @@ export default function TicketsPage() {
           )}
         >
           <div className="flex items-start gap-3">
-            <div className={cn('mt-1 h-2 w-2 rounded-full shrink-0', critStyle.bg.split(' ')[0])} />
+            {/* Punto de color: solo la clase de fondo del badge. */}
+            <div
+              className={cn('mt-1 h-2 w-2 rounded-full shrink-0', critStyle.badgeClass.split(' ')[0])}
+            />
 
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3">
@@ -555,18 +561,7 @@ export default function TicketsPage() {
                 <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                   {catLabel}
                 </span>
-                {isResolvedTab ? (
-                  <CriticalityBadge level={crit} />
-                ) : (
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                      critStyle.bg,
-                    )}
-                  >
-                    <AlertTriangle className="h-2.5 w-2.5" /> {critStyle.label}
-                  </span>
-                )}
+                <CriticalityBadge value={crit} />
                 {kanbanLabel && !isResolvedTab && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-info/10 px-2 py-0.5 text-[10px] font-medium text-info"
@@ -785,8 +780,8 @@ export default function TicketsPage() {
                         {categoryConfigs.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.name} —{' '}
-                            <span className={cn('text-xs', criticalityConfig[c.criticality]?.className)}>
-                              {criticalityConfig[c.criticality]?.label}
+                            <span className={cn('text-xs', CRITICALITY_TEXT_CLASS[c.criticality])}>
+                              {CRITICALITY_LABEL[c.criticality]}
                             </span>
                           </SelectItem>
                         ))}
@@ -885,7 +880,7 @@ export default function TicketsPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Criticidad</DropdownMenuLabel>
-                {(['HIGH', 'MEDIUM', 'LOW'] as const).map((p) => (
+                {CRITICALITY_VALUES.map((p) => (
                   <DropdownMenuCheckboxItem
                     key={p}
                     checked={filterPriority === p}
@@ -893,7 +888,7 @@ export default function TicketsPage() {
                       applyFilters({ criticality: checked ? [p] : [] })
                     }
                   >
-                    {criticalityConfig[p]?.label || p}
+                    {CRITICALITY_LABEL[p]}
                   </DropdownMenuCheckboxItem>
                 ))}
                 <DropdownMenuSeparator />

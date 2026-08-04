@@ -39,6 +39,7 @@ import { useOrg } from '@/providers/org-provider';
 import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
 import { ClientDocumentsSection } from '@/components/clients/client-documents-section';
+import { ClientSlaCard } from '@/components/sla/client-sla-card';
 
 interface SubUser {
  id: string;
@@ -57,6 +58,8 @@ interface ClientDetail {
  userId?: string;
  portalEnabled?: boolean;
  portalBillingEnabled?: boolean;
+ /** SLA por defecto del cliente (#42 Fase 1) — paso 3 de la cascada. */
+ defaultSlaPolicyId?: string | null;
  contractedHours: number;
  usedHours: number;
  loanedHours: number;
@@ -291,6 +294,9 @@ export default function ClientDetailPage() {
  <ChevronRight className="h-5 w-5 text-muted-foreground"/>
  </Link>
  )}
+
+ {/* SLA por defecto del cliente (#42 Fase 1) */}
+ <ClientSlaCard clientId={clientId} defaultSlaPolicyId={client.defaultSlaPolicyId} />
 
  <div className="grid gap-6 lg:grid-cols-2">
  {/* Sub-users — only if portal is enabled */}

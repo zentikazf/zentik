@@ -38,7 +38,7 @@ export function clearToken(): void {
 }
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   headers?: Record<string, string>;
   cache?: RequestCache;
@@ -128,6 +128,16 @@ export const api = {
 
   post: <T = any>(endpoint: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
     request<ApiSuccessResponse<T>>(endpoint, { ...options, method: 'POST', body }),
+
+  // PUT: lo usa el upsert de la matriz de contratos SLA (reemplazo completo del
+  // recurso). Se agrego junto al motor de SLA (#42 Fase 1) porque el backend
+  // expone `PUT projects/:id/sla-contracts` y antes no habia forma de llamarlo
+  // sin hacer `fetch` directo (prohibido por convencion).
+  put: <T = any>(
+    endpoint: string,
+    body?: unknown,
+    options?: Omit<RequestOptions, 'method' | 'body'>,
+  ) => request<ApiSuccessResponse<T>>(endpoint, { ...options, method: 'PUT', body }),
 
   patch: <T = any>(
     endpoint: string,

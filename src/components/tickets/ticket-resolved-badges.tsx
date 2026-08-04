@@ -1,7 +1,6 @@
 'use client';
 
-import { CheckCircle2, ShieldAlert, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { CheckCircle2, MinusCircle, ShieldAlert } from 'lucide-react';
 import { humanizeDelta, diffMin } from '@/lib/format/humanize-delta';
 import type { TicketListItem } from '@/types/ticket.types';
 
@@ -10,6 +9,21 @@ import type { TicketListItem } from '@/types/ticket.types';
  * Verde "Cumplido" / rojo "Breach +Xh".
  */
 export function SlaBadge({ ticket }: { ticket: TicketListItem }) {
+  // Sin ninguna deadline no hubo SLA que cumplir: no se puede marcar breach (el cron
+  // exige deadline no nula), así que el badge caía en el verde "Cumplido" y afirmaba
+  // algo falso. Es el mismo "Sin SLA" que ya usa el panel de filtros (NO_SLA), y es
+  // lo que hace VISIBLE cualquier ticket que nazca sin deadlines.
+  if (!ticket.responseDeadline && !ticket.resolutionDeadline) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+        title="El ticket se creó sin SLA asignado"
+      >
+        <MinusCircle className="h-3 w-3" /> Sin SLA
+      </span>
+    );
+  }
+
   const breached = ticket.slaResponseBreached || ticket.slaResolutionBreached;
   if (!breached) {
     return (
@@ -40,21 +54,5 @@ export function SlaBadge({ ticket }: { ticket: TicketListItem }) {
   );
 }
 
-/**
- * Badge de criticidad por nivel.
- */
-export function CriticalityBadge({ level }: { level: string | null | undefined }) {
-  if (!level) return null;
-  const config: Record<string, { label: string; bg: string }> = {
-    HIGH: { label: 'Alta', bg: 'bg-destructive/10 text-destructive' },
-    MEDIUM: { label: 'Media', bg: 'bg-warning/10 text-warning' },
-    LOW: { label: 'Baja', bg: 'bg-muted text-muted-foreground' },
-  };
-  const cfg = config[level] || config.MEDIUM;
-  return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', cfg.bg)}>
-      <AlertTriangle className="h-2.5 w-2.5" />
-      {cfg.label}
-    </span>
-  );
-}
+// `CriticalityBadge` se mudó a `./criticality-badge` (#42 Fase 3, paso A): era
+// una de las 6 copias del mapa label/color de criticidad.

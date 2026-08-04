@@ -1,3 +1,5 @@
+import type { SlaCriticality, SlaSource } from '@/types/sla.types';
+
 // ─── Tickets — tipos compartidos ──────────────────────────
 
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED';
@@ -21,7 +23,10 @@ export type TicketEventType =
   | 'RESOLVED'
   | 'SLA_WARNING'
   | 'SLA_BREACH_RESPONSE'
-  | 'SLA_BREACH_RESOLUTION';
+  | 'SLA_BREACH_RESOLUTION'
+  // Tipificación interna (#42 Fase 2): el equipo cambió tipo / criticidad /
+  // categoría del ticket. El motivo viaja en `metadata.reason`.
+  | 'RECLASSIFIED';
 
 export type TicketEventSource = 'TICKET' | 'KANBAN' | 'SYSTEM';
 
@@ -64,7 +69,7 @@ export interface TicketListItem {
   status: TicketStatus;
   category: string;
   priority: string;
-  criticality?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  criticality?: SlaCriticality | null;
   slaResponseBreached?: boolean;
   slaResolutionBreached?: boolean;
   responseDeadline?: string | null;
@@ -78,6 +83,26 @@ export interface TicketListItem {
   categoryConfig?: { id: string; name: string; criticality: string } | null;
   createdByUser?: { id: string; name: string } | null;
   createdAt: string;
+
+  // Tipo de solicitud VIGENTE del ticket (#42 Fase 2): arranca con lo que eligió
+  // el cliente y el equipo lo puede cambiar al reclasificar. El detalle devuelve
+  // el escalar; la relación puede no venir en respuestas viejas → siempre opcional.
+  ticketTypeId?: string | null;
+  ticketType?: { id: string; name: string } | null;
+
+  // Declaración CONGELADA del cliente (#42 Fase 2.1). Se graba una sola vez al
+  // crear el ticket desde el portal y NO se toca al reclasificar: es "qué reportó
+  // el cliente". Null en tickets creados por admin y en todo lo histórico, así que
+  // la UI solo pinta la línea cuando existe Y difiere de lo vigente.
+  reportedTicketTypeId?: string | null;
+  reportedTicketType?: { id: string; name: string } | null;
+  reportedCriticality?: SlaCriticality | null;
+
+  // Motor de SLA con cascada (#42 Fase 1). Se congelan al crear el ticket y
+  // NUNCA se recalculan. Ausentes en los tickets históricos y mientras el flag
+  // `SLA_CASCADE_ENABLED` esté apagado → la UI no muestra el badge.
+  slaPolicy?: { id: string; name: string; criticality: SlaCriticality } | null;
+  slaSource?: SlaSource | null;
 }
 
 export interface TicketDetail extends TicketListItem {
@@ -132,6 +157,65 @@ export interface CloseTicketInput {
   note?: string;
 }
 
+/**
+ * Categoría interna configurable (`TicketCategoryConfig` del backend).
+ *
+ * En el modelo nuevo NO es lo que elige el cliente: es la clasificación que el
+ * equipo asigna al tipificar el ticket. Se administra en
+ * `/settings/sla/categorias-internas` (#42 Fase 2.1).
+ */
+export interface TicketCategoryConfigItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  criticality: SlaCriticality;
+  isActive?: boolean;
+}
+
+/** Alta de categoría interna (espejo de `CreateCategoryConfigDto`). */
+export interface CreateTicketCategoryConfigInput {
+  name: string;
+  description?: string;
+  criticality: SlaCriticality;
+}
+
+/** PATCH parcial de categoría interna (`isActive: true` la reactiva). */
+export interface UpdateTicketCategoryConfigInput {
+  name?: string;
+  description?: string;
+  criticality?: SlaCriticality;
+  isActive?: boolean;
+}
+
+/**
+ * Tipificación interna (#42 Fase 2). Los tres campos de clasificación son
+ * opcionales (se manda solo lo que cambia) pero el `reason` es OBLIGATORIO:
+ * sin él la reclasificación no deja rastro auditable.
+ */
+export interface ReclassifyTicketInput {
+  ticketTypeId?: string;
+  criticality?: SlaCriticality;
+  categoryConfigId?: string;
+  reason: string;
+}
+
+/**
+ * Respuesta del endpoint de clasificación. Incluye los deadlines a propósito:
+ * reclasificar NO los recalcula y así se puede verificar que no se movieron.
+ */
+export interface TicketClassification {
+  id: string;
+  ticketTypeId: string | null;
+  criticality: SlaCriticality | null;
+  categoryConfigId: string | null;
+  responseDeadline: string | null;
+  resolutionDeadline: string | null;
+  slaPolicyId: string | null;
+  slaSource: SlaSource | null;
+  ticketType: { id: string; name: string } | null;
+  categoryConfig: { id: string; name: string; criticality: SlaCriticality } | null;
+}
+
 export interface ListTicketsQuery {
   status?: TicketStatus;
   page?: number;
@@ -145,7 +229,7 @@ export interface ListTicketsQuery {
 
   // Feature #10: facets extendidos para tab RESOLVED + panel "Mas filtros".
   // El backend (zentik-backend) los acepta como CSV / single value.
-  criticality?: string;        // "HIGH,MEDIUM,LOW"
+  criticality?: string;        // "CRITICAL,HIGH,MEDIUM,LOW"
   category?: string;           // "SUPPORT_REQUEST,NEW_DEVELOPMENT"
   slaOutcome?: string;         // "COMPLIED" | "BREACHED_RESPONSE" | "BREACHED_RESOLUTION" | "BREACHED_BOTH" | "NO_SLA" (csv)
   overshootBucket?: string;    // "LT_1H" | "BETWEEN_1_4H" | "BETWEEN_4_24H" | "GT_24H"

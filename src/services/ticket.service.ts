@@ -1,5 +1,10 @@
 import { api } from '@/lib/api-client';
 import type {
+  CreateTicketCategoryConfigInput,
+  ReclassifyTicketInput,
+  TicketCategoryConfigItem,
+  TicketClassification,
+  UpdateTicketCategoryConfigInput,
   TicketDetail,
   TicketEvent,
   TicketsListResponse,
@@ -47,6 +52,44 @@ export const ticketService = {
 
   update: (ticketId: string, input: UpdateTicketInput) =>
     api.patch<TicketDetail>(`/tickets/${ticketId}`, input),
+
+  /**
+   * Categorías internas de la org (las tipifica el equipo, no el cliente).
+   * El backend devuelve activas **e inactivas**: quien solo quiera las activas
+   * (el diálogo de reclasificación) filtra por `isActive`.
+   */
+  categories: (orgId: string) =>
+    api.get<TicketCategoryConfigItem[]>(`/organizations/${orgId}/ticket-categories`),
+
+  createCategory: (orgId: string, input: CreateTicketCategoryConfigInput) =>
+    api.post<TicketCategoryConfigItem>(`/organizations/${orgId}/ticket-categories`, input),
+
+  updateCategory: (
+    orgId: string,
+    categoryId: string,
+    input: UpdateTicketCategoryConfigInput,
+  ) =>
+    api.patch<TicketCategoryConfigItem>(
+      `/organizations/${orgId}/ticket-categories/${categoryId}`,
+      input,
+    ),
+
+  /** Baja lógica (`isActive: false`). Los tickets ya tipificados no se tocan. */
+  deactivateCategory: (orgId: string, categoryId: string) =>
+    api.delete<TicketCategoryConfigItem>(
+      `/organizations/${orgId}/ticket-categories/${categoryId}`,
+    ),
+
+  /**
+   * Tipificación interna (#42 Fase 2): cambia tipo / criticidad / categoría con
+   * motivo obligatorio. Deja un evento `RECLASSIFIED` en el timeline y **NO**
+   * recalcula los deadlines (quedan congelados con lo resuelto al crear).
+   */
+  reclassify: (orgId: string, ticketId: string, input: ReclassifyTicketInput) =>
+    api.patch<TicketClassification>(
+      `/organizations/${orgId}/tickets/${ticketId}/classification`,
+      input,
+    ),
 
   create: (
     orgId: string,
