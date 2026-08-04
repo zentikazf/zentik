@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, MinusCircle, ShieldAlert } from 'lucide-react';
 import { humanizeDelta, diffMin } from '@/lib/format/humanize-delta';
 import type { TicketListItem } from '@/types/ticket.types';
 
@@ -9,6 +9,21 @@ import type { TicketListItem } from '@/types/ticket.types';
  * Verde "Cumplido" / rojo "Breach +Xh".
  */
 export function SlaBadge({ ticket }: { ticket: TicketListItem }) {
+  // Sin ninguna deadline no hubo SLA que cumplir: no se puede marcar breach (el cron
+  // exige deadline no nula), así que el badge caía en el verde "Cumplido" y afirmaba
+  // algo falso. Es el mismo "Sin SLA" que ya usa el panel de filtros (NO_SLA), y es
+  // lo que hace VISIBLE cualquier ticket que nazca sin deadlines.
+  if (!ticket.responseDeadline && !ticket.resolutionDeadline) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+        title="El ticket se creó sin SLA asignado"
+      >
+        <MinusCircle className="h-3 w-3" /> Sin SLA
+      </span>
+    );
+  }
+
   const breached = ticket.slaResponseBreached || ticket.slaResolutionBreached;
   if (!breached) {
     return (
