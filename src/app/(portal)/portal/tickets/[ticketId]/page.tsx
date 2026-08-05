@@ -33,7 +33,6 @@ interface TicketDetail {
  category: string;
  status: string;
  priority: string;
- adminNotes: string | null;
  createdAt: string;
  project: { id: string; name: string } | null;
  task: { id: string; title: string; status: string } | null;
@@ -423,15 +422,9 @@ export default function PortalTicketDetailPage() {
  </div>
  </div>
 
- {/* Admin notes */}
- {ticket.adminNotes && (
- <div className="rounded-xl bg-primary/10 p-5 border border-primary/20">
- <h2 className="text-sm font-semibold text-primary mb-2">Respuesta del equipo</h2>
- <p className="text-sm text-primary leading-relaxed">
- {ticket.adminNotes}
- </p>
- </div>
- )}
+ {/* `adminNotes` NO se renderiza acá: son notas INTERNAS del staff. El bloque
+ "Respuesta del equipo" que vivía en este lugar exponía esas notas al
+ cliente (fix 2026-08-05); la respuesta real del equipo es el chat. */}
  </div>
 
  {/* Right: Chat con el equipo */}
