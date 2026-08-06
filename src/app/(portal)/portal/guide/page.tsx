@@ -269,16 +269,16 @@ const modules: Module[] = [
             <p>Cada ticket pasa por los siguientes estados:</p>
             <div className="space-y-2">
               <div className="flex items-center gap-3 rounded-lg border border-border p-3">
-                <span className="h-2.5 w-2.5 rounded-full bg-primary shrink-0" />
+                <span className="h-2.5 w-2.5 rounded-full bg-destructive shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold">Abierto</p>
+                  <p className="text-sm font-semibold">Nuevo</p>
                   <p className="text-xs text-muted-foreground">El ticket fue creado y esta en espera de ser atendido por el equipo.</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-lg border border-border p-3">
                 <span className="h-2.5 w-2.5 rounded-full bg-warning shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold">En Proceso</p>
+                  <p className="text-sm font-semibold">En curso</p>
                   <p className="text-xs text-muted-foreground">El equipo esta trabajando activamente en tu solicitud.</p>
                 </div>
               </div>
@@ -292,8 +292,8 @@ const modules: Module[] = [
               <div className="flex items-center gap-3 rounded-lg border border-border p-3">
                 <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold">Cerrado</p>
-                  <p className="text-xs text-muted-foreground">El ticket fue cerrado definitivamente.</p>
+                  <p className="text-sm font-semibold">Cancelado</p>
+                  <p className="text-xs text-muted-foreground">El ticket fue cancelado. Si necesitas seguir, crea una nueva consulta.</p>
                 </div>
               </div>
             </div>
@@ -326,7 +326,7 @@ const modules: Module[] = [
           <div className="space-y-4">
             <p>Puedes filtrar y buscar tus tickets de varias formas:</p>
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-              <li><strong>Por estado</strong> — Usa las pestanas (Todos, Abiertos, En progreso, Resueltos, Cerrados).</li>
+              <li><strong>Por estado</strong> — Usa las pestanas (Todos, Nuevos, En curso, Resueltos).</li>
               <li><strong>Por texto</strong> — Escribe en el campo de busqueda para encontrar por titulo o numero de ticket.</li>
               <li><strong>Mis tickets</strong> — Activa el filtro para ver solo los tickets que creaste tu.</li>
             </ul>

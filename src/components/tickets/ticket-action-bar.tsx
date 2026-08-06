@@ -9,16 +9,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Check } from 'lucide-react';
+import { Loader2, Check, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
 import { ticketService } from '@/services/ticket.service';
 import { TaskHoursGateDialog } from '@/components/task/task-hours-gate-dialog';
+import { CancelTicketDialog } from './cancel-ticket-dialog';
 import {
   STATUS_LABEL,
-  getValidTransitions,
+  getSelectableTransitions,
+  canCancel,
 } from './ticket-status-machine';
 import type {
   TicketStatus,
@@ -46,6 +48,9 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // #43 — cancelar es una acción dedicada (comentario obligatorio), no un valor del Select.
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   // H6 — gate de horas reactivo: resolver un ticket sin horas en su task abre el diálogo.
   const [gateOpen, setGateOpen] = useState(false);
@@ -78,7 +83,10 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
       .finally(() => setLoadingMembers(false));
   }, [orgId]);
 
-  const validStatuses = useMemo(() => getValidTransitions(ticket.status), [ticket.status]);
+  // #43: el Select solo ofrece estados seleccionables (Nuevo/En curso/Resuelto) +
+  // el actual. «Cancelado» sale por el botón/diálogo; «En revisión» es tombstone.
+  const validStatuses = useMemo(() => getSelectableTransitions(ticket.status), [ticket.status]);
+  const showCancel = canCancel(ticket.status);
 
   const hasChanges =
     status !== ticket.status ||
@@ -193,6 +201,19 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
           {saving ? 'Guardando...' : 'Confirmar cambios'}
         </Button>
       </div>
+
+      {/* #43: cancelar ticket — acción dedicada, secundaria, con comentario obligatorio */}
+      {showCancel && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCancelOpen(true)}
+          className="w-full h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+        >
+          <XCircle className="h-3.5 w-3.5" />
+          Cancelar ticket
+        </Button>
+      )}
     </div>
 
     {gateInfo && (
@@ -220,6 +241,13 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
         }}
       />
     )}
+
+    <CancelTicketDialog
+      open={cancelOpen}
+      onOpenChange={setCancelOpen}
+      ticketId={ticket.id}
+      onCancelled={onUpdated}
+    />
     </>
   );
 }

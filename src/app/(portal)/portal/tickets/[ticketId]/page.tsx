@@ -16,14 +16,8 @@ import { getInitials, cn } from '@/lib/utils';
 import { criticalityStyle } from '@/lib/criticality';
 import { SameTopicDialog } from '@/components/tickets/same-topic-dialog';
 import { ChatImage } from '@/components/tickets/chat-image';
-
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
- OPEN: { label: 'Abierto', color: 'bg-primary/10 text-primary' },
- IN_PROGRESS: { label: 'En Proceso', color: 'bg-warning/10 text-warning' },
- IN_REVIEW: { label: 'En Revision', color: 'bg-info/10 text-info' },
- RESOLVED: { label: 'Resuelto', color: 'bg-success/10 text-success' },
- CLOSED: { label: 'Cerrado', color: 'bg-muted text-muted-foreground' },
-};
+import { STATUS_BADGE, STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
+import type { TicketStatus } from '@/types/ticket.types';
 
 interface TicketDetail {
  id: string;
@@ -252,8 +246,14 @@ export default function PortalTicketDetailPage() {
  );
  }
 
- const statusConf = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
+ // #43: etiquetas/colores desde la fuente única. Terminal para el cliente =
+ // RESOLVED (resuelto) o CLOSED (cancelado): chat read-only + banner + CTA.
+ const statusKey = ticket.status as TicketStatus;
+ const statusLabel = STATUS_LABEL[statusKey] ?? ticket.status;
+ const statusBadgeClass = STATUS_BADGE[statusKey] ?? STATUS_BADGE.OPEN;
  const isResolved = ticket.status === 'RESOLVED';
+ const isCancelled = ticket.status === 'CLOSED';
+ const isReadOnly = isResolved || isCancelled;
 
  // #42 Fase 2.1 — antes se pintaba el enum viejo `category` ("Soporte"/"Desarrollo")
  // con un mapa hardcodeado que ya no representa nada. Ahora se muestran los datos
@@ -283,8 +283,8 @@ export default function PortalTicketDetailPage() {
 
  return (
  <div className="mx-auto max-w-5xl space-y-6 pb-4">
- {/* Back + title — header atenuado cuando el ticket esta resuelto (read-only) */}
- <div className={cn(isResolved && 'opacity-75')}>
+ {/* Back + title — header atenuado cuando el ticket es terminal (read-only) */}
+ <div className={cn(isReadOnly && 'opacity-75')}>
  <Link
  href="/portal/tickets"
  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-3"
@@ -303,8 +303,8 @@ export default function PortalTicketDetailPage() {
  {typeName}
  </Badge>
  )}
- <Badge className={`${statusConf.color} border-none text-[10px] font-semibold`}>
- {statusConf.label}
+ <Badge className={`${statusBadgeClass} border-none text-[10px] font-semibold`}>
+ {statusLabel}
  </Badge>
  {criticalityLabel && (
  <span className="text-xs text-muted-foreground">
@@ -330,6 +330,32 @@ export default function PortalTicketDetailPage() {
  </div>
  <Button
  size="sm"
+ className="rounded-full shrink-0 self-start sm:self-auto"
+ onClick={() => setShowSameTopic(true)}
+ >
+ Crear nueva consulta
+ </Button>
+ </div>
+ </div>
+ )}
+
+ {/* #43: banner del ticket cancelado (terminal para el cliente). El motivo
+     interno NO se muestra — solo el estado + la vía para reabrir consulta. */}
+ {isCancelled && (
+ <div className="bg-muted/40 border border-border rounded-xl p-5">
+ <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+ <div className="flex items-start gap-2.5">
+ <X className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5"/>
+ <div>
+ <h2 className="text-sm font-semibold text-foreground">Ticket cancelado</h2>
+ <p className="text-xs text-muted-foreground mt-0.5">
+ Este ticket fue cancelado. Si necesitas seguir, crea una nueva consulta.
+ </p>
+ </div>
+ </div>
+ <Button
+ size="sm"
+ variant="outline"
  className="rounded-full shrink-0 self-start sm:self-auto"
  onClick={() => setShowSameTopic(true)}
  >
@@ -514,7 +540,7 @@ export default function PortalTicketDetailPage() {
     opacity-60 + pointer-events-none envuelve SOLO la zona del composer
     (preview + input + enviar + adjuntar), ademas del disabled que ya tiene.
     El historial de mensajes de arriba queda 100% legible. */
- <div className={cn(isResolved && 'opacity-60 pointer-events-none')}>
+ <div className={cn(isReadOnly && 'opacity-60 pointer-events-none')}>
  {/* Preview de adjuntos pendientes (imagenes con thumbnail, resto como chip) */}
  {pending.length > 0 && (
  <div className={cn('flex flex-wrap gap-2 mb-2', sending && 'opacity-60 pointer-events-none')}>
@@ -537,7 +563,7 @@ export default function PortalTicketDetailPage() {
  </div>
  )}
  <form onSubmit={handleSend} className="flex items-center gap-2">
- <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending || isResolved} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
+ <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending || isReadOnly} className="shrink-0 rounded-full h-9 w-9 flex items-center justify-center border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50">
  <Paperclip className="h-4 w-4"/>
  </button>
  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.doc,.docx,.xlsx,.csv,.txt" />
@@ -546,14 +572,14 @@ export default function PortalTicketDetailPage() {
  value={messageText}
  onChange={(e) => setMessageText(e.target.value)}
  onPaste={handlePaste}
- placeholder={isResolved ? 'Ticket resuelto — chat de solo lectura' : 'Escribe un mensaje o pega una imagen...'}
- disabled={sending || isResolved}
+ placeholder={isReadOnly ? (isCancelled ? 'Ticket cancelado — chat de solo lectura' : 'Ticket resuelto — chat de solo lectura') : 'Escribe un mensaje o pega una imagen...'}
+ disabled={sending || isReadOnly}
  className="flex-1 rounded-full border border-border bg-muted px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
  />
  <Button
  type="submit"
  size="sm"
- disabled={(!messageText.trim() && pending.length === 0) || sending || isResolved}
+ disabled={(!messageText.trim() && pending.length === 0) || sending || isReadOnly}
  className="rounded-full h-9 w-9 p-0 shrink-0"
  >
  {sending ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}

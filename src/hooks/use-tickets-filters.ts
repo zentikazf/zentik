@@ -8,7 +8,10 @@ import type { TicketStatus } from '@/types/ticket.types';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────
 
-export type StatusTab = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'all';
+// #43: CLOSED («Cancelados») pasa a ser un tab válido (dejó de ser tombstone puro,
+// ahora es un estado vivo). IN_REVIEW sigue en el set para poder filtrar los
+// tickets históricos que quedaron en ese estado retirado.
+export type StatusTab = 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED' | 'all';
 
 export type TicketCategoryType = 'SUPPORT_REQUEST' | 'NEW_DEVELOPMENT';
 
@@ -60,7 +63,7 @@ const COOKIE_DAYS = 30;
  */
 const PRESERVED_PARAMS = ['ticket', 'panel'] as const;
 
-const VALID_TABS: StatusTab[] = ['OPEN', 'IN_PROGRESS', 'IN_REVIEW', 'RESOLVED', 'all'];
+const VALID_TABS: StatusTab[] = ['OPEN', 'IN_PROGRESS', 'IN_REVIEW', 'RESOLVED', 'CLOSED', 'all'];
 // Las criticidades válidas NO se listan acá: el parseo (y el descarte de valores
 // desconocidos) vive en `parseCriticalityCsv` — fuente única (#42 Fase 3, paso A).
 const VALID_CATEGORIES: TicketCategoryType[] = ['SUPPORT_REQUEST', 'NEW_DEVELOPMENT'];
@@ -96,7 +99,7 @@ function parseEnumArray<T extends string>(value: string | null, allowed: T[]): T
  */
 export function parseFiltersFromSearchParams(sp: URLSearchParams): TicketsFilters {
   const rawStatus = sp.get('status');
-  // Legacy: ?status=CLOSED → degrada a OPEN (feature #10)
+  // #43: CLOSED («Cancelados») es un tab válido; un status desconocido cae a OPEN.
   const status: StatusTab =
     rawStatus && VALID_TABS.includes(rawStatus as StatusTab)
       ? (rawStatus as StatusTab)
@@ -251,9 +254,7 @@ export function useTicketsFilters() {
       if (trimmed.length === 0) return;
       // Sanity check: que parsee como URLSearchParams valido
       const parsed = new URLSearchParams(trimmed);
-      const status = parsed.get('status');
-      // Defensa: cookie con ?status=CLOSED (legacy) → ignorar el param
-      if (status === 'CLOSED') parsed.delete('status');
+      // #43: ?status=CLOSED («Cancelados») volvió a ser un tab válido — ya no se degrada.
       const cleanedQs = parsed.toString();
       if (cleanedQs.length === 0) return;
       router.replace(`${pathname}?${cleanedQs}`, { scroll: false });
