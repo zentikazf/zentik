@@ -30,16 +30,16 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
  NEW_PROJECT: { label: 'Nuevo Proyecto', color: 'bg-primary/10 text-primary' },
 };
 
-// Tabs del portal estilo admin: dot + contador. SIN tab "Cerrados" (colapsa
-// en Resueltos — feature #12). Las etiquetas reusan STATUS_LABEL salvo el
-// plural de "Todos".
+// Tabs del portal estilo admin: dot + contador. #43: 3 estados vivos visibles
+// (Nuevos/En curso/Resueltos) + Todos. «En revisión» se retiró del ciclo (los
+// históricos quedan accesibles bajo Todos); una cancelación aparece bajo Todos
+// con badge «Cancelado». Etiquetas alineadas con la fuente única STATUS_LABEL.
 type StatusTab = 'all' | 'OPEN' | 'IN_PROGRESS' | 'IN_REVIEW' | 'RESOLVED';
 
 const tabConfig: { value: StatusTab; label: string; dotColor: string }[] = [
  { value: 'all', label: 'Todos', dotColor: '' },
- { value: 'OPEN', label: 'Abiertos', dotColor: STATUS_DOT.OPEN },
- { value: 'IN_PROGRESS', label: 'En Proceso', dotColor: STATUS_DOT.IN_PROGRESS },
- { value: 'IN_REVIEW', label: 'En Revision', dotColor: STATUS_DOT.IN_REVIEW },
+ { value: 'OPEN', label: 'Nuevos', dotColor: STATUS_DOT.OPEN },
+ { value: 'IN_PROGRESS', label: 'En curso', dotColor: STATUS_DOT.IN_PROGRESS },
  { value: 'RESOLVED', label: 'Resueltos', dotColor: STATUS_DOT.RESOLVED },
 ];
 

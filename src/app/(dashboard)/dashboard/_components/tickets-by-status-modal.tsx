@@ -22,6 +22,7 @@ import type {
   TicketsBreakdownResponse,
   TicketStatusActive,
 } from '@/types/tickets-breakdown';
+import { STATUS_LABEL } from '@/components/tickets/ticket-status-machine';
 
 interface Props {
   open: boolean;
@@ -38,16 +39,19 @@ const CATEGORY_LABELS: Record<TicketCategoryActive, string> = {
   NEW_DEVELOPMENT: 'Desarrollo',
 };
 
+// #43: labels desde la fuente única STATUS_LABEL (Nuevo/En curso/En revisión/
+// Resuelto). El dot/accent es la paleta de analítica de este modal (info→success),
+// distinta del color de estado del listado — se mantiene a propósito.
 const STATUSES: {
   key: TicketStatusActive;
   label: string;
   dot: string;
   accent: string;
 }[] = [
-  { key: 'OPEN',        label: 'Abierto',     dot: 'bg-info',        accent: 'text-info' },
-  { key: 'IN_PROGRESS', label: 'En progreso', dot: 'bg-warning',     accent: 'text-warning' },
-  { key: 'IN_REVIEW',   label: 'En revisión', dot: 'bg-primary',     accent: 'text-primary' },
-  { key: 'RESOLVED',    label: 'Resuelto',    dot: 'bg-success',     accent: 'text-success' },
+  { key: 'OPEN',        label: STATUS_LABEL.OPEN,        dot: 'bg-info',    accent: 'text-info' },
+  { key: 'IN_PROGRESS', label: STATUS_LABEL.IN_PROGRESS, dot: 'bg-warning', accent: 'text-warning' },
+  { key: 'IN_REVIEW',   label: STATUS_LABEL.IN_REVIEW,   dot: 'bg-primary', accent: 'text-primary' },
+  { key: 'RESOLVED',    label: STATUS_LABEL.RESOLVED,    dot: 'bg-success', accent: 'text-success' },
 ];
 
 // ─── Helpers locales ─────────────────────────────────────────────────

@@ -37,6 +37,7 @@ import {
   Wifi,
   WifiOff,
   Eye,
+  XCircle,
 } from 'lucide-react';
 import { api, ApiError, getToken } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
@@ -73,11 +74,15 @@ interface CategoryConfig {
   criticality: Criticality;
 }
 
+// #43: labels alineados con la fuente única (STATUS_LABEL). «Cancelados» (CLOSED)
+// es un tab vivo; «En revisión» queda como tombstone (se filtra si count=0, ver
+// visibleTabs). Los dotColor espejan STATUS_DOT.
 const tabConfig: { value: StatusTab; label: string; icon: React.ElementType; dotColor: string }[] = [
-  { value: 'OPEN', label: 'Abierto', icon: CircleDot, dotColor: 'bg-destructive' },
-  { value: 'IN_PROGRESS', label: 'En progreso', icon: Loader2, dotColor: 'bg-warning' },
-  { value: 'IN_REVIEW', label: 'En revision', icon: Eye, dotColor: 'bg-info' },
+  { value: 'OPEN', label: 'Nuevo', icon: CircleDot, dotColor: 'bg-destructive' },
+  { value: 'IN_PROGRESS', label: 'En curso', icon: Loader2, dotColor: 'bg-warning' },
+  { value: 'IN_REVIEW', label: 'En revisión', icon: Eye, dotColor: 'bg-info' },
   { value: 'RESOLVED', label: 'Resuelto', icon: CheckCircle2, dotColor: 'bg-success' },
+  { value: 'CLOSED', label: 'Cancelados', icon: XCircle, dotColor: 'bg-muted-foreground' },
 ];
 
 const categoryLabelMap: Record<string, string> = {
@@ -454,9 +459,21 @@ export default function TicketsPage() {
       IN_PROGRESS: stats?.IN_PROGRESS ?? 0,
       IN_REVIEW: stats?.IN_REVIEW ?? 0,
       RESOLVED: stats?.RESOLVED ?? 0,
+      CLOSED: stats?.CLOSED ?? 0,
       all: stats?.TOTAL ?? 0,
     };
   }, [stats]);
+
+  // #43: los 4 estados vivos (Nuevo/En curso/Resuelto/Cancelados) + un tab
+  // tombstone «En revisión» que se muestra SOLO si quedan históricos ahí (el
+  // estado se retiró; el tab se autooculta al drenarse). Se mantiene visible si
+  // es el tab activo, para no dejarlo "huérfano" si su último ticket se drena.
+  const visibleTabs = useMemo(() => {
+    return tabConfig.filter((t) => {
+      if (t.value === 'IN_REVIEW') return counts.IN_REVIEW > 0 || activeTab === 'IN_REVIEW';
+      return true;
+    });
+  }, [counts.IN_REVIEW, activeTab]);
 
   // Filtros del toolbar simple (criticality basico, category basico) usan
   // el primer item del array si esta seteado, para mantener compatibilidad
@@ -802,7 +819,7 @@ export default function TicketsPage() {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <TabsList className="w-full sm:w-auto overflow-x-auto">
-            {tabConfig.map((tab) => (
+            {visibleTabs.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5 text-xs">
                 {tab.dotColor && <div className={cn('h-1.5 w-1.5 rounded-full', tab.dotColor)} />}
                 {tab.label}

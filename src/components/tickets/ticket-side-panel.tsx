@@ -329,6 +329,26 @@ export function TicketSidePanel({
                 'flex flex-col gap-3 min-h-0 overflow-y-auto',
                 !expanded && 'border-t border-border pt-3',
               )}>
+                {/* #43 T8: banner del ticket cancelado. Distingue el cierre
+                    automático por cliente deshabilitado (closeReason null — el
+                    único cierre que no setea motivo) de la cancelación manual
+                    (siempre trae closeReason + comentario del staff). */}
+                {ticket.status === 'CLOSED' && (
+                  <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs">
+                    {ticket.closeReason == null ? (
+                      <p className="text-muted-foreground">
+                        <span className="font-semibold text-foreground">Cerrado automáticamente:</span>{' '}
+                        cliente deshabilitado. Se reabrirá a su estado anterior si el cliente vuelve a activarse.
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        <span className="font-semibold text-foreground">Ticket cancelado.</span>{' '}
+                        {ticket.closeNote ? <span className="italic">«{ticket.closeNote}»</span> : 'Sin comentario.'}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* 1) Action bar */}
                 <TicketActionBar
                   ticket={ticket}

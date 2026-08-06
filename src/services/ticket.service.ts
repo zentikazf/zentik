@@ -54,6 +54,14 @@ export const ticketService = {
     api.patch<TicketDetail>(`/tickets/${ticketId}`, input),
 
   /**
+   * Cancelar ticket (#43). Reutiliza el estado CLOSED como «Cancelado» via el
+   * endpoint dedicado (comentario obligatorio, solo staff). No pasa por el PATCH
+   * de estado — el backend rechaza CLOSED por esa vía.
+   */
+  cancel: (ticketId: string, input: { reason: string; note: string }) =>
+    api.post<TicketDetail>(`/tickets/${ticketId}/close`, input),
+
+  /**
    * Categorías internas de la org (las tipifica el equipo, no el cliente).
    * El backend devuelve activas **e inactivas**: quien solo quiera las activas
    * (el diálogo de reclasificación) filtra por `isActive`.

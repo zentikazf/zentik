@@ -65,8 +65,10 @@ function describeEvent(ev: TicketEvent): string {
   if (ev.type === 'ASSIGNED') return 'Usuario asignado';
   if (ev.type === 'UNASSIGNED') return 'Usuario removido';
   if (ev.type === 'CLOSED') {
+    // #43: CLOSED = «Cancelado». El motivo interno (metadata.note) NUNCA se
+    // vuelca acá — solo el enum de motivo, que no es sensible.
     const reason = (ev.metadata as Record<string, unknown> | null)?.reason as string | undefined;
-    return reason ? `Cerrado (${reason})` : 'Cerrado';
+    return reason ? `Cancelado (${reason})` : 'Cancelado';
   }
   if (ev.type === 'REOPENED') return 'Reabierto';
   if (ev.type === 'FIRST_RESPONSE') return 'El equipo respondió por primera vez';
