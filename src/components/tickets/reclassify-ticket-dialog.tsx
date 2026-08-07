@@ -27,12 +27,28 @@ import type {
   TicketDetail,
 } from '@/types/ticket.types';
 
+/** #44: qué eje de la tipificación le falta al ticket (contrato con el backend). */
+type MissingClassification = 'ticketType' | 'categoryConfig';
+
 interface ReclassifyTicketDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ticket: TicketDetail;
-  /** Se llama tras reclasificar, para refrescar el ticket y su timeline. */
-  onReclassified?: () => void;
+  /**
+   * En modo `reclassify` (default) se llama tras guardar para refrescar el ticket.
+   * En modo `gate` (#44) el padre lo usa para **reintentar la resolución** una vez
+   * completada la tipificación; puede ser async y lanzar (el diálogo lo muestra y
+   * queda abierto, igual que el gate de horas).
+   */
+  onReclassified?: () => void | Promise<void>;
+  /**
+   * #44 — Modo "candado al resolver". Aditivo: sin esta prop el diálogo se comporta
+   * exactamente igual que antes. En `gate` siembra el motivo, acepta confirmar
+   * tras completar lo que falta, y resalta `missingFields`.
+   */
+  mode?: 'reclassify' | 'gate';
+  /** #44 — Ejes que el backend reportó faltantes (`details.missing`), para resaltarlos. */
+  missingFields?: MissingClassification[];
 }
 
 interface ReclassifyForm {
@@ -40,6 +56,16 @@ interface ReclassifyForm {
   criticality: string;
   categoryConfigId: string;
   reason: string;
+}
+
+/** #44 — Texto del motivo sembrado en modo gate (editable, sin debilitar la validación). */
+const GATE_REASON_SEED = 'Tipificación al resolver';
+
+function missingFieldsLabel(missing: MissingClassification[]): string {
+  const labels = missing.map((f) =>
+    f === 'ticketType' ? 'el tipo de solicitud' : 'la categoría interna',
+  );
+  return `Antes de resolver, completá ${labels.join(' y ')}.`;
 }
 
 /**
@@ -58,9 +84,15 @@ export function ReclassifyTicketDialog({
   onOpenChange,
   ticket,
   onReclassified,
+  mode = 'reclassify',
+  missingFields,
 }: ReclassifyTicketDialogProps) {
   const { orgId } = useOrg();
   const router = useRouter();
+
+  const isGate = mode === 'gate';
+  const needsType = isGate && (missingFields ?? []).includes('ticketType');
+  const needsCategory = isGate && (missingFields ?? []).includes('categoryConfig');
 
   const [types, setTypes] = useState<TicketType[]>([]);
   const [typesBlocked, setTypesBlocked] = useState(false);
@@ -82,9 +114,11 @@ export function ReclassifyTicketDialog({
       ticketTypeId: ticket.ticketTypeId ?? '',
       criticality: ticket.criticality ?? '',
       categoryConfigId: ticket.categoryConfig?.id ?? '',
-      reason: '',
+      // #44: en modo gate sembramos un motivo editable (la primera tipificación no
+      // tiene un "porqué" natural). No debilita la validación del backend (MinLength 3).
+      reason: isGate ? GATE_REASON_SEED : '',
     });
-  }, [open, ticket.ticketTypeId, ticket.criticality, ticket.categoryConfig?.id]);
+  }, [open, isGate, ticket.ticketTypeId, ticket.criticality, ticket.categoryConfig?.id]);
 
   useEffect(() => {
     if (!open || !orgId) return;
@@ -150,20 +184,48 @@ export function ReclassifyTicketDialog({
       input.categoryConfigId = form.categoryConfigId;
     }
 
-    if (!input.ticketTypeId && !input.criticality && !input.categoryConfigId) {
+    const hasChanges = !!(input.ticketTypeId || input.criticality || input.categoryConfigId);
+
+    if (isGate) {
+      // #44: lo que el backend marcó como faltante tiene que quedar completo. No se
+      // exige "que algo cambie" (confirmar el tipo que ya eligió el cliente + agregar
+      // la categoría es válido); se exige que no quede ningún eje vacío.
+      const stillMissing = (missingFields ?? []).filter((f) =>
+        f === 'ticketType' ? !form.ticketTypeId : !form.categoryConfigId,
+      );
+      if (stillMissing.length) {
+        toast.error('Falta tipificar', missingFieldsLabel(stillMissing));
+        return;
+      }
+    } else if (!hasChanges) {
       toast.error('Sin cambios', 'Cambiá el tipo, la criticidad o la categoría antes de guardar');
       return;
     }
 
     setSaving(true);
     try {
-      await ticketService.reclassify(orgId, ticket.id, input);
-      toast.success('Ticket reclasificado', 'El cambio quedó registrado en el historial');
-      onOpenChange(false);
-      onReclassified?.();
-      router.refresh();
+      // Puede no haber cambios en modo gate (confirmar valores ya presentes): en ese
+      // caso no se escribe una reclasificación vacía, se pasa directo al reintento.
+      if (hasChanges) {
+        await ticketService.reclassify(orgId, ticket.id, input);
+      }
+
+      if (isGate) {
+        // El padre reintenta la resolución con el ticket ya tipificado. Si lanza
+        // (p.ej. gate de horas), lo mostramos y el diálogo queda abierto — mismo
+        // molde que TaskHoursGateDialog.onLogged.
+        await onReclassified?.();
+        toast.success('Ticket tipificado', 'Se completó la tipificación y se resolvió el ticket');
+        onOpenChange(false);
+        router.refresh();
+      } else {
+        toast.success('Ticket reclasificado', 'El cambio quedó registrado en el historial');
+        onOpenChange(false);
+        onReclassified?.();
+        router.refresh();
+      }
     } catch (err) {
-      toast.error('Error', getApiErrorMessage(err, 'No se pudo reclasificar el ticket'));
+      toast.error('Error', getApiErrorMessage(err, 'No se pudo completar la tipificación'));
     } finally {
       setSaving(false);
     }
@@ -173,23 +235,27 @@ export function ReclassifyTicketDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Reclasificar ticket</DialogTitle>
+          <DialogTitle>{isGate ? 'Tipificá antes de resolver' : 'Reclasificar ticket'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Cambiá cómo el equipo tipifica este ticket. Los plazos del SLA no se recalculan: quedan
-            como se fijaron al crearlo.
+            {isGate
+              ? 'Para resolver el ticket, el equipo tiene que tipificarlo. Completá lo que falta. Los plazos del SLA no se recalculan.'
+              : 'Cambiá cómo el equipo tipifica este ticket. Los plazos del SLA no se recalculan: quedan como se fijaron al crearlo.'}
           </p>
 
           <div className="space-y-2">
-            <Label>Tipo de solicitud</Label>
+            <Label>
+              Tipo de solicitud
+              {needsType && <span className="ml-1 text-destructive">*</span>}
+            </Label>
             <Select
               value={form.ticketTypeId}
               onValueChange={(v) => setForm({ ...form, ticketTypeId: v })}
               disabled={loadingOptions || types.length === 0}
             >
-              <SelectTrigger>
+              <SelectTrigger className={needsType ? 'ring-1 ring-destructive/50' : undefined}>
                 <SelectValue
                   placeholder={
                     loadingOptions
@@ -235,13 +301,16 @@ export function ReclassifyTicketDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Categoría interna</Label>
+            <Label>
+              Categoría interna
+              {needsCategory && <span className="ml-1 text-destructive">*</span>}
+            </Label>
             <Select
               value={form.categoryConfigId}
               onValueChange={(v) => setForm({ ...form, categoryConfigId: v })}
               disabled={loadingOptions || categories.length === 0}
             >
-              <SelectTrigger>
+              <SelectTrigger className={needsCategory ? 'ring-1 ring-destructive/50' : undefined}>
                 <SelectValue
                   placeholder={
                     loadingOptions
@@ -280,7 +349,11 @@ export function ReclassifyTicketDialog({
           </div>
 
           <Button className="w-full" onClick={handleSubmit} disabled={!reason || saving}>
-            {saving ? 'Guardando...' : 'Reclasificar'}
+            {saving
+              ? 'Guardando...'
+              : isGate
+                ? 'Guardar y resolver'
+                : 'Reclasificar'}
           </Button>
         </div>
       </DialogContent>

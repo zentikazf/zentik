@@ -15,6 +15,9 @@ import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatHoursFromMinutes, formatWorkedOn } from '@/lib/utils';
+import { ticketService } from '@/services/ticket.service';
+import { ReclassifyTicketDialog } from '@/components/tickets/reclassify-ticket-dialog';
+import type { TicketDetail } from '@/types/ticket.types';
 
 interface ApprovalEntry {
  minutes: number;
@@ -48,6 +51,12 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  // ofrecemos "aprobar sin horas (0 h)" con motivo (auditado).
  const [escapeMode, setEscapeMode] = useState(false);
  const [escapeReason, setEscapeReason] = useState('');
+ // #44 — gate de tipificación: aprobar resuelve el ticket asociado; si no está
+ // tipificado, el backend responde 409 y abrimos el diálogo de tipificación en modo
+ // gate. Al guardar, reintentamos la aprobación.
+ const [classifyOpen, setClassifyOpen] = useState(false);
+ const [classifyTicket, setClassifyTicket] = useState<TicketDetail | null>(null);
+ const [classifyMissing, setClassifyMissing] = useState<('ticketType' | 'categoryConfig')[]>([]);
 
  useEffect(() => {
  if (!open || !taskId) {
@@ -69,6 +78,41 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  .finally(() => setLoading(false));
  }, [open, taskId, onOpenChange]);
 
+ // #44 — el ticket asociado no está tipificado: cargar su detalle y abrir el diálogo
+ // de tipificación en modo gate (resalta lo que falta según `details.missing`).
+ const openClassifyGate = async (err: ApiError) => {
+ const d = (err.details || {}) as Record<string, unknown>;
+ const ticketId = typeof d.ticketId === 'string' ? d.ticketId : null;
+ if (!ticketId) {
+ toast.error('Error', err.message);
+ return;
+ }
+ const missing = Array.isArray(d.missing)
+ ? (d.missing.filter((m) => m === 'ticketType' || m === 'categoryConfig') as (
+ | 'ticketType'
+ | 'categoryConfig'
+ )[])
+ : [];
+ try {
+ const res = await ticketService.detail(ticketId);
+ setClassifyTicket(res.data);
+ setClassifyMissing(missing);
+ setClassifyOpen(true);
+ } catch {
+ toast.error('Error', 'No se pudo cargar el ticket para tipificar');
+ }
+ };
+
+ // #44 — tras tipificar, reintentar la aprobación (mismo POST). Puede lanzar (p. ej.
+ // gate de horas): el diálogo de tipificación lo muestra y queda abierto.
+ const retryApproveAfterClassify = async () => {
+ if (!taskId) return;
+ await api.post(`/tasks/${taskId}/approve`, {});
+ toast.success('Tarea aprobada', 'Se completó la tipificación y se aprobó la tarea');
+ onApproved?.();
+ onOpenChange(false);
+ };
+
  // H7 — la aprobación NO manda confirmedHours: el backend cobra las horas MANUALES
  // reales cargadas en la tarea. El modal solo confirma.
  const handleConfirm = async () => {
@@ -83,6 +127,12 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  onApproved?.();
  onOpenChange(false);
  } catch (err) {
+ // #44: aprobar resuelve el ticket → si no está tipificado, abrir el gate de
+ // tipificación en vez del toast genérico y reintentar la aprobación al guardar.
+ if (err instanceof ApiError && err.code === 'TICKET_CLASSIFICATION_REQUIRED') {
+ await openClassifyGate(err);
+ return;
+ }
  // H6: sin horas reales → ofrecer aprobar sin horas (el aprobador tiene manage:projects).
  if (err instanceof ApiError && err.code === 'WORK_HOURS_REQUIRED') {
  setEscapeMode(true);
@@ -118,6 +168,7 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  const variance = preview ? preview.realHours - (preview.originalEstimate || 0) : 0;
 
  return (
+ <>
  <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent className="sm:max-w-md">
  <DialogHeader>
@@ -257,5 +308,17 @@ export function TaskApprovalOtpModal({ taskId, open, onOpenChange, onApproved }:
  )}
  </DialogContent>
  </Dialog>
+
+ {classifyTicket && (
+ <ReclassifyTicketDialog
+ open={classifyOpen}
+ onOpenChange={setClassifyOpen}
+ ticket={classifyTicket}
+ mode="gate"
+ missingFields={classifyMissing}
+ onReclassified={retryApproveAfterClassify}
+ />
+ )}
+ </>
  );
 }

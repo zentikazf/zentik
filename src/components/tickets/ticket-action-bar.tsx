@@ -17,6 +17,7 @@ import { useOrg } from '@/providers/org-provider';
 import { ticketService } from '@/services/ticket.service';
 import { TaskHoursGateDialog } from '@/components/task/task-hours-gate-dialog';
 import { CancelTicketDialog } from './cancel-ticket-dialog';
+import { ReclassifyTicketDialog } from './reclassify-ticket-dialog';
 import {
   STATUS_LABEL,
   getSelectableTransitions,
@@ -59,6 +60,14 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
     targetStatus: string;
     canCloseWithoutHours: boolean;
     logHoursEndpoint?: string;
+    payload: { status?: TicketStatus; assigneeId?: string | null };
+  } | null>(null);
+
+  // #44 — gate de tipificación reactivo: resolver sin tipificar abre el diálogo de
+  // tipificación en modo gate y, al guardar, reintenta la resolución (patrón del gate de horas).
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [classifyInfo, setClassifyInfo] = useState<{
+    missing: ('ticketType' | 'categoryConfig')[];
     payload: { status?: TicketStatus; assigneeId?: string | null };
   } | null>(null);
 
@@ -120,6 +129,20 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
       // Bloqueo duro (sin escape): toast claro, la nota de crédito es H9.
       if (err instanceof ApiError && err.code === 'TASK_HOURS_BILLED') {
         toast.error('No se puede reabrir: ya está facturada', err.message);
+        return;
+      }
+      // #44: resolver un ticket sin tipificar → abrir el diálogo de tipificación en
+      // modo gate (en vez del toast genérico) y, al guardar, reintentar la resolución.
+      if (err instanceof ApiError && err.code === 'TICKET_CLASSIFICATION_REQUIRED') {
+        const d = (err.details || {}) as Record<string, unknown>;
+        const missing = Array.isArray(d.missing)
+          ? (d.missing.filter((m) => m === 'ticketType' || m === 'categoryConfig') as (
+              | 'ticketType'
+              | 'categoryConfig'
+            )[])
+          : [];
+        setClassifyInfo({ missing, payload });
+        setClassifyOpen(true);
         return;
       }
       if (err instanceof ApiError && err.code === 'WORK_HOURS_REQUIRED' && ticket.task?.id) {
@@ -237,6 +260,21 @@ export function TicketActionBar({ ticket, onUpdated }: TicketActionBarProps) {
             closeWithoutHoursReason: reason,
           });
           const res = await ticketService.update(ticket.id, gateInfo.payload);
+          onUpdated(res.data);
+        }}
+      />
+    )}
+
+    {classifyInfo && (
+      <ReclassifyTicketDialog
+        open={classifyOpen}
+        onOpenChange={setClassifyOpen}
+        ticket={ticket}
+        mode="gate"
+        missingFields={classifyInfo.missing}
+        onReclassified={async () => {
+          // Tipificado → reintentar la resolución con el mismo payload.
+          const res = await ticketService.update(ticket.id, classifyInfo.payload);
           onUpdated(res.data);
         }}
       />
