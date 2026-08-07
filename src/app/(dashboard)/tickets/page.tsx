@@ -357,13 +357,19 @@ export default function TicketsPage() {
     syncPanelUrl({ ticket: ticketId, panel: 'open' });
   };
 
-  const closePanel = (open: boolean) => {
-    setPanelOpen(open);
-    if (!open) {
-      syncPanelUrl({ ticket: null, panel: null });
-      setPanelTicketId(null);
-    }
-  };
+  // #45 T7: memoizado (era la única función del archivo sin useCallback). Se pasa
+  // como `onOpenChange` al panel y al Sheet; sin memoizar, su identidad cambiaba en
+  // cada render y hacía refetchear el detalle del ticket (ver TicketSidePanel).
+  const closePanel = useCallback(
+    (open: boolean) => {
+      setPanelOpen(open);
+      if (!open) {
+        syncPanelUrl({ ticket: null, panel: null });
+        setPanelTicketId(null);
+      }
+    },
+    [syncPanelUrl],
+  );
 
   // ─── Export CSV (T12) ────────────────────────────────────────
   const handleExportCsv = useCallback(async () => {

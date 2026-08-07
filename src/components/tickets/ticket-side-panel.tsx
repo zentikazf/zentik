@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Sheet,
@@ -108,6 +108,14 @@ export function TicketSidePanel({
     });
   };
 
+  // #45 T7: `onOpenChange` (= `closePanel` del padre, sin useCallback) cambiaba de
+  // identidad en CADA render de TicketsPage → este efecto refetcheaba el ticket en
+  // cada render (la "tormenta" de GET /tickets/:id, en dev Y prod; StrictMode solo
+  // la duplica). Se lee vía ref para que el efecto dependa SOLO de [ticketId, open]
+  // y no de la identidad del callback. Robusto aunque el padre pase uno inestable.
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+
   // Cargar ticket cuando cambia el id
   useEffect(() => {
     if (!ticketId || !open) {
@@ -127,14 +135,14 @@ export function TicketSidePanel({
       .catch((err) => {
         if (!cancelled) {
           toast.error('Error', err instanceof ApiError ? err.message : 'No se pudo cargar el ticket');
-          onOpenChange(false);
+          onOpenChangeRef.current(false);
         }
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [ticketId, open, onOpenChange]);
+  }, [ticketId, open]);
 
   const handleUpdated = (updated: TicketDetail) => {
     setTicket(updated);
