@@ -36,12 +36,14 @@ interface TicketChatProps {
   className?: string;
 }
 
-/** Adjunto pendiente de enviar (aun no subido). `preview` es un object URL para
- * imagenes, null para el resto. */
+/** Adjunto pendiente de enviar. `preview` es un object URL para imagenes, null
+ * para el resto. `fileId` se llena una vez subido: si un envio falla a mitad de
+ * batch, el reintento NO re-sube los que ya tienen fileId (cero huerfanos, #45). */
 interface PendingAttachment {
   id: string;
   file: File;
   preview: string | null;
+  fileId?: string;
 }
 
 /**
@@ -148,18 +150,38 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
     if ((!content && pending.length === 0) || !channelId || sending) return;
     setSending(true);
     try {
-      let fileIds: string[] = [];
+      let toAttach = pending;
       if (pending.length > 0) {
-        const uploaded = await Promise.all(
-          pending.map(async (p) => {
+        // allSettled (no all): un upload que falla NO tira los que si subieron.
+        // Los exitosos guardan su fileId en el item; si algo falla, se conservan
+        // en pending con su fileId y el reintento salta esos → cero huerfanos.
+        const results = await Promise.allSettled(
+          pending.map(async (p): Promise<PendingAttachment> => {
+            if (p.fileId) return p; // ya subido en un intento previo
             const formData = new FormData();
             formData.append('file', p.file);
             const res = await api.upload<any>('/files/upload?category=ATTACHMENT', formData);
-            return res.data?.id as string | undefined;
+            const fileId = res.data?.id as string | undefined;
+            if (!fileId) throw new Error('upload sin fileId');
+            return { ...p, fileId };
           }),
         );
-        fileIds = uploaded.filter((id): id is string => Boolean(id));
+        const next = results.map((r, i) => (r.status === 'fulfilled' ? r.value : pending[i]));
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          // Persistimos los fileId ya obtenidos y NO posteamos un mensaje a medias.
+          setPending(next);
+          toast.error(
+            'Adjuntos',
+            `No se pudieron subir ${failed} de ${pending.length} archivos. Reintentá.`,
+          );
+          return; // el finally libera `sending`
+        }
+        toAttach = next;
       }
+      const fileIds = toAttach
+        .map((p) => p.fileId)
+        .filter((id): id is string => Boolean(id));
       await api.post<any>(`/channels/${channelId}/messages`, {
         content: content || `📎 ${pending.map((p) => p.file.name).join(', ')}`,
         ...(fileIds.length > 0 && { fileIds }),
