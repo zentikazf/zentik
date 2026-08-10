@@ -1,4 +1,5 @@
 import { api } from '@/lib/api-client';
+import type { Criticality } from '@/lib/criticality';
 import type {
   CreateTicketCategoryConfigInput,
   ReclassifyTicketInput,
@@ -99,6 +100,13 @@ export const ticketService = {
       input,
     ),
 
+  /**
+   * Alta por STAFF. Espejo de `CreateAdminTicketDto`.
+   *
+   * `ticketTypeId` + `criticality` son la tipificación del equipo (#48 T10/T11):
+   * el tipo se persiste con `SLA_CASCADE_ENABLED` prendido o apagado, y la
+   * criticidad gana sobre la que derivaría de `categoryConfigId`.
+   */
   create: (
     orgId: string,
     body: {
@@ -109,6 +117,8 @@ export const ticketService = {
       clientId: string;
       projectId: string;
       categoryConfigId?: string;
+      ticketTypeId?: string;
+      criticality?: Criticality;
     },
   ) => api.post<TicketDetail>(`/organizations/${orgId}/tickets`, body),
 };

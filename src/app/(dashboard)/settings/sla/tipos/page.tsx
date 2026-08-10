@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   ChevronDown,
   ChevronRight,
+  EyeOff,
   Info,
   Pencil,
   Plus,
@@ -87,11 +88,19 @@ interface TypeForm {
   name: string;
   slug: string;
   isActive: boolean;
+  /** El ojito (#48 R1): si el tipo se le ofrece al cliente. */
+  clientVisible: boolean;
   /** Id del padre, o `ROOT_PARENT` para un tipo raíz. */
   parentId: string;
 }
 
-const EMPTY_FORM: TypeForm = { name: '', slug: '', isActive: true, parentId: ROOT_PARENT };
+const EMPTY_FORM: TypeForm = {
+  name: '',
+  slug: '',
+  isActive: true,
+  clientVisible: true,
+  parentId: ROOT_PARENT,
+};
 
 /** Recorrido en profundidad: la lista plana en el mismo orden en que se ve. */
 function flattenTree(nodes: TicketTypeNode[]): TicketTypeNode[] {
@@ -176,6 +185,15 @@ function TypeNodeRow({
               {!node.isActive && (
                 <Badge variant="secondary" className="text-[10px]">
                   Inactivo
+                </Badge>
+              )}
+              {/* #48 R1: el ojito apagado convierte al tipo en carpeta pura. Se
+                  marca en la fila porque es lo que explica que el cliente no lo
+                  vea en el portal aunque esté activo y contratado. */}
+              {!node.clientVisible && (
+                <Badge variant="secondary" className="gap-1 text-[10px]">
+                  <EyeOff className="h-3 w-3" />
+                  Carpeta
                 </Badge>
               )}
               {hasChildren && !isOpen && (
@@ -360,6 +378,7 @@ export default function TicketTypesPage() {
       name: node.name,
       slug: node.slug,
       isActive: node.isActive,
+      clientVisible: node.clientVisible,
       parentId: node.parentId ?? ROOT_PARENT,
     });
     setShowDialog(true);
@@ -420,6 +439,7 @@ export default function TicketTypesPage() {
           // Solo se manda el slug si cambió: renombrar no debe mover la clave estable.
           ...(slug && slug !== editing.slug ? { slug } : {}),
           isActive: form.isActive,
+          clientVisible: form.clientVisible,
           // `parentId` SOLO si cambió: el backend distingue ausente (no mueve)
           // de `null` (mover a raíz). Mandarlo siempre haría un recálculo de rama
           // en cada edición de nombre.
@@ -436,6 +456,8 @@ export default function TicketTypesPage() {
           name,
           ...(slug ? { slug } : {}),
           ...(parentId ? { parentId } : {}),
+          // Solo si el usuario lo apagó: ausente = el default del backend (`true`).
+          ...(form.clientVisible ? {} : { clientVisible: false }),
         });
         // El hijo recién creado tiene que quedar a la vista: se abre su padre.
         if (parentId) {
@@ -623,6 +645,24 @@ export default function TicketTypesPage() {
               <p className="text-[11px] text-muted-foreground">
                 Si lo dejás vacío se genera del nombre. Solo minúsculas, números y guiones.
               </p>
+            </div>
+
+            {/* El ojito (#48 R1/R5.8). Se muestra también al CREAR: una carpeta
+                se define como carpeta desde el momento en que se la crea. */}
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div className="pr-3">
+                <p className="text-sm font-medium">Visible para el cliente</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Apagado, el tipo funciona como <strong>carpeta</strong>: agrupa y ordena, pero el
+                  cliente no lo ve ni lo puede elegir en el portal. Sus hijos contratados se siguen
+                  ofreciendo. El equipo lo sigue viendo siempre, y un contrato sobre esta carpeta
+                  sigue resolviendo su SLA.
+                </p>
+              </div>
+              <Switch
+                checked={form.clientVisible}
+                onCheckedChange={(checked) => setForm({ ...form, clientVisible: checked })}
+              />
             </div>
 
             {editing && (

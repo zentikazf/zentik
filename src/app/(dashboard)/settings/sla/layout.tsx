@@ -53,7 +53,12 @@ export default function SlaSettingsLayout({ children }: { children: React.ReactN
 
       <div className="flex flex-wrap gap-1 border-b border-border">
         {slaNav.map((item) => {
-          const isActive = pathname === item.href;
+          // La tab queda activa también en sus SUBRUTAS (#48 T8: el centro de
+          // contratación vive en `/cobertura/[projectId]`). Con la igualdad
+          // exacta que había antes, entrar a un proyecto dejaba las 7 tabs
+          // apagadas y el usuario sin referencia de dónde estaba.
+          // El `/` del prefijo evita que `/cobertura` matchee `/coberturaX`.
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}
