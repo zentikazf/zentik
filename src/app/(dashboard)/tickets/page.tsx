@@ -44,6 +44,8 @@ import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ticketService } from '@/services/ticket.service';
+import { slaService } from '@/services/sla.service';
+import { buildTicketTypeAncestorNames, ticketTypeFullLabel } from '@/lib/ticket-type-path';
 import { useBadgeStore } from '@/stores/use-badge-store';
 import { useTicketsSocket } from '@/hooks/use-tickets-socket';
 import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
@@ -66,6 +68,7 @@ import {
   criticalityStyle,
 } from '@/lib/criticality';
 import type { Criticality } from '@/lib/criticality';
+import type { AvailableTicketType } from '@/types/sla.types';
 import type { TicketListItem, TicketStats } from '@/types/ticket.types';
 
 interface CategoryConfig {
@@ -133,17 +136,40 @@ export default function TicketsPage() {
   const [clientProjects, setClientProjects] = useState<{ id: string; name: string }[]>([]);
   const [categoryConfigs, setCategoryConfigs] = useState<CategoryConfig[]>([]);
 
+  /**
+   * Tipos de solicitud ofrecibles en el PROYECTO elegido (#48 T11). Sale del
+   * endpoint de staff (`available-ticket-types`), que NO filtra por
+   * `clientVisible`: el equipo ve todo el árbol, carpetas incluidas.
+   */
+  const [availableTypes, setAvailableTypes] = useState<AvailableTicketType[]>([]);
+  const [loadingTypes, setLoadingTypes] = useState(false);
+
   // Panel lateral
   const [panelTicketId, setPanelTicketId] = useState<string | null>(initialTicketParam);
   const [panelOpen, setPanelOpen] = useState(initialPanelOpen && !!initialTicketParam);
 
+  /**
+   * #48 T11 — el formulario del alta por staff.
+   *
+   * `category` (el enum legacy SUPPORT_REQUEST/NEW_DEVELOPMENT) NO está más en el
+   * form: quedó fijo en `SUPPORT_REQUEST` (decisión 10 del dueño). Lo único que
+   * decide es el prefijo del nombre del canal, y tener dos campos llamados "Tipo"
+   * era la fuente del malentendido. La etiqueta "Tipo" ahora es del árbol de tipos.
+   *
+   * `priority` tampoco está: la columna existe pero la UI ya no la lee como eje
+   * propio — el badge resuelve `criticality || categoryConfig.criticality ||
+   * priority`, o sea que `priority` es solo el fallback histórico de la
+   * criticidad. El campo que decía "Criticidad" escribía `priority`; ahora
+   * escribe `criticality`, que es lo que el usuario creía estar eligiendo. Sin
+   * mandarla, el backend la deja en su default (`MEDIUM`).
+   */
   const [form, setForm] = useState({
     clientId: '',
     projectId: '',
     title: '',
     description: '',
-    category: '',
-    priority: 'MEDIUM',
+    ticketTypeId: '',
+    criticality: '' as '' | Criticality,
     categoryConfigId: '',
   });
 
@@ -284,6 +310,53 @@ export default function TicketsPage() {
     }
   }, [form.clientId, orgId]);
 
+  /**
+   * Tipos disponibles del proyecto elegido (#48 T11).
+   *
+   * La disponibilidad es del par (proyecto, tipo): sin proyecto no hay lista, y
+   * al cambiar de proyecto el tipo elegido se limpia — si no, se podría mandar un
+   * tipo que el proyecto nuevo no contrata y el POST lo rechazaría recién al
+   * guardar.
+   *
+   * Es el endpoint de STAFF: no filtra por `clientVisible`, así que el equipo ve
+   * también las carpetas (#48 R2.1).
+   */
+  useEffect(() => {
+    if (!orgId || !form.projectId) {
+      setAvailableTypes([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingTypes(true);
+    slaService
+      .getAvailableTicketTypes(orgId, form.projectId)
+      .then((res) => {
+        if (cancelled) return;
+        setAvailableTypes(res.data.types ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableTypes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTypes(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, form.projectId]);
+
+  /**
+   * Contexto del padre para desambiguar homónimos entre ramas: el selector del
+   * staff muestra `Incidencia › Error del sistema`. Acá el catálogo llega
+   * completo (el endpoint de staff no oculta carpetas), así que la cadena no se
+   * corta — a diferencia del portal, donde un padre oculto no viaja y por eso los
+   * ancestros se resuelven en el backend (#48 T4).
+   */
+  const typeAncestorNames = useMemo(
+    () => buildTicketTypeAncestorNames(availableTypes),
+    [availableTypes],
+  );
+
   // ─── WebSocket: actualizar SIN saltar de página (feature #12) ─
   // Patch in-place del ticket visible para updated/assigned (no refetch que
   // cambie la página). created/closed NO recargan la página actual saltando a
@@ -420,8 +493,27 @@ export default function TicketsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!orgId || !form.clientId || !form.projectId || !form.title.trim() || !form.category) {
+    if (!orgId || !form.clientId || !form.projectId || !form.title.trim()) {
       toast.error('Error', 'Completa todos los campos requeridos');
+      return;
+    }
+    // #48 T11 / R8.3 — el ticket tiene que nacer TIPIFICABLE. El candado de #44
+    // exige tipo Y categoría interna para poder resolver, y los deadlines se
+    // congelan al crear: pedirlo acá evita el 409 más tarde, cuando ya no se
+    // puede arreglar sin reclasificar.
+    //
+    // Se exige solo si la organización TIENE el catálogo cargado: con la lista
+    // vacía, exigirlo dejaría el alta de tickets bloqueada sin salida desde esta
+    // pantalla.
+    if (availableTypes.length > 0 && !form.ticketTypeId) {
+      toast.error('Falta el tipo', 'Elegí el tipo de solicitud para que el ticket se pueda resolver');
+      return;
+    }
+    if (categoryConfigs.length > 0 && !form.categoryConfigId) {
+      toast.error(
+        'Falta la categoría interna',
+        'Sin categoría interna el ticket no se va a poder resolver (candado de tipificación)',
+      );
       return;
     }
     setCreating(true);
@@ -431,8 +523,11 @@ export default function TicketsPage() {
         projectId: form.projectId,
         title: form.title.trim(),
         description: form.description.trim() || undefined,
-        category: form.category,
-        priority: form.priority,
+        // Enum legacy fijo (decisión 10 del dueño): solo decide el prefijo del
+        // nombre del canal. La etiqueta "Tipo" del modal es del árbol de tipos.
+        category: 'SUPPORT_REQUEST',
+        ...(form.ticketTypeId && { ticketTypeId: form.ticketTypeId }),
+        ...(form.criticality && { criticality: form.criticality }),
         ...(form.categoryConfigId && { categoryConfigId: form.categoryConfigId }),
       });
       const ticketNum = res.data.ticketNumber || res.data.id?.slice(-8).toUpperCase();
@@ -443,8 +538,8 @@ export default function TicketsPage() {
         projectId: '',
         title: '',
         description: '',
-        category: '',
-        priority: 'MEDIUM',
+        ticketTypeId: '',
+        criticality: '',
         categoryConfigId: '',
       });
       await loadTickets();
@@ -756,39 +851,72 @@ export default function TicketsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* #48 T11 — "Tipo" es AHORA el árbol de tipos de solicitud
+                      (el enum legacy quedó fijo en SUPPORT_REQUEST, decisión 10:
+                      solo decidía el prefijo del canal y duplicaba la etiqueta). */}
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Tipo</Label>
+                    <Label className="text-muted-foreground">
+                      Tipo{availableTypes.length > 0 && <span className="ml-1 text-destructive">*</span>}
+                    </Label>
                     <Select
-                      value={form.category || 'none'}
-                      onValueChange={(v) => setForm({ ...form, category: v === 'none' ? '' : v })}
+                      value={form.ticketTypeId || 'none'}
+                      onValueChange={(v) => setForm({ ...form, ticketTypeId: v === 'none' ? '' : v })}
+                      disabled={!form.projectId || loadingTypes || availableTypes.length === 0}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar tipo" />
+                        <SelectValue
+                          placeholder={
+                            !form.projectId
+                              ? 'Elegí un proyecto primero'
+                              : loadingTypes
+                                ? 'Cargando...'
+                                : availableTypes.length === 0
+                                  ? 'Sin tipos disponibles'
+                                  : 'Seleccionar tipo'
+                          }
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Seleccionar...</SelectItem>
-                        <SelectItem value="SUPPORT_REQUEST">Soporte / Error</SelectItem>
-                        <SelectItem value="NEW_DEVELOPMENT">Nueva Funcionalidad</SelectItem>
+                        {availableTypes.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {ticketTypeFullLabel(typeAncestorNames, t)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Criticidad REAL (columna `criticality`). Antes esta etiqueta
+                      escribía `priority`, que es otra columna y otro dominio. */}
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Criticidad</Label>
-                    <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
+                    <Select
+                      value={form.criticality || 'none'}
+                      onValueChange={(v) =>
+                        setForm({ ...form, criticality: v === 'none' ? '' : (v as Criticality) })
+                      }
+                    >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Según la categoría interna" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="LOW">Baja</SelectItem>
-                        <SelectItem value="MEDIUM">Media</SelectItem>
-                        <SelectItem value="HIGH">Alta</SelectItem>
+                        <SelectItem value="none">Según la categoría interna</SelectItem>
+                        {CRITICALITY_VALUES.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            <span className={cn(CRITICALITY_TEXT_CLASS[c])}>
+                              {CRITICALITY_LABEL[c]}
+                            </span>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 {categoryConfigs.length > 0 && (
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Categoria SLA</Label>
+                    <Label className="text-muted-foreground">
+                      Categoria interna <span className="text-destructive">*</span>
+                    </Label>
                     <Select
                       value={form.categoryConfigId || 'none'}
                       onValueChange={(v) =>
@@ -796,10 +924,10 @@ export default function TicketsPage() {
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Sin categoria SLA" />
+                        <SelectValue placeholder="Seleccionar categoria" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Sin categoria SLA</SelectItem>
+                        <SelectItem value="none">Seleccionar...</SelectItem>
                         {categoryConfigs.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.name} —{' '}
@@ -810,6 +938,10 @@ export default function TicketsPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Tipo y categoría interna son lo que el candado de tipificación exige para poder
+                      resolver el ticket. Si elegís una criticidad, manda esa; si no, la de la categoría.
+                    </p>
                   </div>
                 )}
                 <Button type="submit" className="w-full" disabled={creating}>
