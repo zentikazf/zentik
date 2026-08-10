@@ -191,8 +191,18 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
     if (!orgId || !contracts) return;
 
     // ⚠️ Se recorre `contracts.items` (TODOS los tipos), NUNCA la lista filtrada
-    // de la vista: el backend persiste la matriz completa en una transacción, así
-    // que mandar solo lo visible desactivaría los contratos de las filas ocultas.
+    // de la vista.
+    //
+    // El motivo NO es el que decía este comentario hasta #48. El backend hace un
+    // upsert de las filas RECIBIDAS y **lo omitido queda intacto**: no desactiva
+    // nada (verificado en `SlaContractService.upsertForProject`). O sea que
+    // mandar solo lo visible no borraría los contratos ocultos — simplemente no
+    // los tocaría.
+    //
+    // Se recorre la lista completa porque desactivar es EXPLÍCITO: un tipo cuya
+    // política el usuario sacó necesita viajar con `isActive: false`, y esa
+    // decisión vive en `draft`, que no se filtra. Si el bucle usara la vista
+    // filtrada, destildar algo y después filtrarlo perdería la desactivación.
     const items: ProjectContractItemInput[] = [];
     for (const row of contracts.items) {
       const selected = draft[row.ticketTypeId] ?? NO_POLICY;
@@ -206,8 +216,9 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
           isActive: true,
         });
       } else if (row.contractId && row.slaPolicyId) {
-        // Sacar la política de un tipo que YA tenía contrato = desactivarlo
-        // (el backend exige `slaPolicyId` en cada fila, se manda el vigente).
+        // Sacar la política de un tipo que YA tenía contrato = desactivarlo.
+        // Desde #48 T1 el backend no exige `slaPolicyId` con `isActive: false`,
+        // pero se sigue mandando: es el valor vigente y el backend lo ignora.
         items.push({
           ticketTypeId: row.ticketTypeId,
           slaPolicyId: row.slaPolicyId,

@@ -99,6 +99,16 @@ export interface ProjectSlaContract {
   slaPolicyName: string | null;
   contractNotes: string | null;
   isActive: boolean;
+  // ── #48 T1b: la jerarquía viaja con la fila ────────────────────────────────
+  // El centro de contratación agrupa por rama sin tener que pedir el catálogo de
+  // tipos aparte. `path` ordena (la respuesta ya viene ordenada por él), `level`
+  // indenta, `parentId` arma el árbol.
+  /** `null` = tipo raíz. */
+  parentId: string | null;
+  /** Ruta de SLUGS desde la raíz. Para ordenar y agrupar, NUNCA para mostrar. */
+  path: string;
+  /** Profundidad: 0 = raíz. */
+  level: number;
 }
 
 /** Cobertura de contratos de UN proyecto (viene dentro de la matriz). */
@@ -269,13 +279,24 @@ export interface UpdateTicketTypeInput {
 }
 
 /** Una fila del upsert de la matriz. `isActive:false` desactiva el contrato. */
+/**
+ * Una fila del PUT de contratos.
+ *
+ * `slaPolicyId` es obligatoria salvo cuando la fila viene a DESCONTRATAR
+ * (`isActive: false`), donde el backend no la exige ni la usa (#48 T1).
+ */
 export interface ProjectContractItemInput {
   ticketTypeId: string;
-  slaPolicyId: string;
+  slaPolicyId?: string;
   contractNotes?: string;
   isActive?: boolean;
 }
 
+/**
+ * ⚠️ Es un upsert de las filas ENVIADAS, no un reemplazo de la matriz: lo que no
+ * viaja en `items` queda intacto. Descontratar es explícito — hay que mandar la
+ * fila con `isActive: false`.
+ */
 export interface UpsertProjectContractsInput {
   items: ProjectContractItemInput[];
 }
