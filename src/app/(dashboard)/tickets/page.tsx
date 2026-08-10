@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -936,6 +937,23 @@ export default function TicketsPage() {
                       resolver el ticket. Si elegís una criticidad, manda esa; si no, la de la categoría.
                     </p>
                   </div>
+                )}
+                {/* Sin catálogo no se puede exigir la categoría (dejaría el alta
+                    bloqueada sin salida), pero el ticket va a nacer condenado al
+                    409 del candado (#44). Se avisa acá, con el link para
+                    resolverlo, en vez de descubrirlo al querer resolverlo. */}
+                {categoryConfigs.length === 0 && (
+                  <p className="rounded-lg border border-warning/40 bg-warning/5 p-2.5 text-[11px] text-muted-foreground">
+                    La organización no tiene categorías internas. El ticket se va a crear, pero no se
+                    va a poder resolver hasta tipificarlo.{' '}
+                    <Link
+                      href="/settings/sla/categorias-internas"
+                      className="text-primary hover:underline"
+                    >
+                      Creá la primera
+                    </Link>
+                    .
+                  </p>
                 )}
                 <Button type="submit" className="w-full" disabled={creating}>
                   {creating ? 'Creando...' : 'Crear ticket'}

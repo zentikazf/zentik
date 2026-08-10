@@ -216,9 +216,21 @@ export default function ContractCenterPage() {
    * recibido y deja intacto lo omitido (#48 T1), no viajar es exactamente
    * "no lo cambies".
    */
-  const buildPayload = useCallback((): { items: ProjectContractItemInput[]; error?: string } => {
+  const buildPayload = useCallback((): {
+    items: ProjectContractItemInput[];
+    /** Cambios pendientes, INCLUIDOS los que todavía no son válidos. */
+    pending: number;
+    error?: string;
+  } => {
     const out: ProjectContractItemInput[] = [];
     const managed = managedIdsOf(items);
+    // Se acumulan y NO se corta: si cortáramos acá, `pending` volvería 0, el
+    // botón quedaría deshabilitado y el usuario nunca vería el aviso de qué le
+    // falta. El error se muestra recién al apretar Guardar.
+    let invalid = 0;
+    let firstError: string | undefined;
+
+    const leaves = leafIdsOf(items);
 
     for (const row of items) {
       // La CARPETA (raíz con hijos) no se contrata desde acá: no tiene check, y
@@ -229,6 +241,28 @@ export default function ContractCenterPage() {
 
       const key = branchKeyOf(row, items);
       const branch = branches[key];
+
+      // ── HOJA SUELTA (#48 R5.4): "igual que hoy" — el Select ES el control.
+      // Sin check: dos controles para lo mismo dejaban "Sin contrato" como un
+      // no-op silencioso cuando el check seguía tildado.
+      if (leaves.has(row.ticketTypeId)) {
+        const policyId = branch?.policyId ?? NO_POLICY;
+        const wants = policyId !== NO_POLICY && policyId !== MIXED_POLICY;
+        if (!wants) {
+          if (row.isActive) out.push({ ticketTypeId: row.ticketTypeId, isActive: false });
+        } else if (!row.isActive || policyId !== row.slaPolicyId) {
+          out.push({
+            ticketTypeId: row.ticketTypeId,
+            slaPolicyId: policyId,
+            ...(row.contractNotes ? { contractNotes: row.contractNotes } : {}),
+            isActive: true,
+          });
+        }
+        continue;
+      }
+
+      // ── HIJO DE UNA RAMA (#48 R5.5): el CHECK es el control; la política sale
+      // de la cabecera (decisión 12: sin override por hijo).
       const isChecked = checked[row.ticketTypeId] ?? false;
 
       if (!isChecked) {
@@ -246,10 +280,9 @@ export default function ContractCenterPage() {
       if (!row.isActive) {
         // Contrato NUEVO: necesita política sí o sí.
         if (!hasRealPolicy) {
-          return {
-            items: [],
-            error: `Elegí una política para "${labelOfBranch(key, items)}" antes de contratar sus tipos.`,
-          };
+          invalid++;
+          firstError ??= `Elegí una política para "${labelOfBranch(key, items)}" antes de contratar sus tipos.`;
+          continue;
         }
         out.push({ ticketTypeId: row.ticketTypeId, slaPolicyId: branchPolicy, isActive: true });
         continue;
@@ -270,10 +303,10 @@ export default function ContractCenterPage() {
       }
     }
 
-    return { items: out };
+    return { items: out, pending: out.length + invalid, error: firstError };
   }, [items, branches, checked]);
 
-  const pendingCount = useMemo(() => buildPayload().items.length, [buildPayload]);
+  const pendingCount = useMemo(() => buildPayload().pending, [buildPayload]);
 
   const handleSave = async () => {
     if (!orgId) return;
@@ -491,7 +524,8 @@ export default function ContractCenterPage() {
 
             {visibleRoots.length === 0 ? (
               <p className="py-6 text-center text-xs text-muted-foreground">
-                Ningún tipo coincide con la búsqueda. Lo que no se ve no se toca al guardar.
+                Ningún tipo coincide con la búsqueda. El filtro es solo de vista: lo que ya
+                cambiaste se guarda igual aunque lo ocultes.
               </p>
             ) : (
               <div className="space-y-2">
@@ -503,8 +537,6 @@ export default function ContractCenterPage() {
                       row={root}
                       policies={policies}
                       draft={branches[root.ticketTypeId]}
-                      checked={checked[root.ticketTypeId] ?? false}
-                      onCheck={(value) => setChecks([root.ticketTypeId], value)}
                       onPolicy={(value) => setBranchPolicy(root.ticketTypeId, value)}
                       onToggleVisible={(value) => handleToggleVisible(root, value)}
                     />
@@ -562,6 +594,16 @@ function managedIdsOf(items: ProjectSlaContract[]): Set<string> {
   );
 }
 
+/** Hojas sueltas: raíces SIN hijos. Se editan con su propio Select (#48 R5.4). */
+function leafIdsOf(items: ProjectSlaContract[]): Set<string> {
+  const withChildren = new Set(items.map((row) => row.parentId).filter(Boolean) as string[]);
+  return new Set(
+    items
+      .filter((row) => row.parentId === null && !withChildren.has(row.ticketTypeId))
+      .map((row) => row.ticketTypeId),
+  );
+}
+
 function branchKeyOf(row: ProjectSlaContract, items: ProjectSlaContract[]): string {
   let current = row;
   let hops = 0;
@@ -606,20 +648,31 @@ function PolicySelect({
   value,
   policies,
   onChange,
-  disabled,
+  /**
+   * En la CABECERA de una rama, "Sin contrato" es solo el estado vacío: se
+   * muestra y no se elige, porque descontratar ahí se hace destildando los hijos
+   * (decisión 4: el check es UN control). Elegirlo no haría nada — un no-op
+   * silencioso es peor que una opción que no está.
+   *
+   * En una HOJA suelta sí es elegible: ahí el Select ES el control y "Sin
+   * contrato" significa descontratar, igual que en la matriz vieja (R5.4).
+   */
+  noPolicySelectable,
 }: {
   value: string;
   policies: SlaPolicy[];
   onChange: (value: string) => void;
-  disabled?: boolean;
+  noPolicySelectable?: boolean;
 }) {
   return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
+    <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-9 w-[230px] text-sm">
         <SelectValue placeholder="Sin contrato" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={NO_POLICY}>Sin contrato</SelectItem>
+        <SelectItem value={NO_POLICY} disabled={!noPolicySelectable}>
+          Sin contrato
+        </SelectItem>
         {/* Estado heredado, no una opción: se muestra y no se elige (#48 R5.6). */}
         {value === MIXED_POLICY && (
           <SelectItem value={MIXED_POLICY} disabled>
@@ -636,21 +689,23 @@ function PolicySelect({
   );
 }
 
-/** Hoja suelta (#48 R5.4): fila plana con su Select. Igual que la matriz vieja. */
+/**
+ * Hoja suelta (#48 R5.4): fila plana con su Select. Igual que la matriz vieja —
+ * elegir una política la contrata, "Sin contrato" la descontrata.
+ *
+ * SIN checkbox a propósito: el check es el control de los HIJOS de una rama
+ * (decisión 3). Acá sería un segundo control para lo mismo.
+ */
 function LeafRow({
   row,
   policies,
   draft,
-  checked,
-  onCheck,
   onPolicy,
   onToggleVisible,
 }: {
   row: ProjectSlaContract;
   policies: SlaPolicy[];
   draft?: BranchDraft;
-  checked: boolean;
-  onCheck: (value: boolean) => void;
   onPolicy: (value: string) => void;
   onToggleVisible: (value: boolean) => void;
 }) {
@@ -658,22 +713,20 @@ function LeafRow({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <Checkbox
-          checked={checked}
-          onCheckedChange={(value) => onCheck(value === true)}
-          aria-label={`Contratar ${row.ticketTypeName}`}
-        />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{row.ticketTypeName}</p>
-          {!row.clientVisible && (
-            <p className="text-[10px] text-muted-foreground">Carpeta: el cliente no la ve</p>
-          )}
-        </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{row.ticketTypeName}</p>
+        {!row.clientVisible && (
+          <p className="text-[10px] text-muted-foreground">Carpeta: el cliente no la ve</p>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <VisibilityToggle row={row} onToggle={onToggleVisible} />
-        <PolicySelect value={policyId} policies={policies} onChange={onPolicy} disabled={!checked} />
+        <PolicySelect
+          value={policyId}
+          policies={policies}
+          onChange={onPolicy}
+          noPolicySelectable
+        />
       </div>
     </div>
   );
