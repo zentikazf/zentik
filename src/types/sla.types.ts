@@ -117,6 +117,11 @@ export interface ProjectSlaContract {
   path: string;
   /** Profundidad: 0 = raíz. */
   level: number;
+  /**
+   * El ojito del TIPO (#48 R5.8). Es GLOBAL a la organización, no de este
+   * proyecto: apagarlo desde el centro de contratación lo apaga en todos.
+   */
+  clientVisible: boolean;
 }
 
 /** Cobertura de contratos de UN proyecto (viene dentro de la matriz). */
@@ -129,12 +134,24 @@ export interface ProjectSlaCoverage {
 
 /** Respuesta de `GET projects/:projectId/sla-contracts`. */
 export interface ProjectSlaContractsResponse {
-  project: { id: string; name: string; slaPolicyId: string | null };
+  project: {
+    id: string;
+    name: string;
+    slaPolicyId: string | null;
+    /** #48 R5.3: el header del centro de contratación dice de qué cliente es. */
+    client: { id: string; name: string } | null;
+  };
   items: ProjectSlaContract[];
   coverage: ProjectSlaCoverage;
 }
 
-/** Una fila del checklist global de cobertura (un proyecto activo). */
+/**
+ * Una card del índice de cobertura (un proyecto activo).
+ *
+ * #48 T6: salieron `isComplete`, `coveredTypes` y `missingTypes`. "Cobertura
+ * completa" nunca fue una meta y el ✅/⚠️ binario empujaba a perseguir un 100%
+ * que nadie quiere. Entró en su lugar el eje que faltaba: qué ve el cliente.
+ */
 export interface SlaCoverageItem {
   projectId: string;
   projectName: string;
@@ -142,17 +159,17 @@ export interface SlaCoverageItem {
   clientName: string | null;
   hasProjectPolicy: boolean;
   hasClientPolicy: boolean;
-  totalTypes: number;
-  coveredTypes: number;
-  missingTypes: { id: string; name: string }[];
-  isComplete: boolean;
+  /** Modo permisivo: el proyecto no tiene contratos aplicables. */
+  clientSeesAllTypes: boolean;
+  /** Cuántos tipos puede elegir HOY el cliente en este proyecto. */
+  clientVisibleTypeCount: number;
 }
 
 /** Respuesta de `GET sla-coverage`. */
 export interface SlaCoverage {
   totalProjects: number;
-  totalTypes: number;
-  completeProjects: number;
+  /** Tipos activos y visibles al cliente en la organización. */
+  totalVisibleTypes: number;
   items: SlaCoverageItem[];
 }
 
