@@ -94,6 +94,31 @@ const categoryLabelMap: Record<string, string> = {
   NEW_DEVELOPMENT: 'Desarrollo',
 };
 
+/**
+ * Borrador vacío del alta por staff (#48 T11).
+ *
+ * `category` (el enum legacy SUPPORT_REQUEST/NEW_DEVELOPMENT) NO está: quedó fijo
+ * en `SUPPORT_REQUEST` (decisión 10 del dueño). Lo elegía un campo que también se
+ * llamaba "Tipo", y esa era la fuente del malentendido: la etiqueta "Tipo" ahora
+ * es del árbol de tipos de solicitud.
+ *
+ * `priority` tampoco está: la columna existe pero la UI ya no la lee como eje
+ * propio — el badge resuelve `criticality || categoryConfig.criticality ||
+ * priority`, o sea que `priority` es el fallback histórico de la criticidad. El
+ * campo que decía "Criticidad" escribía `priority`; ahora escribe `criticality`,
+ * que es lo que el usuario creía estar eligiendo. Sin mandarla, el backend la
+ * deja en su default (`MEDIUM`).
+ */
+const EMPTY_CREATE_FORM = {
+  clientId: '',
+  projectId: '',
+  title: '',
+  description: '',
+  ticketTypeId: '',
+  criticality: '' as '' | Criticality,
+  categoryConfigId: '',
+};
+
 const DEFAULT_PAGE_SIZE = 15;
 const POLL_INTERVAL_MS = 60000;
 
@@ -164,15 +189,7 @@ export default function TicketsPage() {
    * escribe `criticality`, que es lo que el usuario creía estar eligiendo. Sin
    * mandarla, el backend la deja en su default (`MEDIUM`).
    */
-  const [form, setForm] = useState({
-    clientId: '',
-    projectId: '',
-    title: '',
-    description: '',
-    ticketTypeId: '',
-    criticality: '' as '' | Criticality,
-    categoryConfigId: '',
-  });
+  const [form, setForm] = useState(EMPTY_CREATE_FORM);
 
   // ─── Sync URL para panel/ticket (independiente de filtros) ────
   const syncPanelUrl = useCallback(
@@ -314,10 +331,14 @@ export default function TicketsPage() {
   /**
    * Tipos disponibles del proyecto elegido (#48 T11).
    *
-   * La disponibilidad es del par (proyecto, tipo): sin proyecto no hay lista, y
-   * al cambiar de proyecto el tipo elegido se limpia — si no, se podría mandar un
-   * tipo que el proyecto nuevo no contrata y el POST lo rechazaría recién al
-   * guardar.
+   * La disponibilidad es del par (proyecto, tipo): sin proyecto no hay lista.
+   *
+   * Este efecto SOLO recarga la lista. Limpiar el tipo elegido lo hacen los
+   * `onValueChange` de los selectores de cliente y proyecto — y tiene que ser
+   * ahí: el backend NO valida disponibilidad por proyecto en el alta por staff
+   * (a diferencia del portal, que pasa por `isTypeAvailable`), porque R6.2
+   * habilita al equipo a tipificar con tipos que el proyecto no contrata. O sea
+   * que acá no hay red: un valor stale se persistiría tal cual.
    *
    * Es el endpoint de STAFF: no filtra por `clientVisible`, así que el equipo ve
    * también las carpetas (#48 R2.1).
@@ -523,15 +544,7 @@ export default function TicketsPage() {
       const ticketNum = res.data.ticketNumber || res.data.id?.slice(-8).toUpperCase();
       toast.success('Ticket creado', `Ticket #${ticketNum} creado exitosamente`);
       setShowCreate(false);
-      setForm({
-        clientId: '',
-        projectId: '',
-        title: '',
-        description: '',
-        ticketTypeId: '',
-        criticality: '',
-        categoryConfigId: '',
-      });
+      setForm(EMPTY_CREATE_FORM);
       await loadTickets();
       await loadStats();
       // Capa 1 (#20): crear un ticket sube el conteo de abiertos → refetch del
@@ -772,7 +785,16 @@ export default function TicketsPage() {
           )}
           {/* Sincronizar a Onnix — solo roles internos (feature #13) */}
           <OnnixSyncButton />
-          <Dialog open={showCreate} onOpenChange={setShowCreate}>
+          {/* Cerrar el modal DESCARTA el borrador. Antes solo se limpiaba tras
+              un alta exitosa, así que un tipo elegido para un cliente sobrevivía
+              a cerrar, reabrir y elegir otro cliente. */}
+          <Dialog
+            open={showCreate}
+            onOpenChange={(open) => {
+              setShowCreate(open);
+              if (!open) setForm(EMPTY_CREATE_FORM);
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" /> Nuevo ticket
@@ -806,7 +828,16 @@ export default function TicketsPage() {
                     <Label className="text-muted-foreground">Cliente</Label>
                     <Select
                       value={form.clientId || 'none'}
-                      onValueChange={(v) => setForm({ ...form, clientId: v === 'none' ? '' : v, projectId: '' })}
+                      // Cambiar de cliente invalida proyecto Y tipo: el tipo se
+                      // eligió de la lista de OTRO proyecto (#48 T11).
+                      onValueChange={(v) =>
+                        setForm({
+                          ...form,
+                          clientId: v === 'none' ? '' : v,
+                          projectId: '',
+                          ticketTypeId: '',
+                        })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar cliente" />
@@ -825,7 +856,20 @@ export default function TicketsPage() {
                     <Label className="text-muted-foreground">Proyecto</Label>
                     <Select
                       value={form.projectId || 'none'}
-                      onValueChange={(v) => setForm({ ...form, projectId: v === 'none' ? '' : v })}
+                      /*
+                       * Cambiar de proyecto LIMPIA el tipo elegido.
+                       *
+                       * Sin esto, `form.ticketTypeId` sobrevivía al cambio: el
+                       * Select se recargaba con los tipos del proyecto nuevo, el
+                       * valor viejo dejaba de tener `SelectItem`, y Radix — que
+                       * solo pinta el placeholder cuando el value es "" — dejaba
+                       * el campo EN BLANCO. El usuario veía "Tipo *" vacío, la
+                       * validación pasaba (el valor era truthy) y el POST mandaba
+                       * el tipo del proyecto anterior. Lo mostrado ≠ lo enviado.
+                       */
+                      onValueChange={(v) =>
+                        setForm({ ...form, projectId: v === 'none' ? '' : v, ticketTypeId: '' })
+                      }
                       disabled={!form.clientId}
                     >
                       <SelectTrigger>
