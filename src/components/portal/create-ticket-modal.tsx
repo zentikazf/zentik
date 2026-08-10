@@ -16,7 +16,7 @@ import {
 import { Info, Search } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/api-error-message';
-import { buildTicketTypeAncestorNames, ticketTypeFullLabel } from '@/lib/ticket-type-path';
+import { ticketTypeLabelFromAncestors } from '@/lib/ticket-type-path';
 import { toast } from '@/hooks/use-toast';
 import type {
   AvailableTicketType,
@@ -224,16 +224,16 @@ export function CreateTicketModal({
    * tipos que se llamen igual en ramas distintas, y el cliente tiene que poder
    * distinguirlos (`Incidencia › Error del sistema`).
    *
-   * ⚠️ Hoy el endpoint del portal (`/portal/projects/:id/ticket-types`) proyecta
-   * `{ id, name, slug }`: sin `parentId` el helper devuelve el nombre pelado y el
-   * selector se ve EXACTAMENTE como antes. Queda listo para el día que la
-   * disponibilidad incluya la jerarquía, sin tocar este componente.
+   * Los ancestros llegan RESUELTOS del backend (#48 T4). No se derivan acá a
+   * propósito: esta lista trae solo los tipos ofrecidos, así que un padre oculto
+   * o sin contrato no está en ella y la cadena se cortaba justo ahí. Además el
+   * backend aplica la regla de la carpeta oculta (R3.1) — una carpeta con el
+   * ojito apagado no aporta su nombre —, que este componente no podría aplicar
+   * porque ni siquiera sabe que la carpeta existe.
    */
-  const ancestorNames = useMemo(() => buildTicketTypeAncestorNames(types), [types]);
-
   const typeLabel = useCallback(
-    (type: AvailableTicketType) => ticketTypeFullLabel(ancestorNames, type),
-    [ancestorNames],
+    (type: AvailableTicketType) => ticketTypeLabelFromAncestors(type),
+    [],
   );
 
   const filteredTypes = useMemo(() => {

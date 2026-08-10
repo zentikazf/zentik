@@ -45,7 +45,7 @@ import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ticketService } from '@/services/ticket.service';
 import { slaService } from '@/services/sla.service';
-import { buildTicketTypeAncestorNames, ticketTypeFullLabel } from '@/lib/ticket-type-path';
+import { ticketTypeLabelFromAncestors } from '@/lib/ticket-type-path';
 import { useBadgeStore } from '@/stores/use-badge-store';
 import { useTicketsSocket } from '@/hooks/use-tickets-socket';
 import { TicketSidePanel } from '@/components/tickets/ticket-side-panel';
@@ -345,17 +345,6 @@ export default function TicketsPage() {
     };
   }, [orgId, form.projectId]);
 
-  /**
-   * Contexto del padre para desambiguar homónimos entre ramas: el selector del
-   * staff muestra `Incidencia › Error del sistema`. Acá el catálogo llega
-   * completo (el endpoint de staff no oculta carpetas), así que la cadena no se
-   * corta — a diferencia del portal, donde un padre oculto no viaja y por eso los
-   * ancestros se resuelven en el backend (#48 T4).
-   */
-  const typeAncestorNames = useMemo(
-    () => buildTicketTypeAncestorNames(availableTypes),
-    [availableTypes],
-  );
 
   // ─── WebSocket: actualizar SIN saltar de página (feature #12) ─
   // Patch in-place del ticket visible para updated/assigned (no refetch que
@@ -878,9 +867,13 @@ export default function TicketsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Seleccionar...</SelectItem>
+                        {/* Ancestros resueltos por el backend (#48 T4): esta
+                            lista trae solo los tipos ofrecidos, así que un padre
+                            sin contrato no está en ella y derivar la cadena acá
+                            la cortaría. Como audiencia STAFF, viajan todos. */}
                         {availableTypes.map((t) => (
                           <SelectItem key={t.id} value={t.id}>
-                            {ticketTypeFullLabel(typeAncestorNames, t)}
+                            {ticketTypeLabelFromAncestors(t)}
                           </SelectItem>
                         ))}
                       </SelectContent>

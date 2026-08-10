@@ -78,3 +78,22 @@ export function ticketTypeFullLabel(
   const context = ticketTypeContext(ancestorsById, type.id);
   return context ? `${context}${TICKET_TYPE_PATH_SEPARATOR}${type.name}` : type.name;
 }
+
+/**
+ * Igual, pero con los ancestros que YA vienen resueltos del backend (#48 T4).
+ *
+ * Es la variante correcta para todo lo que salga de `getAvailableTypes`: ahí la
+ * lista contiene solo los tipos OFRECIDOS, así que derivar la cadena localmente
+ * con {@link buildTicketTypeAncestorNames} la cortaría en cuanto un ancestro
+ * esté oculto o no esté contratado. Además el backend ya aplicó la regla de la
+ * carpeta oculta, que el cliente no puede aplicar porque ni siquiera sabe que la
+ * carpeta existe.
+ */
+export function ticketTypeLabelFromAncestors(type: {
+  name: string;
+  ancestorNames: string[];
+}): string {
+  return type.ancestorNames.length > 0
+    ? `${type.ancestorNames.join(TICKET_TYPE_PATH_SEPARATOR)}${TICKET_TYPE_PATH_SEPARATOR}${type.name}`
+    : type.name;
+}

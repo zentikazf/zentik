@@ -66,6 +66,14 @@ export interface TicketType {
   path: string;
   /** Profundidad: 0 = raíz, máximo `MAX_TICKET_TYPE_LEVEL`. */
   level: number;
+  /**
+   * El "ojito" (#48 R1). `false` = carpeta pura: agrupa y ordena, pero el cliente
+   * no la ve ni la elige — sus hijos contratados se siguen ofreciendo.
+   *
+   * Es GLOBAL a la organización (del tipo, no del proyecto) y es solo
+   * PRESENTACIÓN: no toca contratos ni la cascada, y no cascadea a los hijos.
+   */
+  clientVisible: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -224,9 +232,18 @@ export interface AvailableTicketType {
   id: string;
   name: string;
   slug: string;
-  parentId?: string | null;
-  path?: string;
-  level?: number;
+  /**
+   * Nombres de los ancestros, de la raíz hacia abajo y SIN el propio, ya
+   * resueltos por el backend (#48 T4). Vacío = raíz, o todos sus ancestros están
+   * ocultos para esta audiencia.
+   *
+   * ⚠️ NO derivar el camino en el cliente a partir de esta lista de tipos: solo
+   * contiene los OFRECIDOS, y un ancestro oculto o sin contrato no viaja en ella
+   * — la cadena se cortaría justo en el caso que importa. Por eso lo calcula el
+   * backend, que además aplica la regla de la carpeta oculta (R3.1): un ancestro
+   * con el ojito apagado no aporta su nombre al cliente.
+   */
+  ancestorNames: string[];
 }
 
 /**
@@ -264,6 +281,8 @@ export interface CreateTicketTypeInput {
   slug?: string;
   /** Ausente o `null` = tipo raíz. Máximo `MAX_TICKET_TYPE_DEPTH` niveles. */
   parentId?: string | null;
+  /** Ausente = `true`: un tipo nuevo nace visible para el cliente. */
+  clientVisible?: boolean;
 }
 
 export interface UpdateTicketTypeInput {
@@ -276,6 +295,8 @@ export interface UpdateTicketTypeInput {
    * Mover arrastra la rama completa (el backend recalcula `path`/`level`).
    */
   parentId?: string | null;
+  /** El ojito. NO cascadea a los hijos: cada nodo tiene el suyo. */
+  clientVisible?: boolean;
 }
 
 /** Una fila del upsert de la matriz. `isActive:false` desactiva el contrato. */
