@@ -534,8 +534,18 @@ export default function TicketsPage() {
         projectId: form.projectId,
         title: form.title.trim(),
         description: form.description.trim() || undefined,
-        // Enum legacy fijo (decisión 10 del dueño): solo decide el prefijo del
-        // nombre del canal. La etiqueta "Tipo" del modal es del árbol de tipos.
+        // Enum legacy fijo (decisión 10 del dueño), para que no haya dos campos
+        // llamados "Tipo": esa etiqueta es ahora del árbol de tipos.
+        //
+        // ⚠️ NO es inerte. `category` decide TRES cosas en el backend:
+        //   1. el prefijo del canal de chat (`[Soporte]` / `[Desarrollo]`);
+        //   2. la categoría que se muestra en el listado de tickets;
+        //   3. si el ticket se replica a Onnix — `ticket.service.ts` encola al
+        //      outbox SOLO con `SUPPORT_REQUEST`.
+        // Al fijarlo acá, todo ticket creado por staff desde este modal se
+        // sincroniza a Onnix; antes, los de "Nueva Funcionalidad" no. El endpoint
+        // sigue aceptando las otras categorías, así que revertirlo es volver a
+        // mandar el valor elegido.
         category: 'SUPPORT_REQUEST',
         ...(form.ticketTypeId && { ticketTypeId: form.ticketTypeId }),
         ...(form.criticality && { criticality: form.criticality }),
