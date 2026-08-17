@@ -21,6 +21,34 @@ interface HoursTransaction {
  priceCurrency: string | null;
  billedCycleId: string | null;
  workedOn: string | null;
+ // Sólo lo trae la COPIA que genera una nota de crédito con devolución de horas: apunta al
+ // movimiento original que quedó acreditado. Null en cualquier registro normal.
+ // (El backend ya lo devuelve: el findMany de getMyHours usa `include` sin `select`, así que
+ // vienen todos los campos escalares del movimiento.)
+ // OJO: sirve para EMPAREJAR original y copia (quién reemplaza a quién), NUNCA para saber si el
+ // movimiento está acreditado — para eso está `creditNoteNumber`.
+ rebilledFromTransactionId: string | null;
+ // #55 — Acreditado sí/no lo decide el BACKEND, no el front.
+ //
+ // Antes se deducía de la existencia de la fila copia (`rebilledFromTransactionId`), y esa
+ // inferencia fallaba por los dos lados: la copia sólo nace si el staff dejó activada la
+ // devolución de horas al emitir la nota, y además se puede borrar (es la salida oficial para una
+ // nota emitida por error). En los dos casos el cargo acreditado volvía a pintarse "Facturado" al
+ // precio completo mientras /portal/invoices ya le mostraba al cliente la nota en negativo.
+ // Ahora el backend lo resuelve contra la línea de la nota de crédito, que existe siempre y es
+ // única por movimiento.
+ //
+ // OPCIONALES A PROPÓSITO, aunque el backend actual siempre los mande. `zentik` (Vercel) y
+ // `zentik-backend` (Railway) son deploys INDEPENDIENTES, y el backend arranca corriendo
+ // `prisma migrate deploy` dentro del container: el front sube minutos antes. En esa ventana
+ // /portal/hours responde movimientos SIN estos campos. `api-client` devuelve `response.json()`
+ // crudo (sin zod ni defaults), así que el hueco es real en runtime — declararlos obligatorios
+ // sólo lograba que el compilador no lo viera. Marcados opcionales, TS obliga a tratar el caso
+ // ausente y todo el manejo queda fail-closed: sin dato, la fila se pinta como siempre.
+ creditNoteNumber?: string | null;
+ // Concepto CONGELADO al emitir la nota de crédito. Sobrevive al borrado de la tarea y es texto
+ // seguro para el cliente (a diferencia del `note`, que puede ser jerga interna del staff).
+ creditedDescription?: string | null;
  task?: {
   id: string;
   title: string;
@@ -51,6 +79,14 @@ interface PortalVariableStatement {
 
 const fmtUSD = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Una fila está ACREDITADA cuando el backend le adjuntó el número de su nota de crédito.
+//
+// `Boolean(...)` y no `!== null`: si el campo NO viene (front desplegado antes que el backend,
+// ver la interface), `undefined !== null` es TRUE y TODA la tabla del cliente saldría tachada,
+// con badge "Acreditado" en vez de "Facturado"/"Pendiente" y los meses en "0.00h". Falta de dato
+// = fila normal.
+const isCredited = (t: HoursTransaction): boolean => Boolean(t.creditNoteNumber);
+
 export default function PortalHoursPage() {
  const [data, setData] = useState<HoursResponse | null>(null);
  const [vars, setVars] = useState<Map<string, PortalVariableStatement>>(new Map());
@@ -60,7 +96,135 @@ export default function PortalHoursPage() {
  // #23: sub-card de variables COLAPSADAS (default = todas abiertas → el consumo se ve al abrir el mes).
  const [collapsedVars, setCollapsedVars] = useState<Set<string>>(new Set());
 
+ // ── Notas de crédito con devolución de horas: por qué el cliente ve DOS filas de un mismo trabajo ──
+ //
+ // Al emitir una nota de crédito que devuelve las horas al pool facturable, el backend NO borra el
+ // movimiento original: lo deja tal cual (conserva su `billedCycleId`, o sea que ya se facturó) y
+ // crea una COPIA con `rebilledFromTransactionId` apuntando al original y `billedCycleId` en null,
+ // para que el trabajo vuelva a entrar en la próxima factura. Quedan dos filas vivas, un solo trabajo:
+ //
+ //  - la ORIGINAL → se facturó y después se acreditó: ya NO se le cobra al cliente.
+ //  - la COPIA    → es la deuda viva, pendiente de facturar.
+ //
+ // Se muestran las DOS, pero se tacha la ORIGINAL, que es la que quedó sin efecto. Esconder la copia
+ // fue el primer intento y se descartó: dejaba el KPI "Pendiente de facturar" sin ninguna fila que lo
+ // respaldara (un cobro fantasma) y hacía que el pendiente del mes quedara corto. La copia, en
+ // cambio, se pinta como un registro pendiente cualquiera: para el cliente es simplemente su trabajo
+ // por facturar, sin marcas ni vocabulario interno.
+ //
+ // El acreditado NO se deduce acá: lo dice el backend (`creditNoteNumber`, ver la interface). Cuando
+ // se infería desde la existencia de la copia, apagar el switch de devolución de horas o borrar la
+ // copia dejaba el cargo acreditado pintado "Facturado" al precio completo mientras
+ // /portal/invoices ya le mostraba al cliente la nota en negativo.
+ //
+ // OJO: "acreditado" y "el trabajo se mudó a otra fila" son DOS COSAS DISTINTAS, y por eso hay dos
+ // predicados. La copia es OPCIONAL: sólo nace con "devolver horas al pool" encendido y se puede
+ // borrar. Sin copia, lo único que cae es el COBRO (`isCredited` → costo tachado); las HORAS se
+ // trabajaron, nadie las devolvió al cupo y siguen contando (`movedToRebill` → false).
+
+ // Índice por id, para poder emparejar una copia con su original (y viceversa).
+ //
+ // Ojo con el alcance: getMyHours trae sólo los últimos 100 movimientos. Si la copia entró en esa
+ // ventana pero su original no (o al revés), el par queda partido: la fila que sobra se muestra
+ // sola, con su propia marca de acreditada si la tiene, y sin la frase que la vincula a la otra.
+ const txById = useMemo(
+  () => new Map((data?.transactions ?? []).map((t) => [t.id, t])),
+  [data],
+ );
+
+ // Índice INVERSO: id del ORIGINAL → la copia que lo reemplaza, si esa copia sigue viva.
+ //
+ // Es la única prueba de que el trabajo "se mudó" a otra fila. La copia sólo nace si el staff dejó
+ // encendido "devolver horas al pool" al emitir la nota, y además se puede borrar (la salida
+ // oficial para una nota emitida por error). Si no está acá, no existe: las horas no se mudaron a
+ // ningún lado y tampoco volvieron al cupo (la nota de crédito nunca toca `usedHours`).
+ //
+ // GLOBAL, no por mes, a propósito: con `workedOn` en null cada fila cae en el mes de su
+ // `createdAt`, así que original y copia pueden quedar en meses DISTINTOS. Un índice por mes las
+ // daría por separadas y volvería a descontar horas que nadie devolvió.
+ const rebilledByOriginalId = useMemo(() => {
+  const m = new Map<string, HoursTransaction>();
+  for (const t of data?.transactions ?? []) {
+   if (t.rebilledFromTransactionId) m.set(t.rebilledFromTransactionId, t);
+  }
+  return m;
+ }, [data]);
+
+ // ¿Las HORAS de esta fila se mudaron a otra? Sólo si está acreditada Y su copia sigue viva.
+ //
+ // Es lo que separa las dos columnas: el COSTO se tacha con `isCredited` a secas (acreditado =
+ // no se cobra, exista o no la copia), pero las HORAS sólo se tachan y se sacan del total si hay
+ // otra fila que las esté contando. Si no, la fila quedaría tachada en horas y a la vez sumando
+ // en el total del mes: se contradiría con su propio encabezado.
+ const movedToRebill = (t: HoursTransaction): boolean =>
+  isCredited(t) && rebilledByOriginalId.has(t.id);
+
+ // Final de la cadena de copias: la ÚNICA fila del trabajo que sigue viva (no acreditada), o sea la
+ // que de verdad se le va a facturar al cliente.
+ //
+ // ITERATIVO, no la copia inmediata: con dos notas de crédito sobre el mismo trabajo la cadena es
+ // A→B→C, y B también está acreditada y tachada. Mirando sólo un salto, A mandaba al cliente a
+ // "el registro de abajo" y ahí leía "no se te cobra" — la frase lo llevaba a una fila que la
+ // contradecía. La que se factura es C. Guarda de ciclo por `id` + tope de saltos igual que
+ // `conceptOf`: los ids vienen de otro deploy y una cadena corrupta no puede colgar el render.
+ const liveRebillOf = (t: HoursTransaction): HoursTransaction | undefined => {
+  const seen = new Set<string>([t.id]);
+  let node: HoursTransaction | undefined = rebilledByOriginalId.get(t.id);
+  for (let hops = 0; node && hops < 10 && !seen.has(node.id); hops++) {
+   if (!isCredited(node)) return node;
+   seen.add(node.id);
+   node = rebilledByOriginalId.get(node.id);
+  }
+  return undefined;
+ };
+
+ // Concepto que se muestra en la columna "Tarea", con una regla dura: el `note` de una fila NUNCA
+ // llega al cliente si esa fila nació de una nota de crédito (`rebilledFromTransactionId`), porque
+ // el backend la crea con "Re-facturable por NC-…", que es vocabulario del staff. Para esas filas el
+ // concepto sale de la tarea, y si la tarea se borró en duro, de la `creditedDescription` congelada
+ // al emitir la nota. Si nada de eso existe, '—' antes que filtrar jerga interna.
+ const safeConceptOf = (t: HoursTransaction | undefined): string | null => {
+  if (!t) return null;
+  if (t.task?.title) return t.task.title;
+  if (t.rebilledFromTransactionId) return null; // su `note` es interno: no se muestra ni se hereda
+  return t.creditedDescription ?? t.note ?? null;
+ };
+
+ // Sube por la cadena `rebilledFromTransactionId` hasta el primer concepto seguro.
+ //
+ // ITERATIVO, no un solo salto: con dos notas de crédito sobre el mismo trabajo la cadena es
+ // A→B→C, y mirando sólo al padre inmediato la fila VIVA (C, la que se le va a cobrar) se quedaba
+ // con monto y sin concepto ('—'). Guarda de ciclo por `id` + tope de saltos: los ids vienen de
+ // otro deploy y una cadena corrupta no puede colgar el render del portal.
+ const conceptOf = (t: HoursTransaction): string => {
+  const seen = new Set<string>();
+  let node: HoursTransaction | undefined = t;
+  for (let hops = 0; node && hops < 10 && !seen.has(node.id); hops++) {
+   seen.add(node.id);
+   const concept = safeConceptOf(node);
+   if (concept) return concept;
+   const parentId: string | null = node.rebilledFromTransactionId;
+   node = parentId ? txById.get(parentId) : undefined;
+  }
+  return '—';
+ };
+
  // Registros de horas agrupados por mes.
+ //
+ // Dentro del mes se conserva EL ORDEN DEL BACKEND (createdAt desc) y sólo se corrige la CADENA
+ // acreditada→copia: el trabajo se dibuja de arriba hacia abajo, del cargo más viejo al que sigue
+ // vivo, como en el mockup aprobado. La copia nace después que el original, así que sin esto el
+ // cliente leía primero un cargo vivo sin ningún contexto y la explicación le quedaba colgada de la
+ // fila de abajo. No se re-ordena por fecha ni por ningún otro criterio: cambiaría la pantalla de
+ // los clientes que no tienen ninguna nota de crédito, que hoy son todos.
+ //
+ // Se ordena por CADENA COMPLETA y no adelantando el padre inmediato. Con dos notas de crédito
+ // sobre el mismo trabajo (A→B→C) adelantar de a un salto empujaba a la raíz al FONDO del mes:
+ // entrada [C, B, A] salía [B, C, A]. Acá, en cambio, al toparse con cualquier fila se sube hasta
+ // la raíz de su cadena DENTRO del mes y se emite la cadena entera hacia abajo → [A, B, C].
+ // Los dos recorridos llevan guarda de ciclo, y al final se fuerza la emisión de la fila: pase lo
+ // que pase con los punteros, `ordered` tiene exactamente las mismas filas que `rows`, sin
+ // duplicados y sin perder ninguna (una fila perdida acá es plata que el cliente no ve).
  const txsByMonth = useMemo(() => {
   const map = new Map<string, HoursTransaction[]>();
   for (const t of data?.transactions ?? []) {
@@ -69,8 +233,41 @@ export default function PortalHoursPage() {
    if (arr) arr.push(t);
    else map.set(k, [t]);
   }
+  for (const [k, rows] of map) {
+   const byId = new Map(rows.map((r) => [r.id, r]));
+   const seen = new Set<string>();
+   const ordered: HoursTransaction[] = [];
+   const push = (r: HoursTransaction) => {
+    if (seen.has(r.id)) return;
+    seen.add(r.id);
+    ordered.push(r);
+   };
+   for (const r of rows) {
+    if (seen.has(r.id)) continue;
+    // Subir hasta la raíz de la cadena (la fila más vieja del mismo trabajo presente en el mes).
+    let root = r;
+    const climbed = new Set<string>([r.id]);
+    for (;;) {
+     const parentId = root.rebilledFromTransactionId;
+     if (!parentId || climbed.has(parentId)) break;
+     const parent = byId.get(parentId);
+     if (!parent) break;
+     climbed.add(parentId);
+     root = parent;
+    }
+    // Bajar emitiendo la cadena: raíz → su copia → la copia de la copia…
+    let node: HoursTransaction | undefined = root;
+    while (node && !seen.has(node.id)) {
+     push(node);
+     const next = rebilledByOriginalId.get(node.id);
+     node = next && byId.has(next.id) ? next : undefined;
+    }
+    push(r); // red de seguridad: `r` siempre sale, aunque su cadena no lo alcance
+   }
+   map.set(k, ordered);
+  }
   return map;
- }, [data]);
+ }, [data, rebilledByOriginalId]);
 
  // Meses a mostrar = unión de meses con horas + meses con variables, desc (más reciente primero).
  const monthKeys = useMemo(() => {
@@ -190,7 +387,19 @@ export default function PortalHoursPage() {
       const statement = vars.get(key);
       const open = openMonths.has(key);
       const varsOpen = !collapsedVars.has(key);
-      const monthHours = txs.reduce((s, t) => s + t.hours, 0);
+      // Las horas de una fila acreditada se descuentan SÓLO si existe la copia viva que las
+      // representa: contar las dos mostraría 10h sobre un trabajo de 5h.
+      //
+      // Sin copia (el staff apagó "devolver horas al pool", o la copia se borró) las horas no se
+      // mudaron a ninguna otra fila. Descontarlas igual las hacía DESAPARECER: la misma pantalla
+      // decía "Consumidas 5.0h de 100.0h" arriba y "1 registro · 0.00h" en el mes. Tampoco vuelven
+      // al cupo — la nota de crédito no toca `usedHours` —, así que esas horas se trabajaron, se
+      // consumieron y siguen contando. Lo que la nota borra es el COBRO, no el tiempo.
+      const monthHours = txs.reduce((s, t) => (movedToRebill(t) ? s : s + t.hours), 0);
+      // El pendiente NO necesita tocarse y por eso se deja igual: el filtro `billedCycleId === null`
+      // ya deja afuera a la original (que quedó facturada) y adentro a la copia (que nace sin ciclo).
+      // Es el mismo criterio con el que el backend calcula el KPI "Pendiente de facturar" de arriba,
+      // así que el total del mes y el de la página no pueden contradecirse.
       const monthPending = txs
        .filter((t) => t.priceAmount !== null && t.billedCycleId === null)
        .reduce((s, t) => s + parseFloat(t.priceAmount!), 0);
@@ -274,15 +483,52 @@ export default function PortalHoursPage() {
               </tr>
              </thead>
              <tbody className="divide-y divide-border">
-              {txs.map((t) => (
+              {txs.map((t, idx) => {
+               // Fila ACREDITADA = el backend le adjuntó el número de su nota de crédito.
+               // Manda sobre el COSTO: acreditado = no se cobra.
+               const credited = isCredited(t);
+               // ¿Este trabajo se vuelve a facturar en otra fila (la copia)? Manda sobre las HORAS:
+               // sólo se tachan si otra fila las está contando (ver `movedToRebill`).
+               const moved = movedToRebill(t);
+               // Posición REAL en el mes ya ordenado de la fila que SÍ se factura. La frase manda al
+               // cliente a mirar "abajo", así que sólo puede salir si esa fila está efectivamente MÁS
+               // ABAJO: con la copia en otro mes apuntaba a la nada.
+               // Se apunta al FINAL de la cadena (`liveRebillOf`), no a la copia inmediata: en una
+               // cadena de dos notas la copia inmediata también está acreditada y tachada, y la frase
+               // terminaba mandando al cliente a una fila que le dice "no se te cobra".
+               const rebilledRow = credited ? liveRebillOf(t) : undefined;
+               const rebilledIsBelow = rebilledRow ? txs.indexOf(rebilledRow) > idx : false;
+               // La fila viva: dice de dónde viene, para que no parezca un cargo nuevo.
+               const replacesRow = t.rebilledFromTransactionId ? txById.get(t.rebilledFromTransactionId) : undefined;
+               const costLabel = formatCurrency(t.priceAmount, t.priceCurrency ?? data.currency);
+               return (
                <tr key={t.id} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{rowDateShort(t)}</td>
                 <td className="px-4 py-3">
                  <p className="text-sm text-foreground truncate max-w-xs">
-                  {t.task?.title ?? t.note ?? '—'}
+                  {conceptOf(t)}
                  </p>
                  {t.task?.project && (
                   <p className="text-[11px] text-muted-foreground">{t.task.project.name}</p>
+                 )}
+                 {/* Explicación en el idioma del cliente: se le facturó, se le acreditó, no se le cobra.
+                     Nunca "espejo" ni "re-facturable" — eso es vocabulario del staff. */}
+                 {credited && (
+                  <p className="text-[11px] text-muted-foreground">
+                   {`Acreditado por ${t.creditNoteNumber} — no se te cobra`}
+                   {rebilledIsBelow && '. El mismo trabajo se factura en el registro de abajo'}
+                   {/* Sin copia, las horas no se mudaron a ningún lado y tampoco volvieron a tu
+                       cupo: siguen sumando en el total del mes aunque el cargo esté acreditado.
+                       Decirlo evita que la fila se contradiga con su propio encabezado. */}
+                   {!moved && '. Las horas trabajadas siguen contando en tu consumo'}
+                  </p>
+                 )}
+                 {/* La fila viva, sola, es idéntica en fecha, concepto y monto a la de arriba: sin
+                     esta línea se lee como un segundo cobro del mismo trabajo. */}
+                 {!credited && replacesRow?.creditNoteNumber && (
+                  <p className="text-[11px] text-muted-foreground">
+                   {`Reemplaza al cargo acreditado por ${replacesRow.creditNoteNumber}`}
+                  </p>
                  )}
                 </td>
                 <td className="px-4 py-3">
@@ -294,9 +540,39 @@ export default function PortalHoursPage() {
                  )}
                  {!t.task?.type && <span className="text-xs text-muted-foreground">—</span>}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-sm text-foreground">{t.hours.toFixed(2)}h</td>
+                {/* Horas y costo TACHADOS cuando ya no cuentan, con criterios DISTINTOS a propósito:
+                    el costo se tacha si la fila está acreditada (no se cobra, punto), y las horas
+                    sólo si además existe la copia que las cuenta. Tachar horas que igual suman en
+                    el total del mes era contradecir el encabezado del propio mes.
+                    Se siguen viendo (el cliente tiene derecho a ver qué se le acreditó).
+                    El tachado va en <del>, que los lectores de pantalla anuncian como supresión:
+                    `line-through` es decoración CSS y no se anuncia, y el `title` no se dispara en
+                    táctil — que es donde el cliente abre el portal. Sin esto, quien no ve el tachado
+                    lee dos veces las mismas horas y el mismo importe y entiende que le cobran doble,
+                    justo el bug que esto vino a arreglar. El texto explícito va en un sr-only; el
+                    `title` queda como extra, nunca como único portador del mensaje.
+                    Se atenúa con `text-muted-foreground` (token con contraste garantizado) en vez de
+                    `opacity-50` sobre `text-foreground`, que bajaba el contraste real por debajo del
+                    mínimo legible. */}
+                <td
+                 className="px-4 py-3 text-right font-mono text-sm text-foreground"
+                 title={moved ? `${t.hours.toFixed(2)}h acreditadas — no se te cobran` : undefined}
+                >
+                 {moved ? (
+                  <>
+                   <del className="line-through text-muted-foreground">{t.hours.toFixed(2)}h</del>
+                   <span className="sr-only">{` ${t.hours.toFixed(2)}h acreditadas — no se te cobran`}</span>
+                  </>
+                 ) : (
+                  `${t.hours.toFixed(2)}h`
+                 )}
+                </td>
                 <td className="px-4 py-3">
-                 {t.billedCycleId ? (
+                 {credited ? (
+                  <Badge className="inline-flex items-center gap-1 bg-muted text-muted-foreground text-[10px]">
+                   <CheckCircle2 className="h-3 w-3" /> Acreditado
+                  </Badge>
+                 ) : t.billedCycleId ? (
                   <Badge className="inline-flex items-center gap-1 bg-success/15 text-success text-[10px]">
                    <CheckCircle2 className="h-3 w-3" /> Facturado
                   </Badge>
@@ -306,11 +582,26 @@ export default function PortalHoursPage() {
                   </span>
                  )}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground">
-                 {formatCurrency(t.priceAmount, t.priceCurrency ?? data.currency)}
+                <td
+                 className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground"
+                 title={
+                  credited && t.priceAmount !== null
+                   ? `${costLabel} acreditados — no se te cobran`
+                   : undefined
+                 }
+                >
+                 {credited ? (
+                  <>
+                   <del className="line-through text-muted-foreground">{costLabel}</del>
+                   <span className="sr-only">{` ${costLabel} acreditados — no se te cobran`}</span>
+                  </>
+                 ) : (
+                  costLabel
+                 )}
                 </td>
                </tr>
-              ))}
+               );
+              })}
              </tbody>
             </table>
            </div>
