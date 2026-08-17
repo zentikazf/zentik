@@ -441,14 +441,17 @@ export default function ClientTiempoPage() {
         reason: deleteTxReason.trim(),
         deletedById: authUser.id,
       });
-      // Textos distintos por la asimetría del backend (#54): borrar la fila espejo de una NC solo
-      // la saca del pool re-facturable (soft-delete + auditoría) y deja el cupo intacto, porque esa
-      // fila nunca lo movió. Las demás filas sí revierten su efecto sobre las horas del cliente.
+      // Textos distintos por la asimetría del backend: `deleteHoursTransaction` sólo revierte
+      // contadores para PURCHASE/USAGE/LOAN/REFUND. La fila espejo de una NC (#54) y los INTERNAL
+      // nunca movieron el cupo, así que su borrado es soft-delete + auditoría y nada más. El toast
+      // bifurca igual que el diálogo: no puede prometer una reversión que no ocurrió.
       toast.success(
         'Transacción eliminada',
         deleteTxConfirm.esEspejo
           ? 'Se quitó del pool re-facturable de la nota de crédito. Las horas del cliente no cambian.'
-          : 'Se revirtió el efecto en las horas del cliente',
+          : deleteTxConfirm.type === 'INTERNAL'
+            ? 'Se eliminó el registro interno. Las horas del cliente no cambian.'
+            : 'Se revirtió el efecto en las horas del cliente',
       );
       setDeleteTxConfirm(null);
       setDeleteTxReason('');
@@ -713,12 +716,17 @@ export default function ClientTiempoPage() {
           </p>
         </div>
 
-        {/* Aviso de truncado: sólo si el backend tenía más movimientos de los que mandó. */}
+        {/* Aviso de truncado: sólo si el backend tenía más movimientos de los que mandó.
+            Redactado sobre LA VISTA y no sobre el cliente, igual que su hermano de #56 (abajo):
+            `transactionsTotal` es el count CON el `where.type` de la píldora de movimiento, así que
+            con "Descuento" activa el número es el del bucket y no el del cliente. Decir "del
+            cliente" hacía que el total cambiara al filtrar y quien lo leyera concluyera que el
+            cartel miente. Los dos carteles hablan el mismo idioma a propósito. */}
         {truncated && (
           <div className="mb-3 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <p className="text-[11px] text-warning">
-              Del cliente se trajeron los últimos <strong>{allTxs.length}</strong> de{' '}
+              De esta vista se trajeron los últimos <strong>{allTxs.length}</strong> de{' '}
               <strong>{hours?.transactionsTotal}</strong> movimientos. El corte se hace por fecha de
               registro y los meses se agrupan por fecha de trabajo, así que puede faltar información
               en <strong>cualquier</strong> mes: ningún total de abajo es confiable.
@@ -1114,9 +1122,27 @@ export default function ClientTiempoPage() {
               Esta fila espejo (<strong>-{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) se quitará del pool re-facturable de la nota de crédito.
               {' '}<strong>Las horas del cliente no se modifican</strong>: esta fila nunca movió el cupo, solo copia el movimiento original.
             </p>
+          ) : deleteTxConfirm?.type === 'INTERNAL' ? (
+            /* Misma bifurcación que la fila espejo, por el mismo motivo: `deleteHoursTransaction`
+               tiene ramas de contadores para PURCHASE/USAGE/LOAN/REFUND y NINGUNA para INTERNAL, así
+               que acá sólo ocurre el soft-delete. Un INTERNAL nace de una tarea SUPPORT con
+               billable=false: `recordHoursUsage` crea la fila SIN tocar `usedHours` (por eso el
+               header la cuenta como "internas", fuera de los buckets). Prometer una reversión de
+               cupo dejaría al admin esperando que "Consumidas" se mueva y creyendo que el borrado
+               falló. */
+            <p className="text-sm text-muted-foreground">
+              Se eliminará este registro interno (<strong>-{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}).
+              {' '}<strong>Las horas del cliente no se modifican</strong>: un movimiento interno nunca consumió cupo (es tiempo no facturable del equipo).
+            </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Se revertirá el efecto de esta transacción (<strong>{deleteTxConfirm?.type === 'PURCHASE' ? '+' : '-'}{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) sobre las horas del cliente.
+              {/* El signo sale de `esCredito`, el MISMO helper que pinta la fila de la tabla, no de
+                  comparar contra 'PURCHASE' a mano. Comparando solo con PURCHASE, un REFUND —que el
+                  backend crea de verdad al rechazar o reabrir un ticket (hours.listener.ts)— se
+                  pintaba "+2.00h" en la tabla y "-2.00h" en este diálogo: el admin leía lo CONTRARIO
+                  de lo que iba a pasar (ese REFUND SUMÓ horas, borrarlo las RESTA) y el diálogo se
+                  contradecía con la fila que tenía arriba. */}
+              Se revertirá el efecto de esta transacción (<strong>{esCredito(deleteTxConfirm?.type ?? '') ? '+' : '-'}{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) sobre las horas del cliente.
             </p>
           )}
           <div className="space-y-2 pt-2">
