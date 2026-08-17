@@ -7,6 +7,7 @@ import { Clock, DollarSign, TrendingUp, CheckCircle2, Circle, ChevronDown, Slide
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
+import { monthKeyOf, monthLabelEs, rowDateShort } from '@/lib/hours-month';
 import { PortalVariablesBlock, PortalVariableItem, splitVariables } from '@/components/portal/portal-variables-block';
 
 interface HoursTransaction {
@@ -49,37 +50,6 @@ interface PortalVariableStatement {
 }
 
 const fmtUSD = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-// Mes de trabajo real del registro (workedOn date-only, sin day-shift por TZ); fallback a la fecha de carga
-// (createdAt, mes en Asunción). Devuelve la clave 'YYYY-MM'.
-function monthKeyOf(t: HoursTransaction): string {
- if (t.workedOn) return t.workedOn.slice(0, 7);
- const p = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'America/Asuncion',
-  year: 'numeric',
-  month: '2-digit',
- }).formatToParts(new Date(t.createdAt));
- const y = p.find((x) => x.type === 'year')?.value ?? '0000';
- const m = p.find((x) => x.type === 'month')?.value ?? '00';
- return `${y}-${m}`;
-}
-
-// 'YYYY-MM' → 'Julio 2026' (es-PY, capitalizado).
-function monthLabelEs(key: string): string {
- const [y, m] = key.split('-').map(Number);
- if (!y || !m) return key;
- const s = new Intl.DateTimeFormat('es-PY', { month: 'long', year: 'numeric' }).format(
-  new Date(Date.UTC(y, m - 1, 15)),
- );
- return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// Fecha corta del registro para la fila (día + mes; el año ya va en el header del mes). workedOn parseado
-// a medianoche LOCAL para no correr un día por la zona horaria.
-function rowDateShort(t: HoursTransaction): string {
- const iso = t.workedOn ? `${t.workedOn.slice(0, 10)}T00:00:00` : t.createdAt;
- return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short' });
-}
 
 export default function PortalHoursPage() {
  const [data, setData] = useState<HoursResponse | null>(null);
