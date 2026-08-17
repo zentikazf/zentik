@@ -204,7 +204,11 @@ export default function ClientTiempoPage() {
   const [savingHours, setSavingHours] = useState(false);
 
   // Delete hours transaction
-  const [deleteTxConfirm, setDeleteTxConfirm] = useState<{ id: string; type: string; hours: number; note: string | null } | null>(null);
+  // `esEspejo` viaja en el state porque el borrado del backend es ASIMÉTRICO (#54): la fila espejo
+  // de una NC se borra con soft-delete + auditoría y NO revierte el cupo del cliente (nunca lo movió),
+  // mientras que el resto de las filas sí lo revierten. Sin este dato el diálogo no puede bifurcar
+  // los textos y le prometería al admin una reversión de horas que no va a ocurrir.
+  const [deleteTxConfirm, setDeleteTxConfirm] = useState<{ id: string; type: string; hours: number; note: string | null; esEspejo: boolean } | null>(null);
   const [deleteTxReason, setDeleteTxReason] = useState('');
   const [deletingTx, setDeletingTx] = useState(false);
 
@@ -402,7 +406,15 @@ export default function ClientTiempoPage() {
         reason: deleteTxReason.trim(),
         deletedById: authUser.id,
       });
-      toast.success('Transacción eliminada', 'Se revirtió el efecto en las horas del cliente');
+      // Textos distintos por la asimetría del backend (#54): borrar la fila espejo de una NC solo
+      // la saca del pool re-facturable (soft-delete + auditoría) y deja el cupo intacto, porque esa
+      // fila nunca lo movió. Las demás filas sí revierten su efecto sobre las horas del cliente.
+      toast.success(
+        'Transacción eliminada',
+        deleteTxConfirm.esEspejo
+          ? 'Se quitó del pool re-facturable de la nota de crédito. Las horas del cliente no cambian.'
+          : 'Se revirtió el efecto en las horas del cliente',
+      );
       setDeleteTxConfirm(null);
       setDeleteTxReason('');
       loadHours(movementFilter);
@@ -932,45 +944,48 @@ export default function ClientTiempoPage() {
                                   </td>
                                   <td className="px-3 py-2.5">
                                     <div className="flex items-center gap-1 justify-end">
-                                      {/* Dos motivos de solo-lectura, mismo candado:
-                                          - Movimiento facturado (#25): inmutable hasta reabrir el ciclo.
-                                          - Fila espejo de una NC (H9b): nace con billedCycleId null y
-                                            type USAGE/LOAN, así que pasaba los dos guards y quedaba
-                                            editable/borrable. Pero la espejo NUNCA movió el cupo, y el
-                                            backend edita/borra aplicando increment/decrement sobre
-                                            usedHours: borrarla le REGALA las horas al cliente y
-                                            editarla mueve un contador que ella no tocó, todo sin que
-                                            el header (que la excluye) se mueva un decimal. */}
-                                      {tx.billedCycleId || esEspejo ? (
+                                      {/* Movimiento facturado (#25): TODO bloqueado hasta reabrir el ciclo. */}
+                                      {tx.billedCycleId ? (
                                         <span
                                           className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40"
-                                          title={
-                                            tx.billedCycleId
-                                              ? 'Movimiento facturado (solo lectura). Reabrí el ciclo para editarlo.'
-                                              : 'Fila espejo de una nota de crédito: se corrige anulando o reemitiendo la NC, no editando la fila.'
-                                          }
+                                          title="Movimiento facturado (solo lectura). Reabrí el ciclo para editarlo."
                                         >
                                           <Lock className="h-3.5 w-3.5" />
                                         </span>
                                       ) : (
                                         <>
-                                          {canEditHours && (tx.type === 'USAGE' || tx.type === 'LOAN') && (
-                                            <button
-                                              onClick={() => {
-                                                setEditTxConfirm(tx);
-                                                setEditTxHours(String(tx.hours));
-                                                setEditTxRate(tx.priceRate ? String(tx.priceRate) : '');
-                                              }}
-                                              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-primary/10 hover:text-primary transition-colors"
-                                              title="Editar horas / tarifa"
+                                          {/* Fila espejo de una NC (H9b): el candado tapa SOLO el editar.
+                                              Editarla la desincroniza del movimiento original que copia
+                                              (y movería un contador que ella nunca tocó), pero eliminarla
+                                              es la única forma de deshacer una devolución de horas emitida
+                                              por error — no hay anulación ni reemisión de NC. El backend
+                                              la borra sin revertir cupo (#54, deleteHoursTransaction). */}
+                                          {esEspejo ? (
+                                            <span
+                                              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40"
+                                              title="Fila espejo de una nota de crédito: es una copia derivada del movimiento original y no se edita. Si la devolución de horas fue un error, eliminá la fila."
                                             >
-                                              <Pencil className="h-3.5 w-3.5" />
-                                            </button>
+                                              <Lock className="h-3.5 w-3.5" />
+                                            </span>
+                                          ) : (
+                                            canEditHours && (tx.type === 'USAGE' || tx.type === 'LOAN') && (
+                                              <button
+                                                onClick={() => {
+                                                  setEditTxConfirm(tx);
+                                                  setEditTxHours(String(tx.hours));
+                                                  setEditTxRate(tx.priceRate ? String(tx.priceRate) : '');
+                                                }}
+                                                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-primary/10 hover:text-primary transition-colors"
+                                                title="Editar horas / tarifa"
+                                              >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                              </button>
+                                            )
                                           )}
                                           <button
-                                            onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note })}
+                                            onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note, esEspejo })}
                                             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                            title="Eliminar transacción"
+                                            title={esEspejo ? 'Eliminar fila espejo (deshace la devolución de horas)' : 'Eliminar transacción'}
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
                                           </button>
@@ -1034,9 +1049,20 @@ export default function ClientTiempoPage() {
           <DialogHeader>
             <DialogTitle>Eliminar transacción de horas</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Se revertirá el efecto de esta transacción (<strong>{deleteTxConfirm?.type === 'PURCHASE' ? '+' : '-'}{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) sobre las horas del cliente.
-          </p>
+          {/* La fila espejo de una NC se borra por una rama distinta del backend (#54): solo soft-delete
+              + auditoría, sin tocar el cupo del cliente, porque esa fila nunca lo movió (el movimiento
+              original sigue vivo y es el que consumió las horas). Prometer acá una reversión de cupo
+              haría que el admin vea el KPI "Consumidas" sin moverse y crea que el borrado falló. */}
+          {deleteTxConfirm?.esEspejo ? (
+            <p className="text-sm text-muted-foreground">
+              Esta fila espejo (<strong>-{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) se quitará del pool re-facturable de la nota de crédito.
+              {' '}<strong>Las horas del cliente no se modifican</strong>: esta fila nunca movió el cupo, solo copia el movimiento original.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Se revertirá el efecto de esta transacción (<strong>{deleteTxConfirm?.type === 'PURCHASE' ? '+' : '-'}{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) sobre las horas del cliente.
+            </p>
+          )}
           <div className="space-y-2 pt-2">
             <Label>Motivo de eliminación *</Label>
             <Textarea
