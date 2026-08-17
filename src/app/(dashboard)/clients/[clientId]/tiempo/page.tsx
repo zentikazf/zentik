@@ -30,6 +30,7 @@ import {
   Lock,
   DollarSign,
   CalendarRange,
+  Info,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -92,7 +93,22 @@ interface ClientHeader {
 // respuesta: agrupar sobre una página parcial daría totales que mienten (la card mostraría solo
 // la porción del mes que cayó en esa página). El backend capea el limit en 500 — si algún cliente
 // se acercara a ese techo hay que pasar a paginación POR MES agrupada en SQL, no subir el número.
+//
+// OJO: esto es lo que la pantalla PIDE, NO el techo. El techo real vive en el backend
+// (`HOURS_SUMMARY_MAX_LIMIT` en client.service.ts) y capea este pedido: subir este número acá no
+// sube el techo, solo pide de más. Por eso el umbral de aviso NO se deriva de esta constante
+// (ver `umbralDeAviso` abajo).
 const HOURS_FETCH_LIMIT = 500;
+
+// #56: umbral de aviso preventivo (80%). Se DERIVA del techo, nunca es un literal suelto: si el
+// techo se mueve, el umbral lo sigue solo. La entrada es el `limit` EFECTIVO que devuelve la
+// respuesta — el backend ya lo capeó contra su propio techo — y no `HOURS_FETCH_LIMIT`, que es
+// apenas lo que esta pantalla pide. Derivarlo del pedido dejaba un hueco silencioso: subiendo solo
+// `HOURS_FETCH_LIMIT` a 2000 el backend igual devuelve 500, un cliente con 450 movimientos no
+// trunca (450 filas de 450) y el umbral pasa a 1600, así que el aviso NO aparece estando al 90%
+// del techo real. Con el limit de la RESPUESTA, el umbral sigue al techo aunque alguien toque el
+// pedido.
+const umbralDeAviso = (techoEfectivo: number) => Math.floor(techoEfectivo * 0.8);
 
 type MovementFilter = 'ACUMULADAS' | 'DESCUENTO' | null;
 
@@ -272,6 +288,25 @@ export default function ClientTiempoPage() {
   // esté COMPLETO mientras el mes realmente cortado queda sin marcar — señalar el mes equivocado es
   // peor que no señalar ninguno. Bajo truncado, ningún total mensual es confiable.
   const truncated = hours != null && hours.transactionsTotal > allTxs.length;
+
+  // Techo REAL de la respuesta: el backend capea el `limit` pedido contra `HOURS_SUMMARY_MAX_LIMIT`
+  // y devuelve el valor ya capeado. La constante local queda SOLO como fallback defensivo por si la
+  // respuesta no lo trae (o trae algo no usable), nunca como fuente del umbral.
+  const techoEfectivo =
+    typeof hours?.limit === 'number' && hours.limit > 0 ? hours.limit : HOURS_FETCH_LIMIT;
+
+  // #56: aviso PREVENTIVO — todavía funciona todo y los totales son correctos, pero el ledger de
+  // este cliente se está acercando al techo. Es EXCLUYENTE con el de truncado: bajo truncado ya se
+  // está perdiendo información, ese aviso es más grave y este sería ruido al lado.
+  //
+  // `transactionsTotal` es el conteo DE ESTA VISTA: con una píldora de movimiento activa el backend
+  // cuenta con el mismo `where.type` que filtra las filas, así que no es "lo que tiene el cliente"
+  // sino lo que tiene el bucket elegido. Por eso el aviso se redacta en términos de la vista. NO se
+  // pide un conteo total aparte a propósito: sería una query extra en el camino caliente de una
+  // pantalla que se abre para facturar, y el aviso igual cumple su función (sin filtro —el estado
+  // por defecto al abrir— la vista ES el ledger completo).
+  const nearCeiling =
+    hours != null && !truncated && hours.transactionsTotal > umbralDeAviso(techoEfectivo);
 
   const rangeActive = dateFrom !== '' || dateTo !== '';
 
@@ -687,6 +722,27 @@ export default function ClientTiempoPage() {
               <strong>{hours?.transactionsTotal}</strong> movimientos. El corte se hace por fecha de
               registro y los meses se agrupan por fecha de trabajo, así que puede faltar información
               en <strong>cualquier</strong> mes: ningún total de abajo es confiable.
+            </p>
+          </div>
+        )}
+
+        {/* #56: aviso preventivo, nunca junto al de truncado (ver `nearCeiling`). Dice qué pasa y
+            qué hacer: la salida NO es subir el techo, es paginar por MES agrupando en SQL.
+            Redactado sobre LA VISTA y no sobre el cliente: con una píldora de movimiento activa el
+            conteo es el del bucket filtrado (ver `nearCeiling`). Decir "este cliente tiene N" hacía
+            que el número bajara —y el aviso desapareciera— al filtrar, y el staff concluía que el
+            aviso había sido un error. */}
+        {nearCeiling && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-info/30 bg-info/10 p-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+            <p className="text-[11px] text-info">
+              Esta vista ya trae <strong>{hours?.transactionsTotal}</strong> movimientos y se
+              acerca al techo de <strong>{techoEfectivo}</strong> que devuelve el servidor. Los
+              totales de abajo <strong>todavía son correctos</strong>, pero al pasar el techo dejarán
+              de serlo sin avisar: los meses se suman en el navegador y necesitan el ledger completo.
+              La solución <strong>no es subir el techo</strong> (solo mueve el problema y agranda la
+              respuesta), es <strong>paginar por mes agrupando en SQL</strong>. Avisale al equipo de
+              desarrollo antes de llegar al límite.
             </p>
           </div>
         )}
