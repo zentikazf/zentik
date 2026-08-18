@@ -94,20 +94,36 @@ export default function ContractPackageEditorPage() {
     if (!orgId) return;
 
     setSaving(true);
+    let saved: ContractPackageDetail;
     try {
       const res = await slaService.upsertPackageItems(orgId, packageId, { items: payload });
-      setData(res.data);
+      saved = res.data;
+      setData(saved);
       toast.success('Paquete guardado', `${payload.length} tipo(s) actualizados`);
-
-      if (res.data.package.usedInProjects > 0) {
-        const applicationsRes = await slaService.listPackageApplications(orgId, packageId);
-        setApplications(applicationsRes.data);
-        setShowReapply(true);
-      }
     } catch (err) {
       toast.error('Error', getApiErrorMessage(err, 'No se pudo guardar el paquete'));
+      return;
     } finally {
       setSaving(false);
+    }
+
+    // La oferta de re-aplicar va FUERA del try del guardado: es un extra, y si
+    // falla no puede disfrazarse de "no se pudo guardar" sobre un PUT que ya
+    // escribió. El paquete quedó guardado igual; lo único que se pierde es el
+    // ofrecimiento, que también está en la pantalla.
+    if (saved.package.usedInProjects === 0) return;
+    try {
+      const applicationsRes = await slaService.listPackageApplications(orgId, packageId);
+      setApplications(applicationsRes.data);
+      setShowReapply(true);
+    } catch (err) {
+      toast.error(
+        'Guardado, pero...',
+        getApiErrorMessage(
+          err,
+          'No se pudo traer la lista de proyectos que usan el paquete. Podés re-aplicarlo desde cada proyecto.',
+        ),
+      );
     }
   };
 

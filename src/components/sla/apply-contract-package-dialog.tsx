@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -127,21 +127,33 @@ export function ApplyContractPackageDialog({
   }, [open, orgId, canManageSla, lockedPackageId]);
 
   // ── Preview ────────────────────────────────────────────────────────────────
+  /**
+   * Token del pedido en vuelo. Cambiar de paquete rápido deja dos previews
+   * corriendo y el que gana es el que tarda MÁS, no el último elegido: sin esto,
+   * la pantalla puede terminar mostrando los conflictos del paquete A con el
+   * paquete B seleccionado — y los checkboxes autorizarían pisar sobre esa
+   * lectura equivocada.
+   */
+  const previewRequest = useRef(0);
+
   const loadPreview = useCallback(
     async (packageId: string) => {
       if (!packageId) return;
+      const token = ++previewRequest.current;
       setLoadingPreview(true);
       // La selección de "pisar" se descarta con cada preview nuevo: un checkbox
       // sobrevivido de otro paquete autorizaría pisar algo que el usuario no vio.
       setOverwrite(new Set());
       try {
         const res = await slaService.previewContractPackage(orgId, projectId, packageId);
+        if (previewRequest.current !== token) return;
         setPreview(res.data);
       } catch (err) {
+        if (previewRequest.current !== token) return;
         setPreview(null);
         toast.error('Error', getApiErrorMessage(err, 'No se pudo calcular el preview'));
       } finally {
-        setLoadingPreview(false);
+        if (previewRequest.current === token) setLoadingPreview(false);
       }
     },
     [orgId, projectId],
