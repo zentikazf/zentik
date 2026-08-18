@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Info } from 'lucide-react';
+import { ArrowLeft, Info, Package } from 'lucide-react';
 import { getApiErrorMessage } from '@/lib/api-error-message';
 import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
@@ -27,6 +27,7 @@ import type {
 } from '@/types/sla.types';
 import { useCanManageSla } from '@/components/sla/use-can-manage-sla';
 import { ContractTreeEditor, NO_POLICY } from '@/components/sla/contract-tree-editor';
+import { ApplyContractPackageDialog } from '@/components/sla/apply-contract-package-dialog';
 
 /**
  * NIVEL 2 — el centro de contratación (#48 R5).
@@ -54,6 +55,8 @@ export default function ContractCenterPage() {
   const [policies, setPolicies] = useState<SlaPolicy[]>([]);
   const [saving, setSaving] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
+  /** #58 R5.2: la segunda puerta al mismo taller. */
+  const [showApplyPackage, setShowApplyPackage] = useState(false);
 
   // ── Carga ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -248,7 +251,29 @@ export default function ContractCenterPage() {
         saving={saving}
         onSave={handleSave}
         onToggleVisible={handleToggleVisible}
+        headerActions={
+          <Button
+            variant="outline"
+            className="gap-1.5 rounded-full"
+            onClick={() => setShowApplyPackage(true)}
+          >
+            <Package className="h-4 w-4" />
+            Aplicar paquete
+          </Button>
+        }
       />
+
+      {orgId && (
+        <ApplyContractPackageDialog
+          orgId={orgId}
+          projectId={projectId}
+          projectName={data.project.name}
+          open={showApplyPackage}
+          onOpenChange={setShowApplyPackage}
+          // El apply devuelve la matriz ya actualizada: no hace falta un GET más.
+          onApplied={(result) => setData(result.contracts)}
+        />
+      )}
     </div>
   );
 }

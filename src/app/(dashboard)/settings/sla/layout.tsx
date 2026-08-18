@@ -8,6 +8,7 @@ import {
   Gauge,
   Layers,
   ListChecks,
+  Package,
   Settings2,
   ShieldCheck,
   Tags,
@@ -28,6 +29,7 @@ const slaNav = [
   { name: 'Criticidades', href: '/settings/sla/criticidades', icon: Gauge },
   { name: 'Categorías internas', href: '/settings/sla/categorias-internas', icon: Layers },
   { name: 'Cobertura', href: '/settings/sla/cobertura', icon: ListChecks },
+  { name: 'Paquetes', href: '/settings/sla/paquetes', icon: Package },
   { name: 'Calendario', href: '/settings/sla/calendario', icon: CalendarDays },
   { name: 'Configuración actual (legacy)', href: '/settings/sla/legacy', icon: Settings2 },
 ];

@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, ArrowRight, Eye, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Eye, Package, ShieldCheck } from 'lucide-react';
 import { getApiErrorMessage } from '@/lib/api-error-message';
 import { slaService } from '@/services/sla.service';
 import { toast } from '@/hooks/use-toast';
@@ -21,6 +21,7 @@ import { useOrg } from '@/providers/org-provider';
 import { CRITICALITY_LABEL } from '@/lib/criticality';
 import type { ProjectSlaContractsResponse, SlaPolicy } from '@/types/sla.types';
 import { useCanManageSla } from './use-can-manage-sla';
+import { ApplyContractPackageDialog } from './apply-contract-package-dialog';
 
 /** Valor centinela del select: Radix no admite `value=""`. */
 const NO_POLICY = 'NONE';
@@ -54,6 +55,7 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
   const [policies, setPolicies] = useState<SlaPolicy[]>([]);
   const [contracts, setContracts] = useState<ProjectSlaContractsResponse | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
+  const [showApplyPackage, setShowApplyPackage] = useState(false);
 
   const load = useCallback(async () => {
     if (!orgId || !canManageSla) return;
@@ -210,14 +212,40 @@ export function ProjectSlaSection({ projectId }: { projectId: string }) {
               </p>
             )}
 
-            <Button asChild variant="outline" className="rounded-full">
-              <Link href={`/settings/sla/cobertura/${projectId}`}>
-                Configurar contratos
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href={`/settings/sla/cobertura/${projectId}`}>
+                  Configurar contratos
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              {/*
+                #58 R5.2: la tercera puerta. Se ofrece acá porque es donde se
+                llega cuando el proyecto está recién creado y todavía no tiene
+                nada — justo el caso donde un paquete lo resuelve de una.
+              */}
+              <Button
+                variant="ghost"
+                className="gap-1.5 rounded-full"
+                onClick={() => setShowApplyPackage(true)}
+              >
+                <Package className="h-4 w-4" />
+                Aplicar un paquete
+              </Button>
+            </div>
           </div>
         </div>
+      )}
+
+      {orgId && (
+        <ApplyContractPackageDialog
+          orgId={orgId}
+          projectId={projectId}
+          projectName={contracts?.project.name}
+          open={showApplyPackage}
+          onOpenChange={setShowApplyPackage}
+          onApplied={(result) => setContracts(result.contracts)}
+        />
       )}
     </div>
   );

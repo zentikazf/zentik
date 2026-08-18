@@ -66,7 +66,22 @@ export interface ContractTreeEditorProps {
   onToggleVisible?: (row: ProjectSlaContract, next: boolean) => void;
   /** Se inyecta al lado del botón Guardar (#58 R2.3: "Aplicar paquete"). */
   headerActions?: React.ReactNode;
+  /** Default: el título del centro de contratación. */
+  title?: string;
+  /**
+   * El pie que explica qué significa destildar. Es lo único del render que NO
+   * sirve igual en las dos pantallas: en el proyecto destildar descontrata "en
+   * este proyecto", en el paquete saca el tipo del paquete y no toca a nadie.
+   */
+  footerNote?: React.ReactNode;
 }
+
+const DEFAULT_FOOTER_NOTE = (
+  <>
+    Destildar un tipo <strong>descontrata de verdad</strong>: el cliente deja de verlo en este
+    proyecto. Lo que no toques queda como está.
+  </>
+);
 
 /**
  * El editor de árbol tipo → política (#48 R5), extraído del centro de
@@ -96,6 +111,8 @@ export function ContractTreeEditor({
   onSave,
   onToggleVisible,
   headerActions,
+  title = 'Tipos de solicitud contratados',
+  footerNote = DEFAULT_FOOTER_NOTE,
 }: ContractTreeEditorProps) {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -207,7 +224,7 @@ export function ContractTreeEditor({
   return (
     <section className="space-y-4 rounded-xl border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-foreground">Tipos de solicitud contratados</h3>
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
         <div className="flex flex-wrap items-center gap-2">
           {headerActions}
           <Button onClick={handleSave} disabled={saving || pendingCount === 0} className="rounded-full">
@@ -274,10 +291,7 @@ export function ContractTreeEditor({
             </div>
           )}
 
-          <p className="text-[11px] text-muted-foreground">
-            Destildar un tipo <strong>descontrata de verdad</strong>: el cliente deja de verlo en
-            este proyecto. Lo que no toques queda como está.
-          </p>
+          <p className="text-[11px] text-muted-foreground">{footerNote}</p>
         </>
       )}
     </section>

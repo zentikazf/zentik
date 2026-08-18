@@ -1,7 +1,14 @@
 import { api } from '@/lib/api-client';
 import type {
+  ApplyContractPackageInput,
+  ApplyPackagePreview,
+  ApplyPackageResult,
   AssignSlaPolicyInput,
   AvailableTicketTypes,
+  ContractPackageApplicationRow,
+  ContractPackageDetail,
+  ContractPackageListItem,
+  CreateContractPackageInput,
   CreateSlaPolicyInput,
   CreateTicketTypeInput,
   CriticalityConfig,
@@ -14,9 +21,11 @@ import type {
   SlaSeedResult,
   TicketType,
   TicketTypeNode,
+  UpdateContractPackageInput,
   UpdateCriticalityConfigInput,
   UpdateSlaPolicyInput,
   UpdateTicketTypeInput,
+  UpsertContractPackageItemsInput,
   UpsertProjectContractsInput,
 } from '@/types/sla.types';
 
@@ -139,6 +148,63 @@ export const slaService = {
   assignClientPolicy: (orgId: string, clientId: string, input: AssignSlaPolicyInput) =>
     api.patch<{ id: string; name: string; defaultSlaPolicyId: string | null }>(
       `/organizations/${orgId}/clients/${clientId}/sla-policy`,
+      input,
+    ),
+
+  // ── Paquetes de contratos default (#58) ──────────────────────────────────
+
+  listPackages: (orgId: string, includeInactive = false) =>
+    api.get<ContractPackageListItem[]>(
+      `/organizations/${orgId}/sla-packages${includeInactive ? '?includeInactive=true' : ''}`,
+    ),
+
+  createPackage: (orgId: string, input: CreateContractPackageInput) =>
+    api.post<ContractPackageListItem>(`/organizations/${orgId}/sla-packages`, input),
+
+  /**
+   * El paquete + el catálogo COMPLETO de tipos con su asignación encima. Mismo
+   * shape que la matriz del proyecto: alimenta al MISMO editor de árbol.
+   */
+  getPackage: (orgId: string, packageId: string) =>
+    api.get<ContractPackageDetail>(`/organizations/${orgId}/sla-packages/${packageId}`),
+
+  /** Proyectos que ya recibieron el paquete. Alimenta el re-aplicar (#58 R6). */
+  listPackageApplications: (orgId: string, packageId: string) =>
+    api.get<ContractPackageApplicationRow[]>(
+      `/organizations/${orgId}/sla-packages/${packageId}/applications`,
+    ),
+
+  updatePackage: (orgId: string, packageId: string, input: UpdateContractPackageInput) =>
+    api.patch<ContractPackageListItem>(
+      `/organizations/${orgId}/sla-packages/${packageId}`,
+      input,
+    ),
+
+  /** ⚠️ `isActive: false` BORRA el ítem (en un paquete "no está" es fila ausente). */
+  upsertPackageItems: (
+    orgId: string,
+    packageId: string,
+    input: UpsertContractPackageItemsInput,
+  ) =>
+    api.put<ContractPackageDetail>(
+      `/organizations/${orgId}/sla-packages/${packageId}/items`,
+      input,
+    ),
+
+  /** Dry-run: las 3 categorías salen del backend, no se calculan acá. */
+  previewContractPackage: (orgId: string, projectId: string, packageId: string) =>
+    api.post<ApplyPackagePreview>(
+      `/organizations/${orgId}/projects/${projectId}/sla-contracts/apply-package/preview`,
+      { packageId },
+    ),
+
+  /**
+   * Escribe los contratos y registra la aplicación en UNA llamada (#58 R4.1): el
+   * front no orquesta la operación con un PUT y un POST por separado.
+   */
+  applyContractPackage: (orgId: string, projectId: string, input: ApplyContractPackageInput) =>
+    api.post<ApplyPackageResult>(
+      `/organizations/${orgId}/projects/${projectId}/sla-contracts/apply-package`,
       input,
     ),
 
