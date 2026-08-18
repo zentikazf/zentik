@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Check, Eye, Loader2, Package, Plus } from 'lucide-react';
+import { AlertTriangle, Check, Eye, Loader2, Package, Plus, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { getApiErrorMessage } from '@/lib/api-error-message';
 import { slaService } from '@/services/sla.service';
@@ -165,6 +165,15 @@ export function ApplyContractPackageDialog({
   }, [open, selectedId, canManageSla, loadPreview]);
 
   const reset = () => {
+    // Bumpear el token INVALIDA el preview en vuelo. Sin esto, cerrar con Escape
+    // mientras el preview viaja deja la promesa viva: al reabrir, aterriza con
+    // `selectedId` ya vacío y pinta los contratos del paquete anterior con el
+    // Select en "Elegí un paquete...". Peor, el botón Aplicar queda HABILITADO
+    // (hay preview, no está cargando) y al apretarlo no pasa nada — `handleApply`
+    // corta en seco porque no hay `selectedId`. Un botón muerto sobre datos que
+    // el usuario cree que va a aplicar.
+    previewRequest.current++;
+    setLoadingPreview(false);
     setSelectedId(lockedPackageId ?? '');
     setPreview(null);
     setOverwrite(new Set());
@@ -202,8 +211,25 @@ export function ApplyContractPackageDialog({
   // El backend es la autoridad; esto solo evita ofrecer lo que va a dar 403.
   if (!canManageSla) return null;
 
-  const nothingToDo =
-    !!preview && preview.toCreate.length === 0 && overwrite.size === 0 && !preview.isEmpty;
+  /**
+   * Qué decir cuando aplicar no va a escribir nada. Son TRES situaciones
+   * distintas y una sola frase para las tres miente:
+   * · todo omitido  → el paquete está podrido, no es que el proyecto esté al día;
+   * · solo conflictos → hay N distintos esperando un tilde, y decir "al día"
+   *   contradice al cartel naranja que está dos divs más arriba;
+   * · nada de eso → ahí sí, el proyecto ya está al día.
+   */
+  const idleNote = (() => {
+    if (!preview || preview.isEmpty) return null;
+    if (preview.toCreate.length > 0 || overwrite.size > 0) return null;
+    if (preview.different.length > 0) {
+      return `No se va a tocar nada: los ${preview.different.length} contrato(s) configurados distinto quedan como están mientras no tildes ninguno.`;
+    }
+    if (preview.skipped.length > 0) {
+      return `No se va a aplicar nada: los ${preview.skipped.length} ítem(s) del paquete están omitidos. Revisá el paquete antes de contar con él.`;
+    }
+    return 'Este proyecto ya está al día con el paquete. Aplicarlo igual queda registrado, pero no cambia ningún contrato.';
+  })();
 
   return (
     <Dialog
@@ -261,6 +287,53 @@ export function ApplyContractPackageDialog({
           {/* ── El preview ────────────────────────────────────────────────── */}
           {loadingPreview && <Skeleton className="h-40 rounded-lg" />}
 
+          {/*
+            El preview falló. Hace falta un botón: volver a elegir el MISMO
+            paquete en el Select no re-dispara nada (Radix no emite
+            `onValueChange` si el valor no cambia), así que sin esto el diálogo
+            queda inservible tras un blip de red — y en el alta de proyecto,
+            cerrarlo para reintentar te navega y hay que ir a buscar el paso a
+            mano en la pantalla del proyecto.
+          */}
+          {!loadingPreview && selectedId && !preview && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <p className="text-xs text-muted-foreground">
+                No se pudo calcular qué cambia en este proyecto.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => loadPreview(selectedId)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Reintentar
+              </Button>
+            </div>
+          )}
+
+          {/*
+            Archivado. Llega por el re-aplicar (que fija el paquete y no pasa por
+            el Select, donde los archivados ni se listan): si lo archivaste
+            mientras el diálogo estaba abierto, el backend lo rechaza con 422.
+          */}
+          {!loadingPreview && preview && !preview.package.isActive && (
+            <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/5 p-4">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                El paquete <strong>{preview.package.name}</strong> está archivado: no se puede
+                aplicar.{' '}
+                <Link
+                  href={`/settings/sla/paquetes/${preview.package.id}`}
+                  className="text-primary hover:underline"
+                >
+                  Reactivalo
+                </Link>{' '}
+                si querés volver a usarlo.
+              </p>
+            </div>
+          )}
+
           {!loadingPreview && preview && preview.isEmpty && (
             <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/5 p-4">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
@@ -278,7 +351,7 @@ export function ApplyContractPackageDialog({
             </div>
           )}
 
-          {!loadingPreview && preview && !preview.isEmpty && (
+          {!loadingPreview && preview && !preview.isEmpty && preview.package.isActive && (
             <div className="space-y-3">
               <PreviewGroup
                 tone="new"
@@ -372,12 +445,7 @@ export function ApplyContractPackageDialog({
                 </div>
               )}
 
-              {nothingToDo && (
-                <p className="text-[11px] text-muted-foreground">
-                  Este proyecto ya está al día con el paquete. Aplicarlo igual queda registrado,
-                  pero no cambia ningún contrato.
-                </p>
-              )}
+              {idleNote && <p className="text-[11px] text-muted-foreground">{idleNote}</p>}
             </div>
           )}
 
@@ -414,7 +482,9 @@ export function ApplyContractPackageDialog({
           <Button
             className="gap-1.5"
             onClick={handleApply}
-            disabled={saving || !preview || preview.isEmpty || loadingPreview}
+            disabled={
+              saving || !preview || preview.isEmpty || !preview.package.isActive || loadingPreview
+            }
           >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />

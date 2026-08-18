@@ -463,7 +463,8 @@ export interface PackagePreviewRow {
 
 /** Las 3 categorías del preview + los ítems podridos. Lo calcula el backend. */
 export interface ApplyPackagePreview {
-  package: { id: string; name: string; itemCount: number };
+  /** `isActive: false` ⇒ archivado: se puede mirar, el backend NO lo aplica. */
+  package: { id: string; name: string; itemCount: number; isActive: boolean };
   project: { id: string; name: string };
   /** ✚ se van a crear (incluye reactivar). */
   toCreate: PackagePreviewRow[];
