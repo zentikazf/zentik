@@ -344,6 +344,172 @@ export interface AssignSlaPolicyInput {
   slaPolicyId: string | null;
 }
 
+// ─── Paquetes de contratos default (#58) ────────────────────────────────────
+//
+// Un paquete es un grupo con nombre de pares tipo → política, reutilizable.
+// ⛔ Aplicarlo es una COPIA, no un vínculo: crea las filas de contrato del
+// proyecto y ahí se corta la relación. Editar el paquete NO cambia ningún
+// proyecto — para eso está el re-aplicar, siempre explícito.
+
+/** Cuántos tipos aporta cada rama raíz. Es el resumen del listado. */
+export interface ContractPackageBranch {
+  name: string;
+  count: number;
+}
+
+/** Una fila del listado de paquetes. */
+export interface ContractPackageListItem {
+  id: string;
+  name: string;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+  branches: ContractPackageBranch[];
+  /** Proyectos DISTINTOS que recibieron este paquete (log de aplicaciones). */
+  usedInProjects: number;
+}
+
+/** La cabecera del paquete en el detalle. */
+export interface ContractPackageSummary {
+  id: string;
+  name: string;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+  usedInProjects: number;
+}
+
+/**
+ * Respuesta de `GET sla-packages/:packageId`.
+ *
+ * `items` es el catálogo COMPLETO de tipos con la asignación del paquete encima
+ * — **el mismo shape que la matriz del proyecto** (#58 R2.5). Por eso lo consume
+ * el MISMO `ContractTreeEditor` sin adaptadores: en un paquete, `isActive`
+ * significa "el paquete trae este tipo" y `contractNotes` siempre viaja en null.
+ */
+export interface ContractPackageDetail {
+  package: ContractPackageSummary;
+  items: ProjectSlaContract[];
+}
+
+export interface CreateContractPackageInput {
+  name: string;
+  notes?: string;
+}
+
+export interface UpdateContractPackageInput {
+  name?: string;
+  /** String vacío limpia la nota. */
+  notes?: string;
+  isActive?: boolean;
+}
+
+/**
+ * ⚠️ Misma forma que el PUT de contratos, pero `isActive: false` **BORRA** el
+ * ítem en vez de desactivarlo (#58 R3.4). Lo omitido sigue sin tocarse.
+ */
+export interface UpsertContractPackageItemsInput {
+  items: ProjectContractItemInput[];
+}
+
+/**
+ * Un proyecto que recibió el paquete. Es la lista del re-aplicar (#58 R6): el
+ * dueño pidió elección explícita caso por caso, no un batch.
+ *
+ * El log es append-only, así que un proyecto que lo recibió tres veces aparece
+ * UNA vez con `timesApplied: 3` y la fecha de la última.
+ */
+export interface ContractPackageApplicationRow {
+  projectId: string;
+  projectName: string;
+  /** Un proyecto archivado no recibe tickets nuevos: la UI lo marca. */
+  projectIsActive: boolean;
+  lastAppliedAt: string;
+  lastAppliedByName: string;
+  timesApplied: number;
+}
+
+/** Por qué un ítem del paquete no se pudo aplicar. */
+export type PackageItemSkipReason = 'POLICY_INACTIVE' | 'TYPE_INACTIVE';
+
+/** Un ítem que el apply salta y reporta, en vez de fallar entero (#58 R4.5). */
+export interface SkippedPackageItem {
+  ticketTypeId: string;
+  ticketTypeName: string;
+  reason: PackageItemSkipReason;
+  /** Frase lista para mostrar: `la política "Crítico 2h" está desactivada`. */
+  detail: string;
+}
+
+/** Una fila del preview: qué trae el paquete vs. qué tiene hoy el proyecto. */
+export interface PackagePreviewRow {
+  ticketTypeId: string;
+  ticketTypeName: string;
+  packagePolicyId: string;
+  packagePolicyName: string;
+  /** `null` = el proyecto no tiene contrato activo para ese tipo. */
+  currentPolicyId: string | null;
+  currentPolicyName: string | null;
+  /**
+   * El contrato existe pero está APAGADO: aplicar lo reactiva. Cae en "nuevo",
+   * nunca en "ya igual", aunque la política coincida (#58 R4.3).
+   */
+  reactivates: boolean;
+}
+
+/** Las 3 categorías del preview + los ítems podridos. Lo calcula el backend. */
+export interface ApplyPackagePreview {
+  /** `isActive: false` ⇒ archivado: se puede mirar, el backend NO lo aplica. */
+  package: { id: string; name: string; itemCount: number; isActive: boolean };
+  project: { id: string; name: string };
+  /** ✚ se van a crear (incluye reactivar). */
+  toCreate: PackagePreviewRow[];
+  /** ✓ ya configurados igual: no se tocan. */
+  alreadySame: PackagePreviewRow[];
+  /** ⚠ configurados distinto: NO se tocan salvo checkbox explícito. */
+  different: PackagePreviewRow[];
+  skipped: SkippedPackageItem[];
+  /** El paquete no tiene ni un tipo: aplicarlo sería un no-op. */
+  isEmpty: boolean;
+}
+
+/**
+ * La decisión del usuario para UN tipo. Solo tiene efecto sobre los "distinto".
+ *
+ * ⛔ Se manda la DECISIÓN, nunca el resultado del preview: el backend recalcula
+ * las categorías al escribir, así un preview viejo no puede pisar un estado que
+ * el usuario no vio.
+ */
+export interface ApplyPackageDecision {
+  ticketTypeId: string;
+  overwrite?: boolean;
+}
+
+export interface ApplyContractPackageInput {
+  packageId: string;
+  /** Omitir la lista = no pisar nada (el default del dueño). */
+  items?: ApplyPackageDecision[];
+}
+
+/** Respuesta del apply: qué pasó, qué se salteó y la matriz ya actualizada. */
+export interface ApplyPackageResult {
+  packageId: string;
+  packageName: string;
+  createdCount: number;
+  overwrittenCount: number;
+  skippedSameCount: number;
+  skippedDifferentCount: number;
+  skipped: SkippedPackageItem[];
+  /** Se aplicó pero no había nada que escribir. La aplicación se registró igual. */
+  isNoop: boolean;
+  applicationId: string;
+  contracts: ProjectSlaContractsResponse;
+}
+
 // ─── Labels compartidos (UI) ────────────────────────────────────────────────
 //
 // Los labels/colores de criticidad se mudaron a `@/lib/criticality`

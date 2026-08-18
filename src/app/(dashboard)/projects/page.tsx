@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,10 +18,13 @@ import { createProjectSchema } from '@/lib/validations';
 import { formatRelative } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ApplyContractPackageDialog } from '@/components/sla/apply-contract-package-dialog';
+import { useCanManageSla } from '@/components/sla/use-can-manage-sla';
 
 export default function ProjectsPage() {
  const { orgId } = useOrg();
  const router = useRouter();
+ const canManageSla = useCanManageSla();
  const [projects, setProjects] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
@@ -34,6 +37,42 @@ export default function ProjectsPage() {
  const [lifecycleFilter, setLifecycleFilter] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
  const [filterClient, setFilterClient] = useState<string>('');
  const [filterStatus, setFilterStatus] = useState<string>('');
+ /**
+  * #58 R5.1 / R5.3: el paso "¿le aplicamos un paquete de contratos?" que va
+  * DESPUÉS del alta (entre el POST y el push) y después de aceptar un proyecto
+  * nacido en el portal, que es su alta real.
+  *
+  * `goTo` distingue los dos casos: el alta navega al proyecto nuevo, aceptar se
+  * queda en el listado y solo recarga.
+  */
+ const [packageTarget, setPackageTarget] = useState<{ id: string; name: string; goTo?: string } | null>(null);
+ // El diálogo avisa por dos vías (aplicó / omitió) y encima cierra: sin este
+ // candado el paso final correría dos veces (doble push, doble fetch).
+ const packageStepDone = useRef(true);
+
+ const openPackageStep = (target: { id: string; name: string; goTo?: string }) => {
+ // R5.4: quien no puede escribir contratos NO ve la oferta — y el flujo tiene
+ // que seguir exactamente como antes de #58. Sin esta rama, un ADMIN crearía el
+ // proyecto y se quedaría mirando el listado: el diálogo se esconde solo y el
+ // `router.push` nunca llegaría.
+ if (!canManageSla) {
+ if (target.goTo) router.push(target.goTo);
+ else loadProjects();
+ return;
+ }
+ packageStepDone.current = false;
+ setPackageTarget(target);
+ };
+
+ const finishPackageStep = () => {
+ if (packageStepDone.current) return;
+ packageStepDone.current = true;
+ const target = packageTarget;
+ setPackageTarget(null);
+ if (!target) return;
+ if (target.goTo) router.push(target.goTo);
+ else loadProjects();
+ };
 
  useEffect(() => {
  if (orgId) {
@@ -91,7 +130,13 @@ export default function ProjectsPage() {
  setShowCreate(false);
  setForm({ name: '', description: '', clientId: '', hourlyRate: '', estimatedHours: '' });
  setFormErrors({});
- router.push(`/projects/${res.data.id}`);
+ // #58 R5.1: un diálogo posterior e INDEPENDIENTE, entre el POST y el push.
+ // No se redirige al centro de contratación: vive dentro del layout de
+ // Settings y está gateado por rol, así que un ADMIN caería en "no tenés
+ // permisos" justo después de crear su proyecto. El diálogo, en cambio, se
+ // esconde solo si el usuario no puede escribir contratos (R5.4) y el push
+ // sale igual.
+ openPackageStep({ id: res.data.id, name: result.data.name, goTo: `/projects/${res.data.id}` });
  } catch (err) {
  const message = err instanceof ApiError ? err.message : 'Error al crear el proyecto';
  toast.error('Error', message);
@@ -114,7 +159,14 @@ export default function ProjectsPage() {
  try {
  await api.post(`/projects/${projectId}/accept`);
  toast.success('Proyecto aceptado', 'El proyecto fue aceptado y el tablero Kanban creado');
- await loadProjects();
+ // #58 R5.3: los proyectos que nacen en el portal (`pendingClientReview`) no
+ // pasan por el modal de alta, así que su gancho es ACÁ — aceptar es su alta
+ // real: es donde se crea el board y donde el proyecto empieza a existir para
+ // el equipo. Se ofrece el paquete y recién después se recarga el listado.
+ openPackageStep({
+ id: projectId,
+ name: projects.find((p) => p.id === projectId)?.name ?? 'el proyecto',
+ });
  } catch (err) {
  toast.error('Error', err instanceof ApiError ? err.message : 'Error al aceptar el proyecto');
  }
@@ -392,6 +444,25 @@ export default function ProjectsPage() {
  );
  })}
  </div>
+ )}
+
+ {/*
+ El paso posterior al alta (#58 R5.1) y a aceptar un proyecto del portal
+ (R5.3). Es INDEPENDIENTE: el proyecto ya está creado, y omitir es una
+ respuesta válida — por eso el copy dice qué pasa si se omite (R5.5).
+ */}
+ {packageTarget && orgId && (
+ <ApplyContractPackageDialog
+ orgId={orgId}
+ projectId={packageTarget.id}
+ projectName={packageTarget.name}
+ open
+ onOpenChange={(next) => {
+ if (!next) finishPackageStep();
+ }}
+ onApplied={finishPackageStep}
+ onSkip={finishPackageStep}
+ />
  )}
  </div>
  );
