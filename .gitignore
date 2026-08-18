@@ -1,6 +1,9 @@
 node_modules/
 .next/
 out/
+# Cache incremental de TypeScript (`incremental: true` en tsconfig). Lo reescribe CUALQUIER
+# corrida de tsc o next build, asi que trackeado ensucia el git status de todos, todo el tiempo.
+*.tsbuildinfo
 .env
 .env.local
 .env.*.local
