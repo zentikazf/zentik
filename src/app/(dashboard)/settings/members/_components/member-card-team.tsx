@@ -9,6 +9,8 @@ import type { MemberCard } from '@/types/members-view';
 interface MemberCardTeamProps {
   member: MemberCard;
   onResendInvitation: (member: MemberCard) => void;
+  /** #59 — request de reenvío en vuelo para ESTA fila */
+  isResending?: boolean;
   onEditRole?: (member: MemberCard) => void;
   onRemove?: (member: MemberCard) => void;
 }
@@ -38,6 +40,7 @@ function formatRelative(iso: string): string {
 export function MemberCardTeam({
   member,
   onResendInvitation,
+  isResending = false,
   onEditRole,
   onRemove,
 }: MemberCardTeamProps) {
@@ -89,14 +92,15 @@ export function MemberCardTeam({
                 {!member.emailVerified && (
                   <button
                     type="button"
+                    disabled={isResending}
                     onClick={() => {
                       onResendInvitation(member);
                       setMenuOpen(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground hover:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <Mail className="h-3.5 w-3.5" />
-                    Reenviar invitación
+                    <Mail className={cn('h-3.5 w-3.5', isResending && 'animate-pulse')} />
+                    {isResending ? 'Reenviando…' : 'Reenviar invitación'}
                   </button>
                 )}
                 {onEditRole && (
