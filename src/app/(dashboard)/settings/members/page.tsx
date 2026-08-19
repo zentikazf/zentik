@@ -241,6 +241,7 @@ export default function MembersSettingsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<MembersFilter>('all');
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const currentOrgRole = organizations?.find((o) => o.id === orgId)?.roleName;
   const hasAccess = !!currentOrgRole && ALLOWED_ROLES.includes(currentOrgRole);
@@ -318,13 +319,40 @@ export default function MembersSettingsPage() {
     0,
   );
 
+  /**
+   * #59 — Esta pantalla mezcla DOS tipos de persona (`MemberCard.source`): el team de la
+   * organización y los sub-usuarios de clientes. Cada uno tiene su endpoint. El handler
+   * viejo mandaba los dos a `POST /auth/resend-verification`, que ignora el body y usa el
+   * usuario de la SESIÓN: el mail le llegaba al admin que apretaba el botón, no al miembro,
+   * y el 200 hacía que la UI mintiera sobre el resultado Y sobre el destinatario.
+   */
   const handleResendInvitation = async (member: MemberCard) => {
+    if (!orgId || resendingId === member.id) return;
+
+    if (member.source === 'client-sub' && !member.clientId) {
+      toast.error('Error', 'No se pudo resolver el cliente de este usuario');
+      return;
+    }
+
+    const url =
+      member.source === 'client-sub'
+        ? `/organizations/${orgId}/clients/${member.clientId}/users/${member.id}/resend-activation`
+        : `/organizations/${orgId}/members/${member.id}/resend-activation`;
+
+    setResendingId(member.id);
     try {
-      await api.post('/auth/resend-verification', { userId: member.id });
-      toast.success('Email reenviado', `Revisá la bandeja de ${member.email}`);
+      await api.post(url);
+      toast.success(
+        'Activación reenviada',
+        `${member.name} va a recibir un nuevo email en ${member.email}`,
+      );
     } catch (err) {
+      // Los mensajes del backend son útiles tal cual: 409 "ya verificó su correo",
+      // 503 "el servicio de correo no está disponible".
       const msg = err instanceof ApiError ? err.message : 'No se pudo reenviar';
       toast.error('Error', msg);
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -437,6 +465,7 @@ export default function MembersSettingsPage() {
                     key={member.id}
                     member={member}
                     onResendInvitation={handleResendInvitation}
+                    isResending={resendingId === member.id}
                     onRemove={handleRemove}
                   />
                 ) : (
