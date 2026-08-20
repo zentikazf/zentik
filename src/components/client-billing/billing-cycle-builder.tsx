@@ -305,8 +305,6 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
         orgId={orgId}
         clientId={clientId}
         period={builder.period}
-        subtotal={builder.totalFacturable}
-        currency={builder.currency}
         open={closeOpen}
         onOpenChange={setCloseOpen}
         onSaved={onChanged}

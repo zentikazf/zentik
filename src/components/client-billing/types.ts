@@ -93,6 +93,10 @@ export interface CyclePreview {
   bloqueos: {
     sinTarifaRate: boolean;
     sinFechaTrabajo: { count: number; ids: string[] };
+    // H9a — cargas revertidas sin neutralizar dentro del conjunto facturable. El backend ya lo
+    // devolvía (`computeFacturable`) y ya lo cuenta en `puedeEmitir`; faltaba en el tipo, así que
+    // el motivo del bloqueo no se podía mostrar (#60).
+    revertidasVivas: { count: number; ids: string[] };
   };
   puedeEmitir: boolean;
   motivo: 'NOTHING_TO_BILL' | null;
