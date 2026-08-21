@@ -348,6 +348,15 @@ export default function GenerarFacturaPage() {
                       </span>
                     </div>
                   )}
+                  {preview.bloqueos.revertidasVivas.count > 0 && (
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        {preview.bloqueos.revertidasVivas.count} carga(s) revertida(s) sin neutralizar
+                        en el conjunto facturable. Revisá esos movimientos antes de emitir.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
