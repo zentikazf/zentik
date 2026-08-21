@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Receipt, Download, Loader2, FileText, ChevronDown, Clock } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { api, getToken } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
+// #62 — la MISMA etiqueta de periodo que usan las cards de /portal/hours (una sola copia).
+import { invoiceRangeLabel } from '@/lib/invoice-period';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -74,16 +76,6 @@ function invoiceMonthKey(inv: PortalInvoice): string {
  const y = p.find((x) => x.type === 'year')?.value ?? '0000';
  const m = p.find((x) => x.type === 'month')?.value ?? '00';
  return `${y}-${m}`;
-}
-
-function invoiceRangeLabel(inv: PortalInvoice): string {
- const fmt = (iso: string) => {
-  const s = new Intl.DateTimeFormat('es-PY', { timeZone: 'America/Asuncion', month: 'long', year: 'numeric' }).format(new Date(iso));
-  return s.charAt(0).toUpperCase() + s.slice(1);
- };
- const start = fmt(inv.periodStart);
- const end = fmt(inv.cutoffDate ?? inv.periodEnd);
- return start === end ? start : `${start} – ${end}`;
 }
 
 // ── Sub-bloque: tabla de líneas (concepto + monto Gs) con subtotal ──
@@ -191,6 +183,11 @@ function InvoiceDetailBody({ detail, tiempoOpen, onToggleTiempo }: {
 
 export default function PortalBillingPage() {
  const router = useRouter();
+ const searchParams = useSearchParams();
+ // #62 — /portal/hours enlaza cada factura de sus cards acá. El detalle de una factura no tiene
+ // ruta propia (es un acordeón dentro de esta lista), así que el enlace es ?invoice=<id> y esta
+ // página lo abre sola. Sin esto el cliente aterrizaba arriba de todo y tenía que buscarla a mano.
+ const deepLinkId = searchParams.get('invoice');
  const { user, loading } = useAuth();
  const canSeeBilling = user?.client?.portalBillingEnabled === true;
 
@@ -240,6 +237,22 @@ export default function PortalBillingPage() {
    return next;
   });
  };
+
+ // Corre UNA sola vez, cuando la lista ya llegó: el ref evita que reabra la factura cada vez que
+ // el usuario la cierra a mano (el query param sigue en la URL). Si el id no está en la lista
+ // —factura de otro cliente, o una que este cliente no puede ver— no hace nada y la página se
+ // comporta como siempre.
+ const deepLinkDone = useRef(false);
+ useEffect(() => {
+  if (deepLinkDone.current || !deepLinkId || !invoices) return;
+  deepLinkDone.current = true;
+  if (!invoices.some((i) => i.id === deepLinkId)) return;
+  setOpenInv((prev) => new Set(prev).add(deepLinkId));
+  loadDetail(deepLinkId);
+  requestAnimationFrame(() =>
+   document.getElementById(`inv-${deepLinkId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+  );
+ }, [deepLinkId, invoices, loadDetail]);
 
  const toggleTiempo = (id: string) =>
   setOpenTiempo((prev) => {
@@ -329,7 +342,7 @@ export default function PortalBillingPage() {
         const open = openInv.has(inv.id);
         const detail = details.get(inv.id);
         return (
-         <div key={inv.id} className="overflow-hidden rounded-xl border border-border bg-card">
+         <div key={inv.id} id={`inv-${inv.id}`} className="overflow-hidden rounded-xl border border-border bg-card">
           {/* Header del card de factura */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
            <button

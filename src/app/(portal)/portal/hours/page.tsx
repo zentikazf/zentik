@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Clock, DollarSign, TrendingUp, CheckCircle2, Circle, ChevronDown, Sliders } from 'lucide-react';
+import Link from 'next/link';
+import { Clock, DollarSign, TrendingUp, CheckCircle2, Circle, ChevronDown, ChevronRight, Receipt, Sliders } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
 import { monthKeyOf, monthLabelEs, rowDateShort } from '@/lib/hours-month';
+import { invoiceRangeLabel, invoiceDateShort } from '@/lib/invoice-period';
 import { PortalVariablesBlock, PortalVariableItem, splitVariables } from '@/components/portal/portal-variables-block';
 
 interface HoursTransaction {
@@ -20,6 +23,15 @@ interface HoursTransaction {
  priceRate: string | null;
  priceCurrency: string | null;
  billedCycleId: string | null;
+ // #62 — El ESTADO REAL de facturación de la fila, que lo decide el backend mirando el ciclo al
+ // que apunta `billedCycleId`. Reemplaza a `billedCycleId ? 'Facturado' : 'Pendiente'`, que era
+ // el mismo bug del KPI: el estampado ocurre al EMITIR y el ciclo nace en BORRADOR, así que
+ // tener ciclo NO significa estar facturado. Un movimiento en un borrador sigue pendiente.
+ //
+ // OPCIONAL a propósito, misma razón que `creditNoteNumber` (ver abajo): front y backend son
+ // deploys independientes y el front sube antes. Sin el campo se cae al criterio viejo, que es
+ // exactamente lo que la pantalla hacía hasta hoy — nunca a un estado inventado.
+ billingState?: BillingState;
  workedOn: string | null;
  // Sólo lo trae la COPIA que genera una nota de crédito con devolución de horas: apunta al
  // movimiento original que quedó acreditado. Null en cualquier registro normal.
@@ -57,6 +69,32 @@ interface HoursTransaction {
  } | null;
 }
 
+// #62 — Los tres estados de la plata del cliente.
+type BillingState = 'PENDING' | 'INVOICED' | 'PAID';
+
+// Una factura que compone una card. El `amount` es lo que sale DE ESTAS HORAS, no el total del
+// documento: es lo que hace que las filas sumen la card. Si la factura además cobra Variables
+// (#23), el gran total se ve al abrirla.
+interface PortalBucketInvoice {
+ id: string;
+ invoiceNumber: string;
+ kind: 'MONTH' | 'ACCUMULATED';
+ periodStart: string;
+ periodEnd: string;
+ cutoffDate: string | null;
+ currency: string;
+ /** Fecha de PAGO en la card de Cobrado; de ENVÍO en la de Facturado. */
+ date: string | null;
+ hours: number;
+ amount: string;
+}
+
+interface HoursBilling {
+ pending: { amount: string };
+ invoiced: { amount: string; invoices: PortalBucketInvoice[] };
+ paid: { amount: string; invoices: PortalBucketInvoice[] };
+}
+
 interface HoursResponse {
  contractedHours: number;
  usedHours: number;
@@ -67,6 +105,10 @@ interface HoursResponse {
  developmentHourlyRate: string | null;
  supportHourlyRate: string | null;
  totalAmount: number;
+ // #62 — OPCIONAL por la ventana de deploy (front en Vercel, backend en Railway: el front sube
+ // primero). Sin esto, la pantalla vuelve sola al KPI único de siempre en vez de pintar tres
+ // cards en cero, que diría "Cobrado: Gs. 0" a un cliente que sí pagó facturas.
+ billing?: HoursBilling;
  transactions: HoursTransaction[];
 }
 
@@ -87,12 +129,131 @@ const fmtUSD = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionD
 // = fila normal.
 const isCredited = (t: HoursTransaction): boolean => Boolean(t.creditNoteNumber);
 
+// #62 — Estado de facturación de una fila, con el criterio VIEJO como red de seguridad.
+//
+// El backend lo manda resuelto (mira el estado del ciclo, no su mera existencia). Si no viene
+// —front desplegado antes que el backend— se cae a lo que la pantalla hacía hasta hoy: tener
+// ciclo = facturado. Es el comportamiento previo, con su bug del borrador incluido, y dura lo
+// que dura el deploy; inventar un estado sería peor.
+const billingStateOf = (t: HoursTransaction): BillingState =>
+ t.billingState ?? (t.billedCycleId ? 'INVOICED' : 'PENDING');
+
+// #62 — Una de las tres cards de plata.
+//
+// Las dos que tienen facturas detrás se ABREN (mismo mecanismo, distinta lista). "Pendiente" no
+// enlaza a nada a propósito: todavía no existe ninguna factura, y su detalle ya vive en el
+// listado de horas de esta misma pantalla.
+//
+// La leyenda no es decorativa: el número solo no dice si ya se cobró o no, que es justamente lo
+// que hoy confunde al cliente.
+function BucketCard({
+ icon: Icon,
+ label,
+ legend,
+ amount,
+ currency,
+ tone,
+ open,
+ onToggle,
+}: {
+ icon: typeof DollarSign;
+ label: string;
+ legend: string;
+ amount: string;
+ currency: string;
+ tone: { border: string; icon: string; amount: string };
+ open?: boolean;
+ onToggle?: () => void;
+}) {
+ const body = (
+  <>
+   <div className="flex items-center gap-2 mb-2">
+    <Icon className={cn('h-4 w-4 shrink-0', tone.icon)} />
+    <p className="text-xs text-muted-foreground">{label}</p>
+    {onToggle && (
+     <ChevronDown
+      className={cn('ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')}
+     />
+    )}
+   </div>
+   <p className={cn('text-2xl font-bold', tone.amount)}>{formatCurrency(amount, currency)}</p>
+   <p className="text-[11px] text-muted-foreground">{legend}</p>
+  </>
+ );
+ const shell = cn('rounded-xl border p-5 text-left', tone.border);
+ return onToggle ? (
+  <button type="button" onClick={onToggle} aria-expanded={open} className={cn(shell, 'w-full transition-colors hover:bg-muted/30')}>
+   {body}
+  </button>
+ ) : (
+  <div className={shell}>{body}</div>
+ );
+}
+
+// Las facturas que COMPONEN una card. Cada una enlaza a su detalle en /portal/billing, que ya
+// existe: el link lleva ?invoice=<id> y esa página abre sola el acordeón de esa factura.
+function BucketInvoices({ title, invoices, dateLabel }: {
+ title: string;
+ invoices: PortalBucketInvoice[];
+ dateLabel: string;
+}) {
+ return (
+  <div className="overflow-hidden rounded-xl border border-border bg-card animate-fade-in">
+   <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+    <p className="text-xs font-semibold uppercase tracking-wider text-foreground">{title}</p>
+    <p className="text-[11px] text-muted-foreground">
+     {invoices.length} {invoices.length === 1 ? 'factura' : 'facturas'}
+    </p>
+   </div>
+   <ul className="divide-y divide-border">
+    {invoices.map((inv) => (
+     <li key={inv.id}>
+      <Link
+       href={`/portal/billing?invoice=${inv.id}`}
+       className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/30"
+      >
+       <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+         <span className="font-mono text-sm font-medium text-foreground">{inv.invoiceNumber}</span>
+         {inv.kind === 'ACCUMULATED' && <span className="text-[10px] text-muted-foreground">Acumulada</span>}
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+         {invoiceRangeLabel(inv)}
+         {inv.date && ` · ${dateLabel} el ${invoiceDateShort(inv.date)}`}
+        </p>
+       </div>
+       <div className="flex items-center gap-3">
+        <div className="text-right">
+         <p className="font-mono text-sm font-semibold text-foreground">{formatCurrency(inv.amount, inv.currency)}</p>
+         <p className="font-mono text-[11px] text-muted-foreground">{inv.hours.toFixed(2)}h</p>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+       </div>
+      </Link>
+     </li>
+    ))}
+   </ul>
+  </div>
+ );
+}
+
 export default function PortalHoursPage() {
+ // #62 — El MISMO gate que usan el sidebar y /portal/billing. Sin él las cards enlazarían a una
+ // puerta cerrada: /portal/billing rebota a /portal cuando el cliente no tiene el flag.
+ //
+ // ⚠️ No alcanza con que el backend haya mandado las facturas. Un usuario DUEÑO de cliente (el
+ // que crea `createClientUser`, que sella `Client.userId`) queda con `user.clientId` en null, así
+ // que `user.client` le llega null y no ve la sección Facturación aunque su cliente tenga el flag
+ // prendido. Es un desfasaje viejo del armado de la sesión, ajeno a #62; acá sólo se respeta.
+ const { user } = useAuth();
+ const canOpenBilling = user?.client?.portalBillingEnabled === true;
  const [data, setData] = useState<HoursResponse | null>(null);
  const [vars, setVars] = useState<Map<string, PortalVariableStatement>>(new Map());
  const [loading, setLoading] = useState(true);
 
  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
+ // #62: cuál de las dos cards navegables está abierta (una a la vez; "Pendiente" no se abre).
+ const [openBucket, setOpenBucket] = useState<'invoiced' | 'paid' | null>(null);
  // #23: sub-card de variables COLAPSADAS (default = todas abiertas → el consumo se ve al abrir el mes).
  const [collapsedVars, setCollapsedVars] = useState<Set<string>>(new Set());
 
@@ -316,6 +477,10 @@ export default function PortalHoursPage() {
   return (
    <div className="space-y-6">
     <Skeleton className="h-8 w-64"/>
+    {/* Dos filas de cards: las dos de horas + las tres de plata (#62). */}
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+     {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl"/>)}
+    </div>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl"/>)}
     </div>
@@ -342,8 +507,8 @@ export default function PortalHoursPage() {
     </p>
    </div>
 
-   {/* KPI cards */}
-   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+   {/* KPI de HORAS */}
+   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
     <div className="rounded-xl border border-border bg-card p-5">
      <div className="flex items-center gap-2 mb-2">
       <TrendingUp className="h-4 w-4 text-success"/>
@@ -362,17 +527,79 @@ export default function PortalHoursPage() {
      <p className="text-2xl font-bold text-foreground">{data.usedHours.toFixed(1)}h</p>
      <p className="text-[11px] text-muted-foreground">de {data.contractedHours.toFixed(1)}h contratadas</p>
     </div>
-    <div className="rounded-xl border border-primary/30 bg-primary/5 p-5">
-     <div className="flex items-center gap-2 mb-2">
-      <DollarSign className="h-4 w-4 text-primary"/>
-      <p className="text-xs text-muted-foreground">Total facturable</p>
-     </div>
-     <p className="text-2xl font-bold text-primary">
-      {formatCurrency(data.totalAmount, data.currency)}
-     </p>
-     <p className="text-[11px] text-muted-foreground">Pendiente de facturar</p>
-    </div>
    </div>
+
+   {/* #62 — Los tres estados de la PLATA. Antes había un KPI único ("Total facturable") y el
+       cliente no tenía forma de saber si ese número ya se facturó, ya se cobró, o ninguna de las
+       dos. Peor: como el filtro miraba si el movimiento tenía ciclo y el ciclo nace en BORRADOR,
+       generar un borrador —que el cliente ni ve— le hacía bajar el total sin que existiera
+       ninguna factura para él. */}
+   {data.billing ? (
+    <div className="space-y-3">
+     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <BucketCard
+       icon={DollarSign}
+       label="Pendiente de facturar"
+       legend="trabajo sin facturar aún"
+       amount={data.billing.pending.amount}
+       currency={data.currency}
+       tone={{ border: 'border-primary/30 bg-primary/5', icon: 'text-primary', amount: 'text-primary' }}
+      />
+      <BucketCard
+       icon={Receipt}
+       label="Facturado (sin cobrar)"
+       legend="ya en una factura enviada"
+       amount={data.billing.invoiced.amount}
+       currency={data.currency}
+       tone={{ border: 'border-info/30 bg-info/5', icon: 'text-info', amount: 'text-info' }}
+       open={openBucket === 'invoiced'}
+       onToggle={
+        canOpenBilling && data.billing.invoiced.invoices.length > 0
+         ? () => setOpenBucket((b) => (b === 'invoiced' ? null : 'invoiced'))
+         : undefined
+       }
+      />
+      <BucketCard
+       icon={CheckCircle2}
+       label="Cobrado"
+       legend="facturas pagadas"
+       amount={data.billing.paid.amount}
+       currency={data.currency}
+       tone={{ border: 'border-success/30 bg-success/5', icon: 'text-success', amount: 'text-success' }}
+       open={openBucket === 'paid'}
+       onToggle={
+        canOpenBilling && data.billing.paid.invoices.length > 0
+         ? () => setOpenBucket((b) => (b === 'paid' ? null : 'paid'))
+         : undefined
+       }
+      />
+     </div>
+     {openBucket === 'invoiced' && (
+      <BucketInvoices
+       title="Facturas enviadas, todavía sin cobrar"
+       invoices={data.billing.invoiced.invoices}
+       dateLabel="Enviada"
+      />
+     )}
+     {openBucket === 'paid' && (
+      <BucketInvoices title="Facturas pagadas" invoices={data.billing.paid.invoices} dateLabel="Pagada" />
+     )}
+    </div>
+   ) : (
+    /* Backend anterior a #62 (ventana de deploy): el KPI único de siempre, tal cual estaba. */
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+     <div className="rounded-xl border border-primary/30 bg-primary/5 p-5">
+      <div className="flex items-center gap-2 mb-2">
+       <DollarSign className="h-4 w-4 text-primary"/>
+       <p className="text-xs text-muted-foreground">Total facturable</p>
+      </div>
+      <p className="text-2xl font-bold text-primary">
+       {formatCurrency(data.totalAmount, data.currency)}
+      </p>
+      <p className="text-[11px] text-muted-foreground">Pendiente de facturar</p>
+     </div>
+    </div>
+   )}
 
    {/* Acordeón por mes: consumo (variables) + registros de horas */}
    {monthKeys.length === 0 ? (
@@ -396,12 +623,15 @@ export default function PortalHoursPage() {
       // al cupo — la nota de crédito no toca `usedHours` —, así que esas horas se trabajaron, se
       // consumieron y siguen contando. Lo que la nota borra es el COBRO, no el tiempo.
       const monthHours = txs.reduce((s, t) => (movedToRebill(t) ? s : s + t.hours), 0);
-      // El pendiente NO necesita tocarse y por eso se deja igual: el filtro `billedCycleId === null`
-      // ya deja afuera a la original (que quedó facturada) y adentro a la copia (que nace sin ciclo).
-      // Es el mismo criterio con el que el backend calcula el KPI "Pendiente de facturar" de arriba,
-      // así que el total del mes y el de la página no pueden contradecirse.
+      // El pendiente del mes tiene que usar EL MISMO criterio que la card de arriba, o el total de
+      // la página y el de cada mes se contradicen. Por eso mira `billingStateOf` y no
+      // `billedCycleId === null`: con el estampado al emitir, un movimiento en un BORRADOR tiene
+      // ciclo y sigue pendiente — era el mismo bug de #62, replicado acá abajo.
+      //
+      // La cadena de la nota de crédito sigue saliendo bien sola: la original quedó facturada (o
+      // cobrada) y la copia nace sin ciclo, así que sólo la copia cuenta como pendiente.
       const monthPending = txs
-       .filter((t) => t.priceAmount !== null && t.billedCycleId === null)
+       .filter((t) => t.priceAmount !== null && billingStateOf(t) === 'PENDING')
        .reduce((s, t) => s + parseFloat(t.priceAmount!), 0);
       const varsTotal = statement ? splitVariables(statement.items).total : 0;
       return (
@@ -567,14 +797,22 @@ export default function PortalHoursPage() {
                   `${t.hours.toFixed(2)}h`
                  )}
                 </td>
+                {/* #62 — Tres estados, los MISMOS que las cards de arriba: si la card dice
+                    "Cobrado", el cliente tiene que poder ver qué filas la componen. Y "Facturado"
+                    ya no sale de tener `billedCycleId`: un movimiento estampado en un BORRADOR
+                    sigue Pendiente, que es el bug que #62 vino a arreglar. */}
                 <td className="px-4 py-3">
                  {credited ? (
                   <Badge className="inline-flex items-center gap-1 bg-muted text-muted-foreground text-[10px]">
                    <CheckCircle2 className="h-3 w-3" /> Acreditado
                   </Badge>
-                 ) : t.billedCycleId ? (
+                 ) : billingStateOf(t) === 'PAID' ? (
                   <Badge className="inline-flex items-center gap-1 bg-success/15 text-success text-[10px]">
-                   <CheckCircle2 className="h-3 w-3" /> Facturado
+                   <CheckCircle2 className="h-3 w-3" /> Cobrado
+                  </Badge>
+                 ) : billingStateOf(t) === 'INVOICED' ? (
+                  <Badge className="inline-flex items-center gap-1 bg-info/10 text-info text-[10px]">
+                   <Receipt className="h-3 w-3" /> Facturado
                   </Badge>
                  ) : (
                   <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
