@@ -89,8 +89,45 @@ export default function GenerarFacturaPage() {
   const rateNum = Number(rate);
   const rateValid = rateNum > 0;
   const convertedVarsGs = hasVars && rateValid ? Math.round(preview!.variablesSubtotalUsd * rateNum) : 0;
-  const supportGs = preview ? Number(preview.total) : 0;
-  const grandTotalGs = supportGs + convertedVarsGs;
+
+  // #63 — El IVA de la factura, y por qué esta cuenta cambió.
+  //
+  // El preview del backend sólo ve el SOPORTE (las variables todavía no tienen tasa: la elige el
+  // admin en el campo de acá al lado), así que `preview.total` es el soporte con su IVA aplicado.
+  // Sumarle las variables crudas —lo que hacía la fórmula vieja— daría `S×1,1 + V`, y el backend al
+  // emitir estampa `(S+V)×1,1`: el estimado quedaba 10% corto sobre las variables. El IVA es del
+  // DOCUMENTO y su base es el total ya foldeado (soporte + variables ya convertidas a Gs), en ese
+  // orden: primero el USD→PYG, después el IVA.
+  //
+  // Por eso la base de soporte pasa a ser `preview.net` (el neto, sin IVA) y el IVA se aplica una
+  // sola vez sobre la suma. Sigue siendo una ESTIMACIÓN del cliente —la fuente de verdad es el
+  // backend al emitir— pero ahora estima la MISMA cuenta.
+  const ivaRate = preview?.taxRate != null ? parseFloat(preview.taxRate) : 0;
+  const conIva = preview?.net != null && ivaRate > 0;
+  const ivaPorcentaje = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 2 }).format(ivaRate * 100);
+  // Soporte NETO: con IVA sale de `net`; sin IVA, `total` ya es el neto (no hay impuesto que sacar).
+  const supportNetGs = preview ? Number(conIva ? preview.net : preview.total) : 0;
+
+  // Base imponible del documento = soporte neto + variables convertidas.
+  // En INCLUDED la tarifa YA trae el IVA, así que la "base" es el total y el neto sale por división;
+  // en EXCLUDED la base es neta y el IVA se suma. Mismo redondeo que `computeTax` del backend: se
+  // redondea UN término y el otro sale por resta, para que `neto + IVA = total` cierre exacto.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const baseGs = supportNetGs + convertedVarsGs;
+  const estimado = !conIva
+    ? { neto: baseGs, iva: 0, total: baseGs }
+    : preview!.taxMode === 'INCLUDED'
+      ? (() => {
+          // INCLUDED: `preview.net` ya es soporte-sin-IVA, así que el bruto del soporte es `total`.
+          const total = Number(preview!.total) + convertedVarsGs;
+          const neto = round2(total / (1 + ivaRate));
+          return { neto, iva: total - neto, total };
+        })()
+      : (() => {
+          const iva = round2(baseGs * ivaRate);
+          return { neto: baseGs, iva, total: baseGs + iva };
+        })();
+  const grandTotalGs = estimado.total;
 
   const goPreview = async () => {
     if (!orgId || !clientId || !canPreview) return;
@@ -475,7 +512,9 @@ export default function GenerarFacturaPage() {
                             <div className="flex items-center gap-6 text-sm">
                               <span className="text-muted-foreground">Soporte</span>
                               <span className="font-mono text-foreground">
-                                {formatCurrency(preview.total, preview.currency)}
+                                {/* #63: con IVA se muestra el NETO, para que Soporte + Variables + IVA
+                                    sume el total. Sin IVA es el mismo número de siempre. */}
+                                {formatCurrency(conIva ? supportNetGs : preview.total, preview.currency)}
                               </span>
                             </div>
                             <div className="flex items-center gap-6 text-sm">
@@ -484,6 +523,14 @@ export default function GenerarFacturaPage() {
                                 {rateValid ? formatCurrency(convertedVarsGs, preview.currency) : '—'}
                               </span>
                             </div>
+                            {conIva && (
+                              <div className="flex items-center gap-6 text-sm">
+                                <span className="text-muted-foreground">IVA ({ivaPorcentaje}%)</span>
+                                <span className="font-mono text-foreground">
+                                  {rateValid ? formatCurrency(estimado.iva, preview.currency) : '—'}
+                                </span>
+                              </div>
+                            )}
                             <div className="pt-1">
                               <p className="text-xs uppercase tracking-wide text-muted-foreground">Total estimado</p>
                               <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
@@ -493,6 +540,25 @@ export default function GenerarFacturaPage() {
                           </>
                         ) : (
                           <div>
+                            {/* #63 — Sin variables el total sale ENTERO del backend (`preview.total`), ya
+                                con IVA si corresponde: acá no se estima nada. El desglose de arriba usa
+                                `net`/`tax`, que calculó la misma función que va a usar la emisión. */}
+                            {conIva && (
+                              <div className="mb-2 space-y-1">
+                                <div className="flex items-center gap-6 text-sm">
+                                  <span className="text-muted-foreground">Subtotal</span>
+                                  <span className="font-mono text-foreground">
+                                    {formatCurrency(preview.net, preview.currency)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-6 text-sm">
+                                  <span className="text-muted-foreground">IVA ({ivaPorcentaje}%)</span>
+                                  <span className="font-mono text-foreground">
+                                    {formatCurrency(preview.tax, preview.currency)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">Total a facturar</p>
                             <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
                               {formatCurrency(preview.total, preview.currency)}
@@ -509,6 +575,11 @@ export default function GenerarFacturaPage() {
                     <p className="mt-3 text-xs text-muted-foreground">
                       Se asignará el próximo número ({preview.nextInvoiceHint}) al emitir.
                       {hasVars && ' El total se recalcula en el backend con la tasa que estampás.'}
+                      {/* #63 R7.3/R7.4 — el +10% se dice ANTES de emitir, y dónde se cambia. */}
+                      {conIva &&
+                        (preview.taxMode === 'EXCLUDED'
+                          ? ` La tarifa de este cliente no incluye IVA: el total lleva ${ivaPorcentaje}% sumado encima. Se configura en la ficha del cliente.`
+                          : ' La tarifa de este cliente ya incluye IVA: el total no cambia, sólo se desglosa.')}
                     </p>
                   </div>
 

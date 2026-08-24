@@ -57,7 +57,14 @@ export interface BillingCycle {
   periodEnd: string;
   cutoffDate: string | null; // H8b: instante efectivo del corte (= periodEnd si mes completo)
   totalHours: number;
+  // #63 — `totalAmount` sigue siendo LO QUE EL CLIENTE PAGA (con IVA adentro si la factura lo lleva).
+  //   Los cuatro campos de abajo son el desglose ESTAMPADO al emitir; los cuatro en null = factura
+  //   sin IVA, y ahí toda vista queda idéntica a como estaba antes de #63. `taxRate` es fracción.
   totalAmount: string;
+  taxRate?: string | null;
+  taxMode?: string | null;
+  netAmount?: string | null;
+  taxAmount?: string | null;
   currency: string;
   notes: string | null;
   closedAt: string | null;
@@ -83,7 +90,15 @@ export interface CyclePreview {
     subtotalMes: string;
     horasMes: number;
   }>;
+  // #63 — `total` sigue siendo "lo que se va a facturar", así que con el modo EXCLUDED YA VIENE CON
+  //   IVA: es exactamente el número que va a estampar la emisión. `net`/`tax` son el desglose y salen
+  //   de la MISMA función del backend que usa el cierre — el diálogo no calcula IVA por su cuenta.
+  //   Los cuatro en null = cliente sin IVA → el diálogo queda como quedó en #60.
   total: string;
+  net?: string | null;
+  tax?: string | null;
+  taxRate?: string | null; // fracción (0.1 = 10%)
+  taxMode?: string | null; // EXCLUDED | INCLUDED
   currency: string;
   // #23 — Variables (Botmaker) que se sumarán (convertidas) al total. `suggestedRate` prefill del campo
   // editable de conversión (null → el admin la pega a mano). Montos en USD.
@@ -174,6 +189,12 @@ export interface CreditNoteSummary {
   totalHours: number; // NEGATIVO
   returnHoursToBillable: boolean;
   issuedAt: string;
+  // #63 — IVA HEREDADO de la factura acreditada (nunca del cliente actual). Ya NEGATIVOS, como
+  //   `totalAmount`. Null = la factura original se emitió sin IVA → la NC tampoco lo lleva.
+  taxRate?: string | null;
+  taxMode?: string | null;
+  netAmount?: string | null;
+  taxAmount?: string | null;
 }
 
 // Config de estado de la factura (español) — compartida entre builder y detalle.

@@ -31,6 +31,11 @@ interface CreditNotePreview {
   lineCount: number;
   totalAmount: string; // NEGATIVO
   totalHours: number; // NEGATIVO
+  // #63 — IVA HEREDADO de la factura acreditada (nunca del cliente de hoy). Ya NEGATIVOS. Null = esa
+  //   factura se emitió sin IVA → la NC tampoco lo lleva y este bloque no dibuja nada.
+  netAmount?: string | null;
+  taxAmount?: string | null;
+  taxRate?: string | null; // fracción (0.1 = 10%)
   lines: Array<{
     id: string;
     description: string;
@@ -300,6 +305,31 @@ export function CreditNoteDialog({
                 </span>
                 <span className="text-xs text-muted-foreground">{preview.lineCount} línea(s)</span>
               </div>
+              {/* #63 — Con IVA, el total de la NC es MAYOR que la suma de las líneas de arriba (esas
+                  son netas). Sin este desglose la diferencia parecía un error de la pantalla; con él
+                  se lee que se está devolviendo también el IVA que esa factura cobró. */}
+              {preview.netAmount != null && preview.taxAmount != null && (
+                <div className="mt-2 space-y-1 border-t border-info/20 pt-2">
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-mono text-muted-foreground">
+                      {formatCurrency(preview.netAmount, preview.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      IVA
+                      {preview.taxRate != null &&
+                        ` (${new Intl.NumberFormat('es-PY', { maximumFractionDigits: 2 }).format(
+                          parseFloat(preview.taxRate) * 100,
+                        )}%)`}
+                    </span>
+                    <span className="font-mono text-muted-foreground">
+                      {formatCurrency(preview.taxAmount, preview.currency)}
+                    </span>
+                  </div>
+                </div>
+              )}
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="font-mono text-xs text-muted-foreground">{preview.totalHours.toFixed(2)}h</span>
                 <span className="font-mono text-lg font-semibold text-info">

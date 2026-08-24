@@ -181,6 +181,18 @@ export function CloseCycleDialog({ orgId, clientId, period, open, onOpenChange, 
   // deja revisar la tasa es /facturacion/generar.
   const tieneVariables = (preview?.variablesSubtotalUsd ?? 0) > 0;
 
+  // #63 — ¿Esta factura lleva IVA? Lo dice el preview, que lo sacó de la configuración del cliente.
+  //   Sin IVA (`net`/`tax` en null) no se dibuja ninguna línea nueva y el diálogo queda como #60.
+  const conIva = preview?.net != null && preview?.tax != null;
+  //   `taxRate` viene como FRACCIÓN (0.1) y se muestra en porcentaje. Es una etiqueta, no un monto:
+  //   la plata sigue saliendo calculada del backend como string, sin aritmética en el cliente (§1.4).
+  const ivaPorcentaje =
+    preview?.taxRate != null
+      ? new Intl.NumberFormat('es-PY', { maximumFractionDigits: 2 }).format(
+          parseFloat(preview.taxRate) * 100,
+        )
+      : '';
+
   const puedeEmitir = !!preview && preview.puedeEmitir && !tieneVariables;
   const bloqueado = saving || cargando || !!error || !puedeEmitir || (partial && !untilEnPeriodo);
 
@@ -247,6 +259,27 @@ export function CloseCycleDialog({ orgId, clientId, period, open, onOpenChange, 
                 </span>
               )}
             </div>
+
+            {/* #63 — Desglose del IVA, ANTES de emitir. Sale entero del preview: `total` ya viene con
+                IVA cuando el modo es EXCLUDED, y `net`/`tax` los calcula la misma función que usará el
+                cierre. Sin IVA no se dibuja nada y el diálogo queda como quedó en #60. */}
+            {conIva && preview && !cargando && !error && (
+              <div className="mt-3 space-y-1 border-t border-border pt-3">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-mono text-foreground">
+                    {formatCurrency(preview.net, preview.currency)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="text-muted-foreground">IVA ({ivaPorcentaje}%)</span>
+                  <span className="font-mono text-foreground">
+                    {formatCurrency(preview.tax, preview.currency)}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
               {cargando ? (
                 <Skeleton className="h-4 w-48" />
@@ -293,6 +326,41 @@ export function CloseCycleDialog({ orgId, clientId, period, open, onOpenChange, 
                 ) : (
                   <>El corte no deja nada afuera: entra todo el trabajo del período.</>
                 )}
+              </p>
+            </div>
+          )}
+
+          {/* #63 R7.3/R7.4 — El modo del cliente, dicho antes de emitir.
+              En EXCLUDED el total que se ve acá es 10% MÁS ALTO que el de hace un mes, y eso tiene
+              que ser evidente ANTES de firmar, no una sorpresa después. La nota dice además dónde se
+              cambia: NO se cambia desde este diálogo (no hay override por factura — dos facturas del
+              mismo cliente con modos distintos no tienen lectura contable). */}
+          {conIva && !cargando && !error && !sinNadaQueFacturar && (
+            <div
+              className={`flex items-start gap-2 rounded-lg border p-3 ${
+                preview?.taxMode === 'EXCLUDED'
+                  ? 'border-warning/30 bg-warning/5'
+                  : 'border-border bg-muted/40'
+              }`}
+            >
+              <AlertTriangle
+                className={`mt-0.5 h-4 w-4 shrink-0 ${
+                  preview?.taxMode === 'EXCLUDED' ? 'text-warning' : 'text-muted-foreground'
+                }`}
+              />
+              <p className="text-xs text-muted-foreground">
+                {preview?.taxMode === 'EXCLUDED' ? (
+                  <>
+                    La tarifa de este cliente <strong>no incluye IVA</strong>: el total de arriba ya
+                    trae <strong>{ivaPorcentaje}% de IVA sumado</strong> encima del trabajo facturado.
+                  </>
+                ) : (
+                  <>
+                    La tarifa de este cliente <strong>ya incluye IVA</strong>: el total no cambia, sólo
+                    se desglosa.
+                  </>
+                )}{' '}
+                Se configura en la ficha del cliente (<strong>Clientes › Editar</strong>), no desde acá.
               </p>
             </div>
           )}

@@ -272,6 +272,26 @@ export default function CycleDetailPage() {
               <p className="font-mono text-lg font-semibold text-foreground">{cycle.totalHours.toFixed(2)}h</p>
             </div>
             <div className="text-right">
+              {/* #63 — El IVA ESTAMPADO en esta factura (no el que el cliente tenga hoy: acá se lee
+                  el documento, no la configuración). Sin el desglose, una factura EXCLUDED mostraba
+                  un total mayor que la suma de sus propios subtotales por mes —que son netos— y la
+                  diferencia se leía como un error de la pantalla. Null = factura sin IVA: queda
+                  exactamente la línea única de siempre. */}
+              {cycle.netAmount != null && cycle.taxAmount != null && (
+                <div className="mb-1 space-y-0.5">
+                  <p className="font-mono text-xs text-muted-foreground">
+                    Subtotal {formatCurrency(cycle.netAmount, cycle.currency)}
+                  </p>
+                  <p className="font-mono text-xs text-muted-foreground">
+                    IVA
+                    {cycle.taxRate != null &&
+                      ` (${new Intl.NumberFormat('es-PY', { maximumFractionDigits: 2 }).format(
+                        parseFloat(cycle.taxRate) * 100,
+                      )}%)`}{' '}
+                    {formatCurrency(cycle.taxAmount, cycle.currency)}
+                  </p>
+                </div>
+              )}
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Total facturado</p>
               <p className="font-mono text-lg font-semibold text-foreground">
                 {formatCurrency(cycle.totalAmount, cycle.currency)}
