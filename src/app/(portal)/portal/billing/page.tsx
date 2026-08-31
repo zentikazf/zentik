@@ -1,17 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Receipt, Download, Loader2, FileText, ChevronDown, Clock } from 'lucide-react';
+import Link from 'next/link';
+import { Receipt, FileText, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { api, getToken } from '@/lib/api-client';
-import { toast } from '@/hooks/use-toast';
+import { api } from '@/lib/api-client';
 import { formatCurrency, cn } from '@/lib/utils';
+// #62 — la MISMA etiqueta de periodo que usan las cards de /portal/hours (una sola copia).
+import { invoiceRangeLabel } from '@/lib/invoice-period';
+import { taxLabel } from '@/lib/tax';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// #63 — Esta pantalla pasó a ser SÓLO UNA LISTA.
+//
+// El detalle vivía acá adentro como acordeón: el cliente abría una fila y leía su factura apretada
+// entre las otras, sin poder compartir el enlace ni volver a ella. Una factura es un DOCUMENTO, así
+// que ahora tiene ruta propia (`/portal/billing/<id>`) y esta página sólo lista y enlaza.
+//
+// El acordeón se conserva donde sí corresponde: en `/portal/hours`, que es una vista de CONSUMO
+// —meses que se abren y se cierran para explorar—, no un documento.
 
 // 'YYYY-MM' → 'Julio 2026' (es-PY, capitalizado).
 function monthLabel(period: string): string {
@@ -36,6 +45,9 @@ interface PortalInvoice {
  status: 'SENT' | 'PAID' | 'CANCELLED';
  cancelReason: string | null;
  cancelledAt: string | null;
+ // #63 — El modo ESTAMPADO en ESTA factura. Opcional por la ventana de deploy (el front sube
+ // antes que el backend): sin dato, sin etiqueta, que es como se veía antes de #63.
+ taxMode?: string | null;
 }
 
 interface PortalCreditNote {
@@ -46,20 +58,7 @@ interface PortalCreditNote {
  totalHours: number;
  currency: string;
  issuedAt: string;
-}
-
-// #23 — detalle de una factura (todo en Gs, como se facturó).
-interface InvoiceDetail {
- invoiceNumber: string;
- currency: string;
- consumo: { label: string; amount: string }[];
- fee: { label: string; amount: string }[];
- subtotalConsumo: string;
- subtotalFee: string;
- tiempo: { concepto: string; hours: number; amount: string }[];
- subtotalTiempo: string;
- totalHoras: number;
- total: string;
+ taxMode?: string | null;
 }
 
 const INVOICE_STATUS: Record<PortalInvoice['status'], { label: string; className: string }> = {
@@ -76,117 +75,6 @@ function invoiceMonthKey(inv: PortalInvoice): string {
  return `${y}-${m}`;
 }
 
-function invoiceRangeLabel(inv: PortalInvoice): string {
- const fmt = (iso: string) => {
-  const s = new Intl.DateTimeFormat('es-PY', { timeZone: 'America/Asuncion', month: 'long', year: 'numeric' }).format(new Date(iso));
-  return s.charAt(0).toUpperCase() + s.slice(1);
- };
- const start = fmt(inv.periodStart);
- const end = fmt(inv.cutoffDate ?? inv.periodEnd);
- return start === end ? start : `${start} – ${end}`;
-}
-
-// ── Sub-bloque: tabla de líneas (concepto + monto Gs) con subtotal ──
-function LinesTable({ title, rows, subtotal, currency }: {
- title: string;
- rows: { label: string; amount: string }[];
- subtotal: string;
- currency: string;
-}) {
- return (
-  <div className="overflow-x-auto rounded-lg border border-border">
-   <table className="w-full text-sm">
-    <thead>
-     <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-      <th className="px-4 py-2.5 text-left font-medium">{title}</th>
-      <th className="px-4 py-2.5 text-right font-medium">Total</th>
-     </tr>
-    </thead>
-    <tbody>
-     {rows.length === 0 ? (
-      <tr><td colSpan={2} className="px-4 py-3 text-center text-xs text-muted-foreground">Sin ítems.</td></tr>
-     ) : (
-      rows.map((r, i) => (
-       <tr key={i} className="border-b border-border/50 last:border-0">
-        <td className="px-4 py-2.5 font-mono text-xs">{r.label}</td>
-        <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(r.amount, currency)}</td>
-       </tr>
-      ))
-     )}
-     <tr className="border-t-2 border-border bg-muted/30">
-      <td className="px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Subtotal</td>
-      <td className="px-4 py-2.5 text-right font-mono font-medium">{formatCurrency(subtotal, currency)}</td>
-     </tr>
-    </tbody>
-   </table>
-  </div>
- );
-}
-
-// ── Detalle de la factura (Consumo → Fee → Tiempo facturado colapsable), todo en Gs ──
-function InvoiceDetailBody({ detail, tiempoOpen, onToggleTiempo }: {
- detail: InvoiceDetail;
- tiempoOpen: boolean;
- onToggleTiempo: () => void;
-}) {
- const c = detail.currency;
- return (
-  <div className="space-y-4">
-   {/* 1) Consumo */}
-   <LinesTable title="Consumo" rows={detail.consumo} subtotal={detail.subtotalConsumo} currency={c} />
-   {/* 2) Fee fijo */}
-   {detail.fee.length > 0 && (
-    <LinesTable title="Fee fijo" rows={detail.fee} subtotal={detail.subtotalFee} currency={c} />
-   )}
-   {/* 3) Tiempo facturado — sub-card colapsable */}
-   {detail.tiempo.length > 0 && (
-    <div className="overflow-hidden rounded-lg border border-border">
-     <button
-      type="button"
-      onClick={onToggleTiempo}
-      aria-expanded={tiempoOpen}
-      className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-muted/30"
-     >
-      <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200', tiempoOpen && 'rotate-180')} />
-      <Clock className="h-3.5 w-3.5 text-primary" />
-      <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Tiempo facturado</span>
-      <span className="ml-auto font-mono text-xs font-semibold text-foreground">
-       {detail.totalHoras.toFixed(2)}h · {formatCurrency(detail.subtotalTiempo, c)}
-      </span>
-     </button>
-     {tiempoOpen && (
-      <div className="overflow-x-auto border-t border-border animate-fade-in">
-       <table className="w-full text-sm">
-        <thead>
-         <tr className="border-b border-border bg-muted/20 text-xs uppercase tracking-wider text-muted-foreground">
-          <th className="px-4 py-2.5 text-left font-medium">Concepto</th>
-          <th className="px-4 py-2.5 text-right font-medium">Horas</th>
-          <th className="px-4 py-2.5 text-right font-medium">Monto</th>
-         </tr>
-        </thead>
-        <tbody>
-         {detail.tiempo.map((t, i) => (
-          <tr key={i} className="border-b border-border/50 last:border-0">
-           <td className="px-4 py-2.5"><p className="truncate max-w-xs text-foreground">{t.concepto}</p></td>
-           <td className="px-4 py-2.5 text-right font-mono text-xs">{t.hours.toFixed(2)}h</td>
-           <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(t.amount, c)}</td>
-          </tr>
-         ))}
-        </tbody>
-       </table>
-      </div>
-     )}
-    </div>
-   )}
-   {/* Total de la factura */}
-   <div className="flex items-baseline justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-    <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total de la factura</span>
-    <span className="font-mono text-lg font-semibold text-foreground">{formatCurrency(detail.total, c)}</span>
-   </div>
-  </div>
- );
-}
-
 // ── Page ─────────────────────────────────────────────────────────────
 
 export default function PortalBillingPage() {
@@ -196,10 +84,6 @@ export default function PortalBillingPage() {
 
  const [invoices, setInvoices] = useState<PortalInvoice[] | null>(null);
  const [creditNotes, setCreditNotes] = useState<PortalCreditNote[]>([]);
- const [openInv, setOpenInv] = useState<Set<string>>(new Set());
- const [openTiempo, setOpenTiempo] = useState<Set<string>>(new Set());
- const [details, setDetails] = useState<Map<string, InvoiceDetail | 'loading' | 'error'>>(new Map());
- const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
  useEffect(() => {
   if (!loading && !canSeeBilling) router.replace('/portal');
@@ -218,65 +102,6 @@ export default function PortalBillingPage() {
     setCreditNotes([]);
    });
  }, [canSeeBilling]);
-
- const loadDetail = useCallback(async (id: string) => {
-  setDetails((prev) => new Map(prev).set(id, 'loading'));
-  try {
-   const res = await api.get<InvoiceDetail>(`/portal/invoices/${id}/detail`);
-   setDetails((prev) => new Map(prev).set(id, res.data));
-  } catch {
-   setDetails((prev) => new Map(prev).set(id, 'error'));
-  }
- }, []);
-
- const toggleInvoice = (id: string) => {
-  setOpenInv((prev) => {
-   const next = new Set(prev);
-   if (next.has(id)) next.delete(id);
-   else {
-    next.add(id);
-    if (!details.has(id)) loadDetail(id); // lazy load al abrir
-   }
-   return next;
-  });
- };
-
- const toggleTiempo = (id: string) =>
-  setOpenTiempo((prev) => {
-   const next = new Set(prev);
-   if (next.has(id)) next.delete(id);
-   else next.add(id);
-   return next;
-  });
-
- const doDownload = useCallback(
-  async (url: string, filename: string, id: string) => {
-   if (downloadingId) return;
-   setDownloadingId(id);
-   try {
-    const token = getToken();
-    const res = await fetch(url, { credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : undefined });
-    if (!res.ok) {
-     toast.error('Error', `No se pudo descargar el PDF (HTTP ${res.status})`);
-     return;
-    }
-    const blob = await res.blob();
-    const objUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(objUrl);
-   } catch (err) {
-    toast.error('Error', err instanceof Error ? err.message : 'No se pudo descargar el PDF');
-   } finally {
-    setDownloadingId(null);
-   }
-  },
-  [downloadingId],
- );
 
  if (loading || !canSeeBilling) {
   return (
@@ -305,7 +130,7 @@ export default function PortalBillingPage() {
     <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
      <Receipt className="h-6 w-6" /> Facturación
     </h1>
-    <p className="mt-1 text-sm text-muted-foreground">Tus facturas por mes. Abrí una para ver el detalle.</p>
+    <p className="mt-1 text-sm text-muted-foreground">Tus facturas por mes. Entrá a una para ver el detalle completo.</p>
    </div>
 
    {invoices === null ? (
@@ -326,91 +151,46 @@ export default function PortalBillingPage() {
        {invs.map((inv) => {
         const st = INVOICE_STATUS[inv.status];
         const cancelled = inv.status === 'CANCELLED';
-        const open = openInv.has(inv.id);
-        const detail = details.get(inv.id);
+        // #63 — La etiqueta sale del `taxMode` de ESTA factura, nunca de la configuración actual
+        // del cliente: en esta lista conviven facturas de distintas épocas y distintos modos, y
+        // las anteriores a #63 no llevan ninguna.
+        const etiqueta = taxLabel(inv.taxMode);
+        const ncs = creditNotes.filter((nc) => nc.appliesToInvoiceNumber === inv.invoiceNumber);
         return (
          <div key={inv.id} className="overflow-hidden rounded-xl border border-border bg-card">
-          {/* Header del card de factura */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-           <button
-            type="button"
-            onClick={() => toggleInvoice(inv.id)}
-            aria-expanded={open}
-            className="flex min-w-0 flex-1 items-center gap-3 text-left"
-           >
-            <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} />
-            <div className="min-w-0">
-             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-sm font-medium text-foreground">{inv.invoiceNumber}</span>
-              <Badge className={`${st.className} text-[10px]`}>{st.label}</Badge>
-              {inv.kind === 'ACCUMULATED' && <span className="text-[10px] text-muted-foreground">Acumulada</span>}
-             </div>
-             <p className="mt-0.5 text-xs text-muted-foreground">{invoiceRangeLabel(inv)}</p>
-             {cancelled && inv.cancelReason && (
-              <p className="mt-1 text-[11px] text-destructive/80">Motivo: {inv.cancelReason}</p>
-             )}
+          <Link
+           href={`/portal/billing/${inv.id}`}
+           className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-muted/30"
+          >
+           <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+             <span className="font-mono text-sm font-medium text-foreground">{inv.invoiceNumber}</span>
+             <Badge className={`${st.className} text-[10px]`}>{st.label}</Badge>
+             {inv.kind === 'ACCUMULATED' && <span className="text-[10px] text-muted-foreground">Acumulada</span>}
             </div>
-           </button>
-           <div className="flex items-center gap-4">
+            <p className="mt-0.5 text-xs text-muted-foreground">{invoiceRangeLabel(inv)}</p>
+            {cancelled && inv.cancelReason && (
+             <p className="mt-1 text-[11px] text-destructive/80">Motivo: {inv.cancelReason}</p>
+            )}
+            {ncs.length > 0 && (
+             <p className="mt-1 text-[11px] text-info">
+              {ncs.length} nota{ncs.length === 1 ? '' : 's'} de crédito
+             </p>
+            )}
+           </div>
+           <div className="flex items-center gap-3">
             <div className="text-right">
-             <p className="font-mono text-sm font-semibold text-foreground">{formatCurrency(inv.totalAmount, inv.currency)}</p>
+             <div className="flex items-baseline justify-end gap-1.5">
+              <p className={cn('font-mono text-sm font-semibold', cancelled ? 'text-muted-foreground line-through' : 'text-foreground')}>
+               {formatCurrency(inv.totalAmount, inv.currency)}
+              </p>
+              {etiqueta && <span className="shrink-0 text-[10px] font-medium text-muted-foreground">{etiqueta}</span>}
+             </div>
              <p className="font-mono text-[11px] text-muted-foreground">{inv.totalHours.toFixed(2)}h</p>
             </div>
-            {!cancelled && (
-             <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => doDownload(`${API_URL}/api/v1/portal/invoices/${inv.id}/pdf`, `${inv.invoiceNumber}.pdf`, inv.id)}
-              disabled={downloadingId === inv.id}
-             >
-              {downloadingId === inv.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              Descargar
-             </Button>
-            )}
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
            </div>
-          </div>
-
-          {/* Detalle (lazy) */}
-          {open && (
-           <div className="border-t border-border p-4 animate-fade-in">
-            {detail === undefined || detail === 'loading' ? (
-             <Skeleton className="h-40 rounded-lg" />
-            ) : detail === 'error' ? (
-             <p className="py-4 text-center text-sm text-muted-foreground">No se pudo cargar el detalle.</p>
-            ) : (
-             <InvoiceDetailBody detail={detail} tiempoOpen={openTiempo.has(inv.id)} onToggleTiempo={() => toggleTiempo(inv.id)} />
-            )}
-           </div>
-          )}
-
-          {/* Notas de crédito asociadas */}
-          {creditNotes
-           .filter((nc) => nc.appliesToInvoiceNumber === inv.invoiceNumber)
-           .map((nc) => (
-            <div key={nc.id} className="mx-4 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-info/30 bg-info/5 px-4 py-2.5">
-             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-               <span className="font-mono text-xs font-medium text-foreground">{nc.number}</span>
-               <Badge className="bg-info/10 text-info text-[10px]">Nota de crédito</Badge>
-              </div>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">Aplica a {nc.appliesToInvoiceNumber}</p>
-             </div>
-             <div className="flex items-center gap-3">
-              <p className="font-mono text-sm font-semibold text-info">{formatCurrency(nc.totalAmount, nc.currency)}</p>
-              <Button
-               variant="outline"
-               size="sm"
-               className="gap-1.5"
-               onClick={() => doDownload(`${API_URL}/api/v1/portal/credit-notes/${nc.id}/pdf`, `${nc.number}.pdf`, nc.id)}
-               disabled={downloadingId === nc.id}
-              >
-               {downloadingId === nc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-               Descargar
-              </Button>
-             </div>
-            </div>
-           ))}
+          </Link>
          </div>
         );
        })}

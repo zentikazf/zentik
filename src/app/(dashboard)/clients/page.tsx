@@ -34,6 +34,12 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
 import { toast } from '@/hooks/use-toast';
+import {
+  TaxMode,
+  previewHourlyRateTax,
+  formatRateNumber,
+  rateCurrencySuffix,
+} from '@/lib/tax';
 
 interface Client {
   id: string;
@@ -51,6 +57,12 @@ interface Client {
   developmentHourlyRate?: number | null;
   supportHourlyRate?: number | null;
   currency?: string;
+  // #63 — IVA del cliente. `taxRate` es una FRACCIÓN (0.1 = 10%), como se guarda; el input del
+  //   diálogo trabaja en porcentaje y convierte en los dos sentidos. Los montos Decimal llegan como
+  //   string del backend, así que se parsean acá (`number | string`) y nunca se asume el tipo.
+  //   null/ausente = cliente SIN IVA, que es el estado de todos hasta que alguien prenda el switch.
+  taxRate?: number | string | null;
+  taxMode?: string | null;
   _count?: { projects: number };
 }
 
@@ -95,6 +107,12 @@ export default function ClientsPage() {
   const [developmentHourlyRate, setDevelopmentHourlyRate] = useState('');
   const [supportHourlyRate, setSupportHourlyRate] = useState('');
   const [currency, setCurrency] = useState('PYG');
+  // #63 — El switch APAGADO es el estado de todos los clientes hoy y equivale a "sin IVA" (el backend
+  //   guarda null en los dos campos). Prendido, la tasa arranca en 10 (el IVA general paraguayo) y el
+  //   modo en EXCLUDED. `taxRatePct` es PORCENTAJE en la UI; se divide por 100 al guardar.
+  const [taxEnabled, setTaxEnabled] = useState(false);
+  const [taxRatePct, setTaxRatePct] = useState('10');
+  const [taxMode, setTaxMode] = useState<TaxMode>('EXCLUDED');
 
   useEffect(() => {
     if (orgId) loadClients();
@@ -123,6 +141,11 @@ export default function ClientsPage() {
     setDevelopmentHourlyRate('');
     setSupportHourlyRate('');
     setCurrency('PYG');
+    // #63: un cliente nuevo nace SIN IVA. Que el default sea el apagado no es pereza: prender el IVA
+    //   sube las facturas 10%, y eso tiene que ser una decisión explícita de quien carga el cliente.
+    setTaxEnabled(false);
+    setTaxRatePct('10');
+    setTaxMode('EXCLUDED');
     setDialogOpen(true);
   };
 
@@ -139,11 +162,30 @@ export default function ClientsPage() {
       client.supportHourlyRate != null ? String(client.supportHourlyRate) : '',
     );
     setCurrency(client.currency || 'PYG');
+    // #63: fracción → porcentaje. El switch lo prende `taxRate != null`, no `taxMode`: la tasa es la
+    //   que decide si hay IVA (el backend estampa los dos juntos o ninguno).
+    const rate = client.taxRate != null ? Number(client.taxRate) : null;
+    const hasTax = rate != null && !Number.isNaN(rate) && rate > 0;
+    setTaxEnabled(hasTax);
+    // Con el IVA apagado el campo vuelve al 10 sugerido en vez de quedar vacío: al prender el switch
+    // ya hay una tasa válida y la línea viva se puede leer sin tipear nada.
+    setTaxRatePct(hasTax ? String(Math.round(rate * 100 * 100) / 100) : '10');
+    setTaxMode(client.taxMode === 'INCLUDED' ? 'INCLUDED' : 'EXCLUDED');
     setDialogOpen(true);
   };
 
+  // #63 — La tasa tipeada, saneada. Sólo se considera IVA con el switch prendido Y un número > 0:
+  //   un 0 o un campo vacío significan "sin IVA", no un IVA del 0% (que ensuciaría el PDF con una
+  //   línea "IVA (0%)" y una NC con desglose en cero).
+  const taxRatePctNum = Number(taxRatePct.replace(',', '.'));
+  const taxRateValido = taxEnabled && Number.isFinite(taxRatePctNum) && taxRatePctNum > 0 && taxRatePctNum < 100;
+
   const handleSave = async () => {
     if (!orgId || !name.trim()) return;
+    if (taxEnabled && !taxRateValido) {
+      toast.error('Error', 'La tasa de IVA tiene que ser un número mayor a 0 y menor a 100');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -158,6 +200,12 @@ export default function ClientsPage() {
           ? Number(supportHourlyRate)
           : undefined,
         currency,
+        // #63 — Siempre se mandan los DOS, y `null` explícito cuando el switch está apagado: es la
+        //   única forma de APAGARLE el IVA a un cliente que lo tenía. Mandar `undefined` dejaría el
+        //   valor viejo en la base y el switch mentiría. Porcentaje → fracción (10 → 0.1); el redondeo
+        //   a 4 decimales es el de la columna `Decimal(5,4)`.
+        taxRate: taxRateValido ? Math.round((taxRatePctNum / 100) * 10000) / 10000 : null,
+        taxMode: taxRateValido ? taxMode : null,
       };
 
       if (editing) {
@@ -757,6 +805,104 @@ export default function ClientsPage() {
               <p className="text-[11px] text-muted-foreground mt-2">
                 Las tarifas se aplican en facturación según el tipo de tarea (desarrollo o soporte).
               </p>
+            </div>
+
+            {/* #63 — IVA del cliente. Va ACÁ, pegado a las tarifas, porque lo que el control define es
+                exactamente "la tarifa de este cliente, ¿es neta o bruta?". No es una propiedad de la
+                agencia ni de una factura suelta: es del acuerdo comercial. */}
+            <div className="pt-2 border-t border-border">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Cobrar IVA</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Apagado: las facturas salen como hasta ahora, sin IVA.
+                  </p>
+                </div>
+                <Switch checked={taxEnabled} onCheckedChange={setTaxEnabled} />
+              </div>
+
+              {taxEnabled && (
+                <div className="mt-3 space-y-3">
+                  <div className="flex items-end gap-2">
+                    <div className="space-y-2 w-28">
+                      <Label className="text-xs">Tasa</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="any"
+                        value={taxRatePct}
+                        onChange={(e) => setTaxRatePct(e.target.value)}
+                        placeholder="10"
+                      />
+                    </div>
+                    <span className="pb-2.5 text-sm text-muted-foreground">%</span>
+                  </div>
+
+                  {/* Las dos opciones, como control de dos caras y no como un select: la diferencia
+                      entre trasladar y absorber el IVA es la decisión, no un detalle de formulario. */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ['EXCLUDED', 'La tarifa NO incluye IVA'],
+                        ['INCLUDED', 'La tarifa YA incluye IVA'],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setTaxMode(mode)}
+                        aria-pressed={taxMode === mode}
+                        className={`rounded-lg border px-3 py-2.5 text-left text-xs transition-colors ${
+                          taxMode === mode
+                            ? 'border-primary bg-primary/10 text-foreground font-medium'
+                            : 'border-border text-muted-foreground hover:bg-muted/40'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ⚠️ LA LÍNEA VIVA — no es decorativa y no es opcional.
+                      "Incluye / no incluye" se confunde siempre; con la tarifa REAL de este cliente
+                      delante no hay forma de elegir mal. Es la diferencia entre TRASLADAR el IVA
+                      (cobrás 99.000, recibís 90.000) y ABSORBERLO (cobrás 90.000, recibís 81.818).
+                      Se recalcula al tocar cualquiera de los tres controles. */}
+                  {taxRateValido && supportHourlyRate.trim() && Number(supportHourlyRate) > 0 ? (
+                    (() => {
+                      const p = previewHourlyRateTax(Number(supportHourlyRate), taxRatePctNum, taxMode);
+                      const suffix = rateCurrencySuffix(currency);
+                      return (
+                        <div className="rounded-lg border border-border bg-muted/40 p-3">
+                          <p className="font-mono text-xs text-foreground">
+                            {formatRateNumber(p.net, currency)} + {formatRateNumber(p.tax, currency)} IVA ={' '}
+                            <strong>{formatRateNumber(p.total, currency)}</strong> {suffix}
+                          </p>
+                          <p
+                            className={`mt-1 text-[11px] ${
+                              taxMode === 'EXCLUDED' ? 'text-warning' : 'text-success'
+                            }`}
+                          >
+                            {taxMode === 'EXCLUDED'
+                              ? `⚠ Las próximas facturas suben ${new Intl.NumberFormat('es-PY', { maximumFractionDigits: 2 }).format(taxRatePctNum)}%`
+                              : '✓ El total de las facturas no cambia'}
+                          </p>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Cargá la tarifa de <strong>Soporte</strong> para ver cómo queda la hora con IVA.
+                    </p>
+                  )}
+
+                  <p className="text-[11px] text-muted-foreground">
+                    El IVA se <strong>estampa en cada factura al emitirla</strong>. Cambiar esto no
+                    modifica ninguna factura ya emitida ni sus notas de crédito.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
