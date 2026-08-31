@@ -11,11 +11,10 @@ import {
  DialogTitle,
  DialogFooter,
 } from '@/components/ui/dialog';
-import { CreditCard, Check, Zap, TrendingDown, X, DollarSign, FileText, AlertTriangle } from 'lucide-react';
+import { Check, Zap, TrendingDown, X, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { useOrg } from '@/providers/org-provider';
-import { formatCurrency, formatDate } from '@/lib/utils';
 
 const fallbackPlans = [
  { id: 'FREE', name: 'Free', price: '$0', features: ['3 Proyectos', '5 Miembros', '1 GB Almacenamiento', 'Tableros Kanban'] },
@@ -27,8 +26,6 @@ export default function BillingSettingsPage() {
  const { orgId } = useOrg();
  const [subscription, setSubscription] = useState<any>(null);
  const [usage, setUsage] = useState<any>(null);
- const [billingSummary, setBillingSummary] = useState<any>(null);
- const [subscriptionInvoices, setSubscriptionInvoices] = useState<any[]>([]);
  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [upgrading, setUpgrading] = useState<string | null>(null);
@@ -46,8 +43,6 @@ export default function BillingSettingsPage() {
  api.get('/subscriptions/current'),
  api.get('/subscriptions/usage'),
  api.get('/subscriptions/plans'),
- api.get('/subscriptions/invoices'),
- orgId ? api.get(`/organizations/${orgId}/billing/summary`) : Promise.resolve({ data: null }),
  ]);
  if (results[0].status === 'fulfilled') setSubscription(results[0].value.data);
  if (results[1].status === 'fulfilled') setUsage(results[1].value.data);
@@ -55,11 +50,6 @@ export default function BillingSettingsPage() {
  const p = results[2].value.data;
  setAvailablePlans(Array.isArray(p) ? p : p?.data || []);
  }
- if (results[3].status === 'fulfilled') {
- const inv = results[3].value.data;
- setSubscriptionInvoices(Array.isArray(inv) ? inv : inv?.data || []);
- }
- if (results[4].status === 'fulfilled') setBillingSummary(results[4].value.data);
  } catch (err) {
  const message = err instanceof ApiError ? err.message : 'Error al cargar datos de suscripción';
  toast.error('Error', message);
@@ -135,7 +125,7 @@ export default function BillingSettingsPage() {
  <div className="space-y-7">
  <div>
  <h1 className="text-[22px] font-semibold text-foreground">Facturación y Suscripción</h1>
- <p className="mt-1 text-sm text-muted-foreground">Gestiona tu plan, uso y historial de pagos</p>
+ <p className="mt-1 text-sm text-muted-foreground">Gestiona tu plan y uso</p>
  </div>
 
  {/* Current Plan */}
@@ -172,42 +162,6 @@ export default function BillingSettingsPage() {
  )}
  </div>
 
- {/* Billing Summary */}
- {billingSummary && (
- <div className="rounded-xl border border-border bg-card p-6">
- <h2 className="mb-5 text-lg font-semibold text-foreground">Resumen de Facturación</h2>
- <div className="grid gap-4 md:grid-cols-3">
- <div className="flex items-center gap-3">
- <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
- <DollarSign className="h-5 w-5 text-primary"/>
- </div>
- <div>
- <p className="text-sm text-muted-foreground">Total Facturado</p>
- <p className="text-xl font-bold text-foreground">{formatCurrency(billingSummary.totalInvoiced || 0)}</p>
- </div>
- </div>
- <div className="flex items-center gap-3">
- <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10">
- <Check className="h-5 w-5 text-success"/>
- </div>
- <div>
- <p className="text-sm text-muted-foreground">Total Cobrado</p>
- <p className="text-xl font-bold text-foreground">{formatCurrency(billingSummary.totalPaid || 0)}</p>
- </div>
- </div>
- <div className="flex items-center gap-3">
- <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10">
- <FileText className="h-5 w-5 text-warning"/>
- </div>
- <div>
- <p className="text-sm text-muted-foreground">Facturas Pendientes</p>
- <p className="text-xl font-bold text-foreground">{billingSummary.pendingInvoices ?? 0}</p>
- </div>
- </div>
- </div>
- </div>
- )}
-
  {/* Available Plans */}
  <div>
  <h2 className="mb-5 text-lg font-semibold text-foreground">Planes Disponibles</h2>
@@ -237,29 +191,6 @@ export default function BillingSettingsPage() {
  ))}
  </div>
  </div>
-
- {/* Payment History */}
- {subscriptionInvoices.length > 0 && (
- <div className="rounded-xl border border-border bg-card p-6">
- <h2 className="mb-5 text-lg font-semibold text-foreground">Historial de Pagos</h2>
- <div className="space-y-2">
- {subscriptionInvoices.map((inv: any) => (
- <div key={inv.id} className="flex items-center justify-between rounded-xl border border-border p-4">
- <div>
- <p className="text-[15px] font-medium text-foreground">{inv.description || inv.number || 'Pago de suscripción'}</p>
- <p className="mt-0.5 text-[13px] text-muted-foreground">{formatDate(inv.createdAt || inv.date)}</p>
- </div>
- <div className="flex items-center gap-3">
- <span className="font-medium text-foreground">{formatCurrency(inv.amount || inv.total || 0)}</span>
- <Badge className={inv.status === 'PAID' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}>
- {inv.status === 'PAID' ? 'Pagado' : inv.status || 'Pendiente'}
- </Badge>
- </div>
- </div>
- ))}
- </div>
- </div>
- )}
 
  {/* Downgrade Dialog */}
  <Dialog open={!!downgradeTarget} onOpenChange={() => setDowngradeTarget(null)}>
