@@ -34,6 +34,30 @@ export function taxLabel(taxMode: string | null | undefined): string | null {
   return null;
 }
 
+/**
+ * #63 — La LEYENDA de la factura del cliente: la frase que le dice, en su idioma, si el IVA venía
+ * adentro de los precios o se sumó al final.
+ *
+ * La etiqueta corta (`taxLabel`) alcanza para un monto suelto en una lista; en la página de la
+ * factura hace falta la frase entera, porque ahí el cliente está mirando subtotales Y total y
+ * tiene que entender por qué el total es mayor (o por qué no lo es).
+ *
+ * `taxRatePercent` ya viene formateado ('10', '10,5'). null = factura sin IVA → sin leyenda.
+ */
+export function taxLegend(taxMode: string | null | undefined, taxRatePercent: string): string | null {
+  if (taxMode === 'EXCLUDED') return `Los importes no incluyen IVA. Se suma ${taxRatePercent}% al total.`;
+  if (taxMode === 'INCLUDED') return `Los importes ya incluyen IVA ${taxRatePercent}%.`;
+  return null;
+}
+
+/** Fracción del backend ('0.1000') → porcentaje para mostrar ('10', '10,5'). '' si no hay tasa. */
+export function taxRatePercent(taxRate: string | null | undefined): string {
+  if (taxRate == null) return '';
+  const n = parseFloat(taxRate);
+  if (Number.isNaN(n)) return '';
+  return new Intl.NumberFormat('es-PY', { maximumFractionDigits: 2 }).format(n * 100);
+}
+
 export interface HourlyRateTaxPreview {
   net: number;
   tax: number;

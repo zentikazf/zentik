@@ -228,8 +228,10 @@ function BucketCard({
  );
 }
 
-// Las facturas que COMPONEN una card. Cada una enlaza a su detalle en /portal/billing, que ya
-// existe: el link lleva ?invoice=<id> y esa página abre sola el acordeón de esa factura.
+// Las facturas que COMPONEN una card. Cada una enlaza a SU PÁGINA en /portal/billing/<id>.
+// #63: antes el enlace era `?invoice=<id>` y la lista abría sola el acordeón de esa factura —un
+// rodeo que existía sólo porque el detalle no tenía ruta propia. Ahora la tiene, así que el enlace
+// va derecho al documento.
 function BucketInvoices({ title, invoices, dateLabel }: {
  title: string;
  invoices: PortalBucketInvoice[];
@@ -247,7 +249,7 @@ function BucketInvoices({ title, invoices, dateLabel }: {
     {invoices.map((inv) => (
      <li key={inv.id}>
       <Link
-       href={`/portal/billing?invoice=${inv.id}`}
+       href={`/portal/billing/${inv.id}`}
        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/30"
       >
        <div className="min-w-0">
