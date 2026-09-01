@@ -36,7 +36,6 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api-client';
 import { useOrg } from '@/providers/org-provider';
-import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -196,7 +195,6 @@ interface MonthGroup {
 export default function ClientTiempoPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const { orgId } = useOrg();
-  const { user: authUser } = useAuth();
   const { hasPermission } = usePermissions();
   const canEditHours = hasPermission('manage:projects');
 
@@ -434,12 +432,17 @@ export default function ClientTiempoPage() {
   };
 
   const handleDeleteTransaction = async () => {
-    if (!orgId || !deleteTxConfirm || !deleteTxReason.trim() || !authUser?.id) return;
+    // Ya no se chequea `authUser?.id`: el actor lo pone el backend (#65 C2.1). Pedirlo acá
+    // dejaba el botón mudo mientras la sesión todavía estaba cargando.
+    if (!orgId || !deleteTxConfirm || !deleteTxReason.trim()) return;
     setDeletingTx(true);
     try {
+      // #65 C2.1: `deletedById` ya NO se manda. El backend sella el autor con el usuario de la
+      // sesión (`@CurrentUser()`); mandarlo desde acá era dejar que el cliente firmara la auditoría
+      // con el id que quisiera. El DTO todavía lo acepta y lo descarta, así que un frontend viejo
+      // en la ventana de deploy no se rompe — pero el nuevo no tiene por qué mandarlo.
       await api.post(`/organizations/${orgId}/clients/${clientId}/hours/${deleteTxConfirm.id}/delete`, {
         reason: deleteTxReason.trim(),
-        deletedById: authUser.id,
       });
       // Textos distintos por la asimetría del backend: `deleteHoursTransaction` sólo revierte
       // contadores para PURCHASE/USAGE/LOAN/REFUND. La fila espejo de una NC (#54) y los INTERNAL
@@ -563,9 +566,14 @@ export default function ClientTiempoPage() {
           <h2 className="text-[15px] font-semibold text-card-foreground flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" /> Horas Contratadas
           </h2>
-          <Button size="sm" onClick={() => setShowAddHours(true)}>
-            <Plus className="mr-1 h-3 w-3" /> Agregar Horas
-          </Button>
+          {/* #65 C1: la ruta POST :clientId/hours pasó a exigir `manage:projects`. Sin este
+              gate el botón queda visible para todo el mundo y falla con 403 recién después de
+              abrir el diálogo y escribir las horas — el mismo anti-patrón que A1.3 condena. */}
+          {canEditHours && (
+            <Button size="sm" onClick={() => setShowAddHours(true)}>
+              <Plus className="mr-1 h-3 w-3" /> Agregar Horas
+            </Button>
+          )}
         </div>
 
         {/*
