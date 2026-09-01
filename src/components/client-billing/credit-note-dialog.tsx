@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -86,7 +85,6 @@ export function CreditNoteDialog({
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState('');
-  const [returnHours, setReturnHours] = useState(true);
   const [preview, setPreview] = useState<CreditNotePreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,7 +96,6 @@ export function CreditNoteDialog({
   const reset = () => {
     setSelected(new Set());
     setReason('');
-    setReturnHours(true);
     setPreview(null);
   };
 
@@ -118,15 +115,24 @@ export function CreditNoteDialog({
     setPreview(null);
   };
 
-  const handleReturnHours = (v: boolean) => {
-    setReturnHours(v);
-    setPreview(null);
-  };
-
+  // #65 T14 (A2) — `returnHoursToBillable` queda FIJO en true, y el switch se sacó de la UI.
+  //
+  // Con la opción en false no nacía la fila espejo, y la fila original quedaba encerrada por
+  // cuatro puertas a la vez: borrarla daba TRANSACTION_BILLED, editarla también, reemitir la NC
+  // con la opción prendida chocaba el @unique de `creditedTransactionId` (LINE_ALREADY_CREDITED),
+  // anular la factura daba CYCLE_HAS_CREDIT_NOTES, y borrar la nota de crédito no tiene endpoint.
+  // Esas horas no se podían volver a facturar NUNCA: plata que desaparecía con un click, sin
+  // ninguna advertencia y sin vuelta atrás.
+  //
+  // Se manda explícito en vez de omitirlo (el backend igual lo defaultea a true, service:1486)
+  // para que el contrato quede visible en el request y no dependa de un `??` remoto.
+  //
+  // La alternativa era construir la anulación de notas de crédito, que lleva migración
+  // (`CreditNote.cancelledAt` + liberar las líneas) y es un spec aparte.
   const buildBody = () => ({
     lineIds: [...selected],
     reason: reason.trim(),
-    returnHoursToBillable: returnHours,
+    returnHoursToBillable: true,
   });
 
   const handlePreview = async () => {
@@ -277,24 +283,12 @@ export function CreditNoteDialog({
             />
           </div>
 
-          {/* Toggle devolver horas a facturable (default ON) */}
-          <div className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="nc-return-hours" className="cursor-pointer">
-                Devolver horas a facturable
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Las horas acreditadas vuelven a estar disponibles para facturar. Desactivalo para un descuento
-                sin re-facturar (gesto comercial).
-              </p>
-            </div>
-            <Switch
-              id="nc-return-hours"
-              checked={returnHours}
-              onCheckedChange={handleReturnHours}
-              disabled={saving}
-            />
-          </div>
+          {/* #65 T14 (A2): acá vivía el switch "Devolver horas a facturable". Ahora es siempre
+              SÍ, y se dice en vez de preguntarse — apagarlo dejaba las horas encerradas para
+              siempre (ver `buildBody`). */}
+          <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            Las horas acreditadas <strong>vuelven a estar disponibles para facturar</strong>.
+          </p>
 
           {/* Vista previa server-side */}
           {preview && (

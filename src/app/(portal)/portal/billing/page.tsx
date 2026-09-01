@@ -42,7 +42,7 @@ interface PortalInvoice {
  totalHours: number;
  totalAmount: string;
  currency: string;
- status: 'SENT' | 'PAID' | 'CANCELLED';
+ status: 'SENT' | 'PAID' | 'CANCELLED' | 'WRITTEN_OFF';
  cancelReason: string | null;
  cancelledAt: string | null;
  // #63 — El modo ESTAMPADO en ESTA factura. Opcional por la ventana de deploy (el front sube
@@ -65,6 +65,11 @@ const INVOICE_STATUS: Record<PortalInvoice['status'], { label: string; className
  SENT: { label: 'Enviada', className: 'bg-info/10 text-info' },
  PAID: { label: 'Cobrada', className: 'bg-success/15 text-success' },
  CANCELLED: { label: 'Anulada', className: 'bg-destructive/10 text-destructive' },
+ // #65 A1.4 — "Cerrada": el cliente no necesita saber la contabilidad interna de por qué dejó de
+ //   cobrarse, pero SÍ que esta factura ya no está esperando su pago. Deliberadamente NO usa el
+ //   verde de "Cobrada": no entró plata, y confundir las dos cosas es exactamente lo que este
+ //   estado existe para evitar.
+ WRITTEN_OFF: { label: 'Cerrada', className: 'bg-muted text-muted-foreground' },
 };
 
 function invoiceMonthKey(inv: PortalInvoice): string {

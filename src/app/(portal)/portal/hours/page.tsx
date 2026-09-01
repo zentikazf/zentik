@@ -88,6 +88,10 @@ interface PortalBucketInvoice {
  date: string | null;
  hours: number;
  amount: string;
+ // #65 A3 — `amount` y `hours` vienen NETOS de lo acreditado por notas de crédito; estos dos
+ //   dicen de cuánto fue ese descuento. Opcionales por la ventana de deploy Railway/Vercel.
+ creditedAmount?: string;
+ creditedHours?: number;
  // #63 — El modo de IVA ESTAMPADO EN ESTA FACTURA. Es el ÚNICO origen válido de su etiqueta: un
  // cliente que cambió de configuración tiene facturas viejas con otro modo (o sin ninguno), y leer
  // el del cliente les pondría encima una etiqueta que esa factura nunca tuvo.
@@ -272,6 +276,14 @@ function BucketInvoices({ title, invoices, dateLabel }: {
           <TaxTag taxMode={inv.taxMode} />
          </div>
          <p className="font-mono text-[11px] text-muted-foreground">{inv.hours.toFixed(2)}h</p>
+         {/* #65 A3 — el importe de arriba ya viene NETO de las notas de crédito. Sin esta línea el
+             número aparecería achicado sin explicación y el cliente no podría conciliarlo contra el
+             PDF que tiene en la mano. */}
+         {Number(inv.creditedAmount ?? 0) > 0 && (
+          <p className="font-mono text-[11px] text-info">
+           − {formatCurrency(inv.creditedAmount!, inv.currency)} acreditados
+          </p>
+         )}
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
        </div>
