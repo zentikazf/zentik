@@ -33,7 +33,11 @@ interface InvoiceDetail {
   periodStart: string;
   periodEnd: string;
   cutoffDate: string | null;
-  status: 'SENT' | 'PAID' | 'CANCELLED';
+  status: 'SENT' | 'PAID' | 'CANCELLED' | 'WRITTEN_OFF';
+  // #65 A1.2 — el saldo, calculado en el backend. Opcionales por la ventana de deploy.
+  creditedTotal?: string;
+  balance?: string;
+  creditNoteCount?: number;
   sentAt: string | null;
   paidAt: string | null;
   cancelReason: string | null;
@@ -66,6 +70,8 @@ const STATUS: Record<InvoiceDetail['status'], { label: string; className: string
   SENT: { label: 'Enviada', className: 'bg-info/10 text-info' },
   PAID: { label: 'Cobrada', className: 'bg-success/15 text-success' },
   CANCELLED: { label: 'Anulada', className: 'bg-destructive/10 text-destructive' },
+  // #65 A1.4 — ver el comentario gemelo en el listado: "Cerrada", en gris, nunca en verde.
+  WRITTEN_OFF: { label: 'Cerrada', className: 'bg-muted text-muted-foreground' },
 };
 
 /** Una sección de líneas del documento (Consumo · Fee · Tiempo facturado) con su subtotal. */
@@ -323,14 +329,42 @@ export default function PortalInvoicePage() {
               <div className="border-t border-primary/20" />
             </>
           )}
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Total de la factura
-            </span>
-            <span className="font-mono text-lg font-semibold text-foreground">
-              {formatCurrency(detail.total, c)}
-            </span>
-          </div>
+          {/* #65 A1.2 — con notas de crédito, el total emitido deja de ser lo que el cliente debe.
+              La página tiene un botón "Descargar PDF" a ochenta líneas de acá y ese PDF ya imprime
+              el SALDO: sin este bloque, el documento y la pantalla que se lo dio dirían cosas
+              distintas. Sin NC queda exactamente igual que antes. */}
+          {(detail.creditNoteCount ?? 0) > 0 ? (
+            <>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">Total de la factura</span>
+                <span className="font-mono text-foreground">{formatCurrency(detail.total, c)}</span>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">Notas de crédito</span>
+                <span className="font-mono text-info">
+                  {formatCurrency(detail.creditedTotal ?? '0', c)}
+                </span>
+              </div>
+              <div className="border-t border-primary/20" />
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Saldo
+                </span>
+                <span className="font-mono text-lg font-semibold text-foreground">
+                  {formatCurrency(detail.balance ?? detail.total, c)}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Total de la factura
+              </span>
+              <span className="font-mono text-lg font-semibold text-foreground">
+                {formatCurrency(detail.total, c)}
+              </span>
+            </div>
+          )}
           {/* La frase que responde la pregunta del cliente: ¿el IVA estaba adentro o se sumó? */}
           {leyenda && <p className="text-[11px] text-muted-foreground">{leyenda}</p>}
         </div>

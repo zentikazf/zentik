@@ -292,10 +292,35 @@ export default function CycleDetailPage() {
                   </p>
                 </div>
               )}
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Total facturado</p>
-              <p className="font-mono text-lg font-semibold text-foreground">
-                {formatCurrency(cycle.totalAmount, cycle.currency)}
-              </p>
+              {/* #65 A1.2 — el SALDO. Hasta acá la pantalla mostraba "Total facturado" y, doscientas
+                  líneas más abajo, un banner con las notas de crédito en negativo: el operador tenía
+                  que restar de cabeza para saber cuánto se debía todavía. Sin notas de crédito el
+                  bloque queda EXACTAMENTE como antes (una sola línea). El gate es el CONTEO de NC y
+                  no `balance !== totalAmount`: una NC que acredita 0 por redondeo del IVA igual
+                  tiene que mostrar el desglose. */}
+              {(cycle.creditNoteCount ?? 0) > 0 ? (
+                <>
+                  <div className="mb-1 space-y-0.5">
+                    <p className="font-mono text-xs text-muted-foreground">
+                      Total factura {formatCurrency(cycle.totalAmount, cycle.currency)}
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      Notas de crédito {formatCurrency(cycle.creditedTotal ?? '0', cycle.currency)}
+                    </p>
+                  </div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Saldo</p>
+                  <p className="font-mono text-lg font-semibold text-foreground">
+                    {formatCurrency(cycle.balance ?? cycle.totalAmount, cycle.currency)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Total facturado</p>
+                  <p className="font-mono text-lg font-semibold text-foreground">
+                    {formatCurrency(cycle.totalAmount, cycle.currency)}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>

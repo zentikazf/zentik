@@ -3,7 +3,11 @@
 // Los montos llegan como STRING (Prisma.Decimal.toJSON() === toString()); nunca
 // se hace aritmética monetaria en el cliente (§1.4).
 
-export type CycleStatus = 'DRAFT' | 'SENT' | 'PAID' | 'CANCELLED';
+// #65 A1.4 — WRITTEN_OFF ("cerrada sin cobro"): la factura se da por saldada SIN que haya
+//   entrado plata. Es un estado propio y no un PAID con `paidAt` en null porque `status` es lo
+//   que leen todos los consumidores (badges, portal, buckets) y `paidAt` casi ninguno: con PAID
+//   disfrazado, quince lugares seguirían diciendo "Cobrada".
+export type CycleStatus = 'DRAFT' | 'SENT' | 'PAID' | 'CANCELLED' | 'WRITTEN_OFF';
 
 export type CycleEstado =
   | 'EN_CURSO'
@@ -66,6 +70,14 @@ export interface BillingCycle {
   netAmount?: string | null;
   taxAmount?: string | null;
   currency: string;
+  // #65 A1.1 — el SALDO, calculado en el backend y DERIVADO (no existe como columna).
+  //   `creditedTotal` ya viene NEGATIVO; `balance` = totalAmount + creditedTotal.
+  //   `creditNoteCount` es el predicado para ocultar "Anular" y para mostrar el bloque de saldo:
+  //   se usa el CONTEO y no `balance === '0'` porque una factura puede tener NC y saldo distinto
+  //   de cero (crédito parcial). Opcionales por la ventana de deploy Railway/Vercel.
+  creditedTotal?: string;
+  balance?: string;
+  creditNoteCount?: number;
   notes: string | null;
   closedAt: string | null;
   sentAt: string | null;
@@ -206,6 +218,10 @@ export const CYCLE_STATUS_CONFIG: Record<
   SENT: { label: 'Enviada', variant: 'info' },
   PAID: { label: 'Cobrada', variant: 'success' },
   CANCELLED: { label: 'Anulada', variant: 'destructive' },
+  // #65 A1.4: 'muted' y no 'success'. Una factura cerrada sin cobro NO es plata que entró, y
+  // pintarla del mismo verde que "Cobrada" sería exactamente el equívoco que este estado existe
+  // para evitar.
+  WRITTEN_OFF: { label: 'Cerrada sin cobro', variant: 'muted' },
 };
 
 // Etiqueta 'YYYY-MM' → 'Julio 2026' (es-PY), primera letra en mayúscula.

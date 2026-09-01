@@ -10,14 +10,46 @@ import { toast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
 import { CloseCycleDialog } from './close-cycle-dialog';
 import { CancelCycleDialog } from './cancel-cycle-dialog';
-import { BillingCycle, BillingRow, CycleBuilder, CycleStatus, formatPeriodLabel, formatUsd } from './types';
+import { WriteOffCycleDialog } from './write-off-cycle-dialog';
+import {
+  BillingCycle,
+  BillingRow,
+  CycleBuilder,
+  CYCLE_STATUS_CONFIG,
+  formatPeriodLabel,
+  formatUsd,
+} from './types';
 
-const CYCLE_STATUS: Record<CycleStatus, { label: string; variant: 'muted' | 'info' | 'success' | 'destructive' }> = {
-  DRAFT: { label: 'Borrador', variant: 'muted' },
-  SENT: { label: 'Enviada', variant: 'info' },
-  PAID: { label: 'Cobrada', variant: 'success' },
-  CANCELLED: { label: 'Cancelada', variant: 'destructive' },
-};
+// #65: este archivo tenía su propia copia del mapa de estados, y ya había divergido — decía
+// "Cancelada" donde `types.ts` dice "Anulada", así que la MISMA factura se llamaba distinto en el
+// listado y en su detalle. Al agregar WRITTEN_OFF, TypeScript marcó la copia como incompleta; en
+// vez de agregarle el estado se borró y se usa la compartida, que es la que el detalle ya usaba.
+const CYCLE_STATUS = CYCLE_STATUS_CONFIG;
+
+/**
+ * #65 A1.2/A1.3 — ¿esta factura tiene notas de crédito?
+ *
+ * Se pregunta por el CONTEO y no por `balance === '0'`: una factura puede tener NC y saldo
+ * distinto de cero (crédito parcial), y el redondeo del IVA deja residuales de ±1 Gs. que harían
+ * fallar una comparación de montos. Es además el mismo predicado del guard del backend
+ * (CYCLE_HAS_CREDIT_NOTES), así que la UI y la API no pueden discrepar.
+ *
+ * El `?? 0` cubre la ventana de deploy: si el backend todavía no manda el campo, la pantalla se
+ * comporta exactamente como antes de #65.
+ */
+const tieneNC = (c: BillingCycle) => (c.creditNoteCount ?? 0) > 0;
+
+/**
+ * Factura con NC cuyo saldo quedó en cero: el caso en que corresponde cerrar sin cobro.
+ *
+ * La comparación es `< 1` en valor absoluto y no `=== 0` a propósito. El IVA se redondea por nota
+ * de crédito (`computeTax` con ROUND_HALF_UP), así que una factura acreditada al 100% puede quedar
+ * con un residual de ±1 Gs. Con la igualdad exacta, esa factura mostraba "Marcar Cobrada" — que
+ * sella un `paidAt` inventado — justo en el caso que este spec vino a resolver. Un guaraní es la
+ * unidad mínima: por debajo de eso no hay deuda que cobrar.
+ */
+const saldoCero = (c: BillingCycle) =>
+  tieneNC(c) && Math.abs(Number(c.balance ?? c.totalAmount)) < 1;
 
 interface Props {
   orgId: string;
@@ -73,6 +105,8 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
   const [closeOpen, setCloseOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<BillingCycle | null>(null);
+  const [writeOffTarget, setWriteOffTarget] = useState<BillingCycle | null>(null);
+  const [writeOffReason, setWriteOffReason] = useState('');
 
   const hasFacturable = builder.soporte.some((r) => r.billable);
   const hasVariables = builder.variables.length > 0; // #23
@@ -251,9 +285,24 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
                       <span className="font-mono text-sm text-foreground">{c.invoiceNumber}</span>
                       <Badge variant={conf.variant}>{conf.label}</Badge>
                       {c.kind === 'ACCUMULATED' && <Badge variant="info">Acumulada</Badge>}
-                      <span className="font-mono text-sm font-semibold text-foreground">
+                      <span
+                        className={`font-mono text-sm font-semibold ${
+                          tieneNC(c) ? 'text-muted-foreground line-through' : 'text-foreground'
+                        }`}
+                      >
                         {formatCurrency(c.totalAmount, c.currency)}
                       </span>
+                      {/* #65 A1.2: con notas de crédito, el número que importa es el SALDO. El total
+                          emitido queda tachado al lado para que se vea de dónde sale, en vez de
+                          desaparecer y dejar al operador sin poder conciliar contra el PDF. */}
+                      {tieneNC(c) && (
+                        <span
+                          className="font-mono text-sm font-semibold text-foreground"
+                          title={`Total ${formatCurrency(c.totalAmount, c.currency)} — notas de crédito ${formatCurrency(c.creditedTotal ?? '0', c.currency)}`}
+                        >
+                          Saldo {formatCurrency(c.balance ?? c.totalAmount, c.currency)}
+                        </span>
+                      )}
                     </Link>
                     {canManage && (
                       <div className="flex items-center gap-2">
@@ -262,25 +311,58 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
                             Marcar Enviada
                           </Button>
                         )}
-                        {c.status === 'SENT' && (
+                        {/* #65 A1.4: con saldo cero por notas de crédito, lo que corresponde NO es
+                            "Marcar Cobrada" — sellaría un `paidAt` de hoy, o sea registraría un pago
+                            que nunca ocurrió, y PAID es terminal. Un saldo cero por crédito no es un
+                            cobro. Se ofrece "Cerrar sin cobro", que deja la factura en WRITTEN_OFF
+                            sin fecha de pago y con el motivo registrado. */}
+                        {c.status === 'SENT' && !saldoCero(c) && (
                           <Button size="sm" variant="outline" disabled={acting} onClick={() => updateStatus(c, 'PAID')}>
                             Marcar Cobrada
                           </Button>
                         )}
-                        {c.status !== 'PAID' && c.status !== 'CANCELLED' && (
+                        {c.status === 'SENT' && saldoCero(c) && (
                           <Button
                             size="sm"
-                            variant="ghost"
+                            variant="outline"
                             disabled={acting}
-                            onClick={() => setCancelTarget(c)}
-                            title="Anula la factura y libera los movimientos"
+                            onClick={() => {
+                              setWriteOffTarget(c);
+                              setWriteOffReason(`Saldo 0 por nota${(c.creditNoteCount ?? 0) > 1 ? 's' : ''} de crédito`);
+                            }}
+                            title="Cierra la factura sin registrar un pago (no sella fecha de cobro)"
                           >
-                            <Ban className="mr-1 h-3.5 w-3.5" /> Anular
+                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Cerrar sin cobro
                           </Button>
                         )}
+                        {/* #65 A1.3: el botón se OCULTA si la factura tiene notas de crédito. Anular
+                            libera los `billedCycleId` y devolvería por segunda vez una plata que la NC
+                            ya devolvió, así que el backend responde 409 CYCLE_HAS_CREDIT_NOTES —
+                            siempre. Hasta ahora el botón se veía y se podía apretar: un botón que
+                            nunca funciona es peor que no tenerlo. */}
+                        {c.status !== 'PAID' &&
+                          c.status !== 'CANCELLED' &&
+                          c.status !== 'WRITTEN_OFF' &&
+                          !tieneNC(c) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={acting}
+                              onClick={() => setCancelTarget(c)}
+                              title="Anula la factura y libera los movimientos"
+                            >
+                              <Ban className="mr-1 h-3.5 w-3.5" /> Anular
+                            </Button>
+                          )}
                       </div>
                     )}
                   </div>
+                  {c.status === 'WRITTEN_OFF' && (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Cerrada sin cobro — no se registró ningún pago
+                      {tieneNC(c) ? ` (saldo ${formatCurrency(c.balance ?? '0', c.currency)} por notas de crédito)` : ''}
+                    </p>
+                  )}
                   {c.status === 'CANCELLED' && c.cancelReason && (
                     <p className="mt-1.5 text-xs text-muted-foreground">
                       Anulada
@@ -299,6 +381,30 @@ export function BillingCycleBuilder({ orgId, clientId, builder, canManage, onBac
             })}
           </div>
         </div>
+      )}
+
+      {/* #65 A1.4 — sólo se monta con un target: así el diálogo arranca siempre con el motivo
+          por defecto de ESA factura, sin arrastrar el texto de la anterior. */}
+      {writeOffTarget && (
+        <WriteOffCycleDialog
+          orgId={orgId}
+          clientId={clientId}
+          invoiceNumber={writeOffTarget.invoiceNumber}
+          cycleId={writeOffTarget.id}
+          totalAmount={writeOffTarget.totalAmount}
+          creditedTotal={writeOffTarget.creditedTotal ?? '0'}
+          balance={writeOffTarget.balance ?? writeOffTarget.totalAmount}
+          currency={writeOffTarget.currency}
+          defaultReason={writeOffReason}
+          open
+          onOpenChange={(o) => {
+            if (!o) {
+              setWriteOffTarget(null);
+              setWriteOffReason('');
+            }
+          }}
+          onDone={onChanged}
+        />
       )}
 
       <CloseCycleDialog
