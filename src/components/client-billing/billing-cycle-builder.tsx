@@ -39,8 +39,17 @@ const CYCLE_STATUS = CYCLE_STATUS_CONFIG;
  */
 const tieneNC = (c: BillingCycle) => (c.creditNoteCount ?? 0) > 0;
 
-/** Factura con NC cuyo saldo quedó en cero: el caso en que corresponde cerrar sin cobro. */
-const saldoCero = (c: BillingCycle) => tieneNC(c) && Number(c.balance ?? c.totalAmount) === 0;
+/**
+ * Factura con NC cuyo saldo quedó en cero: el caso en que corresponde cerrar sin cobro.
+ *
+ * La comparación es `< 1` en valor absoluto y no `=== 0` a propósito. El IVA se redondea por nota
+ * de crédito (`computeTax` con ROUND_HALF_UP), así que una factura acreditada al 100% puede quedar
+ * con un residual de ±1 Gs. Con la igualdad exacta, esa factura mostraba "Marcar Cobrada" — que
+ * sella un `paidAt` inventado — justo en el caso que este spec vino a resolver. Un guaraní es la
+ * unidad mínima: por debajo de eso no hay deuda que cobrar.
+ */
+const saldoCero = (c: BillingCycle) =>
+  tieneNC(c) && Math.abs(Number(c.balance ?? c.totalAmount)) < 1;
 
 interface Props {
   orgId: string;
