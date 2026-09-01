@@ -445,9 +445,10 @@ export default function ClientTiempoPage() {
         reason: deleteTxReason.trim(),
       });
       // Textos distintos por la asimetría del backend: `deleteHoursTransaction` sólo revierte
-      // contadores para PURCHASE/USAGE/LOAN/REFUND. La fila espejo de una NC (#54) y los INTERNAL
-      // nunca movieron el cupo, así que su borrado es soft-delete + auditoría y nada más. El toast
-      // bifurca igual que el diálogo: no puede prometer una reversión que no ocurrió.
+      // contadores para PURCHASE/USAGE/LOAN. La fila espejo de una NC (#54) y los INTERNAL nunca
+      // movieron el cupo, así que su borrado es soft-delete + auditoría y nada más; el REFUND ya
+      // no llega acá (#65: la papelera es un candado para ese tipo). El toast bifurca igual que el
+      // diálogo: no puede prometer una reversión que no ocurrió.
       toast.success(
         'Transacción eliminada',
         deleteTxConfirm.esEspejo
@@ -1054,13 +1055,31 @@ export default function ClientTiempoPage() {
                                               </button>
                                             )
                                           )}
-                                          <button
-                                            onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note, esEspejo })}
-                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                            title={esEspejo ? 'Eliminar fila espejo (deshace la devolución de horas)' : 'Eliminar transacción'}
-                                          >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                          </button>
+                                          {/* #65 B1.2/T7: la papelera no tenía NINGUNA condición — ni de permiso ni
+                                              de tipo—, mientras el lápiz de al lado exigía las dos. Ahora:
+                                                · REFUND  → candado. El backend lo rechaza siempre (REFUND_NOT_DELETABLE):
+                                                  lo genera el revert de una carga y borrarlo dejaría el cargo original
+                                                  tombstoneado para siempre. Ofrecer el botón era prometer una reversión
+                                                  imposible — el mismo anti-patrón que A1.3 condena en "Anular".
+                                                · sin manage:projects → no se muestra: la ruta ahora pide ese permiso. */}
+                                          {tx.type === 'REFUND' ? (
+                                            <span
+                                              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40"
+                                              title="Una devolución de cupo la genera el sistema al revertir una carga y no se elimina a mano. Si la reversión fue un error, volvé a aprobar o cargar el tiempo en la tarea: eso emite un cargo nuevo."
+                                            >
+                                              <Lock className="h-3.5 w-3.5" />
+                                            </span>
+                                          ) : (
+                                            canEditHours && (
+                                              <button
+                                                onClick={() => setDeleteTxConfirm({ id: tx.id, type: tx.type, hours: tx.hours, note: tx.note, esEspejo })}
+                                                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                                title={esEspejo ? 'Eliminar fila espejo (deshace la devolución de horas)' : 'Eliminar transacción'}
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </button>
+                                            )
+                                          )}
                                         </>
                                       )}
                                     </div>
@@ -1145,11 +1164,13 @@ export default function ClientTiempoPage() {
           ) : (
             <p className="text-sm text-muted-foreground">
               {/* El signo sale de `esCredito`, el MISMO helper que pinta la fila de la tabla, no de
-                  comparar contra 'PURCHASE' a mano. Comparando solo con PURCHASE, un REFUND —que el
-                  backend crea de verdad al rechazar o reabrir un ticket (hours.listener.ts)— se
-                  pintaba "+2.00h" en la tabla y "-2.00h" en este diálogo: el admin leía lo CONTRARIO
-                  de lo que iba a pasar (ese REFUND SUMÓ horas, borrarlo las RESTA) y el diálogo se
-                  contradecía con la fila que tenía arriba. */}
+                  comparar contra 'PURCHASE' a mano, para que el diálogo no se contradiga con la fila
+                  que tiene arriba.
+
+                  #65: el REFUND ya no llega hasta acá —la papelera es un candado para ese tipo
+                  (B1.2/T7)—, así que `esCredito` sólo puede dar '+' por un PURCHASE. Se deja el
+                  helper igual y no se hardcodea 'PURCHASE': si mañana vuelve a existir un tipo que
+                  acredita cupo, el signo sigue saliendo de una sola fuente. */}
               Se revertirá el efecto de esta transacción (<strong>{esCredito(deleteTxConfirm?.type ?? '') ? '+' : '-'}{deleteTxConfirm?.hours.toFixed(2)}h</strong> — {deleteTxConfirm?.note || deleteTxConfirm?.type}) sobre las horas del cliente.
             </p>
           )}
