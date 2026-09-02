@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { getToken } from '@/lib/api-client';
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -25,16 +26,42 @@ export function setAuthFailHandler(fn: (() => void) | null): void {
   onAuthFail = fn;
 }
 
+/**
+ * Token para el handshake del socket. DOS fuentes, en este orden.
+ *
+ * 1) Bearer de localStorage — el MISMO fallback que ya usa `api-client.ts` para el
+ *    HTTP. Es el que hace falta cuando el navegador bloquea la cookie cross-domain
+ *    (frontend Vercel ↔ backend Railway): third-party cookies desactivadas, Safari/
+ *    iOS por defecto, modo estricto de Chrome.
+ * 2) Cookie legible — sirve sólo si NO es httpOnly y es same-site.
+ *
+ * ⚠️ Por qué el orden importa, y por qué esto era un bug de producción: el socket
+ * miraba ÚNICAMENTE la cookie. Con la cookie bloqueada, el HTTP seguía andando
+ * (tiene su Bearer) pero el handshake salía sin token → el backend lo rechazaba con
+ * NO_TOKEN → `'io server disconnect'` → `markAuthError()` → `onAuthFail()` →
+ * **logout**. O sea: el usuario entraba, el dashboard cargaba entero con 200, y un
+ * segundo después lo devolvía al login. Sin fallback acá, un canal secundario
+ * (el WS) tiraba abajo una sesión HTTP perfectamente válida.
+ *
+ * La lista de nombres de cookie replica la que acepta el backend
+ * (`tickets.gateway.ts` / `chat.gateway.ts`) — incluido `__Host-`, que faltaba.
+ */
 function getSessionToken(): string | undefined {
+  const bearer = getToken();
+  if (bearer) return bearer;
+
   if (typeof document === 'undefined') return undefined;
   const cookies = document.cookie.split('; ');
   for (const cookie of cookies) {
-    if (
-      cookie.startsWith('zentik.session_token=') ||
-      cookie.startsWith('better-auth.session_token=') ||
-      cookie.startsWith('__Secure-better-auth.session_token=')
-    ) {
-      return cookie.split('=').slice(1).join('=');
+    for (const name of [
+      '__Host-zentik.session_token',
+      'zentik.session_token',
+      'better-auth.session_token',
+      '__Secure-better-auth.session_token',
+    ]) {
+      if (cookie.startsWith(`${name}=`)) {
+        return cookie.slice(name.length + 1);
+      }
     }
   }
   return undefined;
