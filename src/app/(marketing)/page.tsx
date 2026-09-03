@@ -55,11 +55,13 @@ export default function LandingPage() {
  plataforma. Todo lo que necesitas para escalar tu operacion SaaS.
  </p>
  <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+ {/* #68 F5: el auto-registro salio de la interfaz, el CTA lleva al login.
+   Ver el comentario largo en `(auth)/login/page.tsx`. href original: "/register" */}
  <Link
- href="/register"
+ href="/login"
  className="rounded-md bg-primary px-8 py-3 text-base font-medium text-primary-foreground shadow hover:bg-primary/90"
  >
- Comenzar gratis
+ Iniciar sesion
  </Link>
  <Link
  href="/pricing"
@@ -106,11 +108,13 @@ export default function LandingPage() {
  <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
  Unete a equipos que ya gestionan sus proyectos SaaS de forma mas eficiente con Zentik.
  </p>
+ {/* #68 F5: idem el CTA del hero. href original: "/register", texto original:
+   "Empezar gratis — sin tarjeta de credito" (prometia un alta que ya no existe). */}
  <Link
- href="/register"
+ href="/login"
  className="mt-8 inline-block rounded-md bg-primary px-8 py-3 text-base font-medium text-primary-foreground shadow hover:bg-primary/90"
  >
- Empezar gratis — sin tarjeta de credito
+ Iniciar sesion
  </Link>
  </div>
  </section>

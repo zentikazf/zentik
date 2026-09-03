@@ -8,8 +8,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
  <Link href="/"className="text-xl font-bold text-primary">Zentik</Link>
  <div className="flex items-center gap-6">
  <Link href="/pricing"className="text-sm text-muted-foreground hover:text-foreground">Precios</Link>
- <Link href="/login"className="text-sm text-muted-foreground hover:text-foreground">Iniciar sesion</Link>
- <Link href="/register"className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">Empezar gratis</Link>
+ {/* #68 F5: el CTA pasa a ser el login. El auto-registro salio de la interfaz — ver el
+   comentario largo en `(auth)/login/page.tsx`. El endpoint del backend sigue vivo.
+   <Link href="/register" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">Empezar gratis</Link> */}
+ <Link href="/login"className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">Iniciar sesion</Link>
  </div>
  </nav>
  </header>

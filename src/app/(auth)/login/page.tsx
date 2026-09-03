@@ -165,12 +165,28 @@ export default function LoginPage() {
  </button>
  </form>
 
- <p className="mt-6 text-center text-sm text-muted-foreground">
- ¿No tienes cuenta?{' '}
- <Link href="/register"className="font-medium text-primary hover:underline">
- Regístrate gratis
- </Link>
- </p>
+ {/* #68 F5 — El auto-registro se saco de la interfaz.
+   *
+   * El endpoint POST /auth/register SIGUE VIVO en el backend a proposito (decision del dueno:
+   * queda como puerta de emergencia). Lo que se quita es la puerta publica.
+   *
+   * POR QUE: `auth.service.ts:68-72` le crea una organizacion PERSONAL a cada registrado y
+   * `organization.service.ts:95-104` lo mete ahi como Owner con `*:*`. Ese es el unico modo en
+   * que hoy aparece un usuario con DOS memberships — la condicion exacta que dispara el bug de
+   * permisos que arreglo #68 F1b. Sin registro publico, el multi-membership solo puede nacer de
+   * una invitacion deliberada.
+   *
+   * Los usuarios del sistema NO se crean por aca: los clientes y sus sub-usuarios salen de
+   * `client.service.ts` (createUser :442 / createSubUser :558), que arman user + account +
+   * organizationMember en su propia transaccion y NUNCA pasan por `authService.register`.
+   *
+   * <p className="mt-6 text-center text-sm text-muted-foreground">
+   *   ¿No tienes cuenta?{' '}
+   *   <Link href="/register" className="font-medium text-primary hover:underline">
+   *     Regístrate gratis
+   *   </Link>
+   * </p>
+   */}
  </div>
  );
 }

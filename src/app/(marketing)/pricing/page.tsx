@@ -11,8 +11,10 @@ const plans = [
  price: '$0',
  period: '/mes',
  description: 'Para equipos pequenos que estan comenzando.',
- cta: 'Comenzar gratis',
- href: '/register',
+ // #68 F5: el auto-registro salio de la interfaz — ver `(auth)/login/page.tsx`.
+ // Original: cta: 'Comenzar gratis', href: '/register'
+ cta: 'Iniciar sesion',
+ href: '/login',
  highlighted: false,
  features: [
  'Hasta 3 proyectos',
@@ -28,8 +30,10 @@ const plans = [
  price: '$19',
  period: '/usuario/mes',
  description: 'Para equipos en crecimiento que necesitan mas poder.',
- cta: 'Iniciar prueba gratuita',
- href: '/register?plan=pro',
+ // #68 F5: original: cta: 'Iniciar prueba gratuita', href: '/register?plan=pro'
+ // El `?plan=pro` no lo leia nadie: la pagina de registro nunca miraba ese query param.
+ cta: 'Iniciar sesion',
+ href: '/login',
  highlighted: true,
  features: [
  'Proyectos ilimitados',
