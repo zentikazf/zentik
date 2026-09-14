@@ -17,6 +17,7 @@ import {
  X,
  LogOut,
  Bell,
+ Receipt,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { cn, getInitials } from '@/lib/utils';
@@ -40,6 +41,7 @@ interface NavItem {
 const navItems: NavItem[] = [
  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
  { name: 'Clientes', href: '/clients', icon: Users, permission: 'manage:members' },
+ { name: 'Facturación v2', href: '/clients/facturacionv2', icon: Receipt, permission: 'manage:billing' },
  { name: 'Proyectos', href: '/projects', icon: FolderKanban, permission: 'read:projects' },
  { name: 'Aprobaciones', href: '/approvals', icon: ClipboardCheck, permission: 'manage:projects' },
  { name: 'Soporte', href: '/tickets', icon: TicketCheck, permission: 'read:projects' },
@@ -120,6 +122,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
  }, [orgId, canRead, canApprovals]);
 
  const isActive = (href: string) => {
+ if (href === '/clients' && pathname.startsWith('/clients/facturacionv2')) return false;
  if (href === '/dashboard') return pathname === '/' || pathname === '/dashboard';
  return pathname.startsWith(href);
  };

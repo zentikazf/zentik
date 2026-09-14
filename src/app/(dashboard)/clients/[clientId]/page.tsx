@@ -40,6 +40,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from '@/hooks/use-toast';
 import { ClientDocumentsSection } from '@/components/clients/client-documents-section';
 import { ClientSlaCard } from '@/components/sla/client-sla-card';
+import { FORTALEZA_CLIENT_ID } from '@/lib/billing-v2';
 
 interface SubUser {
  id: string;
@@ -242,6 +243,12 @@ export default function ClientDetailPage() {
 
  {/* Acceso a Facturación por ciclos (#25 — T23) */}
  {hasPermission('read:billing') && (
+ clientId === FORTALEZA_CLIENT_ID ? (
+ <button type="button" disabled className="flex w-full items-center justify-between rounded-xl border bg-muted/30 p-5 text-left opacity-60">
+ <div><p className="font-semibold">Facturación anterior</p><p className="mt-1 text-sm text-muted-foreground">Deshabilitada en esta ficha · usar Facturación v2</p></div>
+ <Badge variant="outline">Deshabilitado</Badge>
+ </button>
+ ) : (
  <Link
  href={`/clients/${clientId}/facturacion`}
  className="flex items-center justify-between rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/40"
@@ -256,6 +263,13 @@ export default function ClientDetailPage() {
  </div>
  </div>
  <ChevronRight className="h-5 w-5 text-muted-foreground"/>
+ </Link>
+ )
+ )}
+
+ {clientId === FORTALEZA_CLIENT_ID && hasPermission('manage:billing') && (
+ <Link href="/clients/facturacionv2" className="flex items-center justify-between rounded-xl border border-primary/30 bg-card p-5 transition-colors hover:bg-muted/40">
+ <div className="flex items-center gap-3"><Receipt className="h-5 w-5 text-primary"/><div><p className="font-semibold">Facturación v2</p><p className="mt-1 text-sm text-muted-foreground">Revisar plan fijo, variables y desarrollo antes de publicar</p></div></div><ChevronRight className="h-5 w-5 text-muted-foreground"/>
  </Link>
  )}
 
