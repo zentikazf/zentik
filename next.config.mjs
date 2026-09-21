@@ -70,6 +70,16 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  // Proxy opcional de desarrollo para usar Railway desde localhost.
+  // La autenticacion sigue siendo validada por el backend remoto.
+  async rewrites() {
+    if (process.env.NODE_ENV !== 'development' || !process.env.DEV_BACKEND_URL) return [];
+    const backend = new URL(process.env.DEV_BACKEND_URL).origin;
+    return [
+      { source: '/api/v1/:path*', destination: `${backend}/api/v1/:path*` },
+      { source: '/socket.io/:path*', destination: `${backend}/socket.io/:path*` },
+    ];
+  },
   images: {
     remotePatterns: [
       {

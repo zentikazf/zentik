@@ -1,0 +1,162 @@
+{
+  "billingPeriod": "2026-04",
+  "accounts": [
+    {
+      "accountId": "IC0XXEN8LOZW38EW2XP2",
+      "productUsage": [
+        {
+          "productId": "WA_BUSINESS_MKT_INITIATED_CONVERSATIONS",
+          "usage": 10848,
+          "totalSpend": {
+            "total": 875.17,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "SESSIONS",
+          "usage": 12670,
+          "totalSpend": {
+            "total": 415.81,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "FEE",
+          "usage": 1,
+          "totalSpend": {
+            "total": 149,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_AGENT_TOKENS",
+          "usage": 37409709,
+          "totalSpend": {
+            "total": 59.86,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "AGENTS",
+          "usage": 30,
+          "totalSpend": {
+            "total": 60,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WHATSAPP_LINE",
+          "usage": 2,
+          "totalSpend": {
+            "total": 50,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "NOTIFICATION_WA_FAILED",
+          "usage": 3178,
+          "totalSpend": {
+            "total": 9.54,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_ADMINISTRATIVE_COSTS",
+          "usage": 43982415,
+          "totalSpend": {
+            "total": 6.48,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_PRODUCTIVITY_TOKENS",
+          "usage": 4713660,
+          "totalSpend": {
+            "total": 1.89,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_NLU_TOKENS",
+          "usage": 935037,
+          "totalSpend": {
+            "total": 1.5,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_RESPONSES_TOKENS",
+          "usage": 924009,
+          "totalSpend": {
+            "total": 1.48,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_USER_INITIATED_CONVERSATIONS",
+          "usage": 413,
+          "totalSpend": {
+            "total": 1.78,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_BUSINESS_UTIL_INITIATED_CONVERSATIONS",
+          "usage": 16,
+          "totalSpend": {
+            "total": 0.27,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "AV_SCAN",
+          "usage": 252,
+          "totalSpend": {
+            "total": 0.23,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "NOTIFICATION_WA_NOT_ANSWERED",
+          "usage": 7,
+          "totalSpend": {
+            "total": 0.04,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "BILLABLE_ACTIONS",
+          "usage": 40,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "MESSAGES",
+          "usage": 33928,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "URL_SCAN",
+          "usage": 34,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "CDN_STORAGE",
+          "usage": 170408637,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ]
+}
