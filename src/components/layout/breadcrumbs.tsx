@@ -19,6 +19,7 @@ const routeNames: Record<string, string> = {
  chat: 'Chat',
  files: 'Archivos',
  billing: 'Facturacion',
+ facturacionv2: 'Facturación v2',
  members: 'Miembros',
  roles: 'Roles',
  integrations: 'Integraciones',

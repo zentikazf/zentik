@@ -1,0 +1,582 @@
+{
+  "accounts": [
+    {
+      "accountName": "Fortaleza",
+      "accountId": "IC0XXEN8LOZW38EW2XP2",
+      "productUsage": [
+        {
+          "productId": "CALL_RECORDING_DURATION",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "TEXT_TO_SPEECH",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WEBHOOK_MESSAGES",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "DECRYPTION",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "CALL_DURATION",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "MESSAGES",
+          "usage": 58428,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "BIG_QUERY_PROCESSING",
+          "usage": 20,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "PPI_PROCESSING",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "DLP_PROCESSING",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "TRANSLATION",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "SESSIONS",
+          "usage": 21411,
+          "totalSpend": {
+            "total": 791.68,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "BILLABLE_ACTIONS",
+          "usage": 45,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "AUDIO_TRANSCRIPT",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "AGENTS",
+          "usage": 47,
+          "totalSpend": {
+            "total": 111,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "SESSIONS_COEXISTENCE",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "CA_PROCESSING",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "NOTIFICATION_WA_NOT_ANSWERED",
+          "usage": 645,
+          "totalSpend": {
+            "total": 3.23,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "CDN_STORAGE",
+          "usage": 699552824,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WHATSAPP_LINE",
+          "usage": 3,
+          "totalSpend": {
+            "total": 100,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "NOTIFICATION_WA_FAILED",
+          "usage": 19,
+          "totalSpend": {
+            "total": 0.06,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "COPILOT_WORDS",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_BOT_WORDS",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "ENCRYPTION",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "KNOWLEDGE_BASE_WORDS",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "TWITTER_SUBSCRIPTION",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "EMAIL_MONTHLY_THREADS",
+          "usage": 0,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_ADMINISTRATIVE_COSTS",
+          "usage": 62257555,
+          "totalSpend": {
+            "total": 9.5,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "FEE",
+          "usage": 1,
+          "totalSpend": {
+            "total": 149,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "SHORT_CALL",
+          "usage": 3,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "LONG_CALL",
+          "usage": 2,
+          "totalSpend": {
+            "total": 0,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "AV_SCAN",
+          "usage": 2095,
+          "totalSpend": {
+            "total": 3,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "URL_SCAN",
+          "usage": 201,
+          "totalSpend": {
+            "total": 0.1,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_USER_INITIATED_CONVERSATIONS",
+          "usage": 1326,
+          "totalSpend": {
+            "total": 5.5,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_BUSINESS_MKT_INITIATED_CONVERSATIONS",
+          "usage": 9335,
+          "totalSpend": {
+            "total": 755.28,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_BUSINESS_UTIL_INITIATED_CONVERSATIONS",
+          "usage": 220,
+          "totalSpend": {
+            "total": 2.8,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_BUSINESS_UTIL_INITIATED_CONVERSATIONS",
+          "usage": 96,
+          "totalSpend": {
+            "total": 1.21,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_USER_INITIATED_CONVERSATIONS",
+          "usage": 178,
+          "totalSpend": {
+            "total": 0.76,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_USER_INITIATED_CONVERSATIONS",
+          "usage": 512,
+          "totalSpend": {
+            "total": 2.18,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_BUSINESS_MKT_INITIATED_CONVERSATIONS",
+          "usage": 4760,
+          "totalSpend": {
+            "total": 385.87,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_BUSINESS_MKT_INITIATED_CONVERSATIONS",
+          "usage": 243,
+          "totalSpend": {
+            "total": 19.74,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "WA_BUSINESS_UTIL_INITIATED_CONVERSATIONS",
+          "usage": 4388,
+          "totalSpend": {
+            "total": 57.01,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_AGENT_TOKENS",
+          "usage": 49865,
+          "totalSpend": {
+            "total": 0.09,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_NLU_TOKENS",
+          "usage": 1229580,
+          "totalSpend": {
+            "total": 1.97,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_AGENT_TOKENS",
+          "usage": 55028744,
+          "totalSpend": {
+            "total": 88.05,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_RESPONSES_TOKENS",
+          "usage": 2011454,
+          "totalSpend": {
+            "total": 3.22,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_AGENT_TOKENS",
+          "usage": 28097,
+          "totalSpend": {
+            "total": 0.05,
+            "currency": "USD"
+          }
+        },
+        {
+          "productId": "GENERATIVE_PRODUCTIVITY_TOKENS",
+          "usage": 3909815,
+          "totalSpend": {
+            "total": 1.57,
+            "currency": "USD"
+          }
+        }
+      ],
+      "projects": [
+        {
+          "projectName": "fortaleza",
+          "productUsage": [
+            {
+              "productId": "CALL_RECORDING_DURATION",
+              "usage": 0
+            },
+            {
+              "productId": "TEXT_TO_SPEECH",
+              "usage": 0
+            },
+            {
+              "productId": "WEBHOOK_MESSAGES",
+              "usage": 0
+            },
+            {
+              "productId": "DECRYPTION",
+              "usage": 0
+            },
+            {
+              "productId": "CALL_DURATION",
+              "usage": 0
+            },
+            {
+              "productId": "MESSAGES",
+              "usage": 58428
+            },
+            {
+              "productId": "BIG_QUERY_PROCESSING",
+              "usage": 20
+            },
+            {
+              "productId": "PPI_PROCESSING",
+              "usage": 0
+            },
+            {
+              "productId": "DLP_PROCESSING",
+              "usage": 0
+            },
+            {
+              "productId": "TRANSLATION",
+              "usage": 0
+            },
+            {
+              "productId": "SESSIONS",
+              "usage": 21411
+            },
+            {
+              "productId": "BILLABLE_ACTIONS",
+              "usage": 45
+            },
+            {
+              "productId": "AUDIO_TRANSCRIPT",
+              "usage": 0
+            },
+            {
+              "productId": "SESSIONS_COEXISTENCE",
+              "usage": 0
+            },
+            {
+              "productId": "CA_PROCESSING",
+              "usage": 0
+            },
+            {
+              "productId": "NOTIFICATION_WA_NOT_ANSWERED",
+              "usage": 645
+            },
+            {
+              "productId": "CDN_STORAGE",
+              "usage": 699552824
+            },
+            {
+              "productId": "WHATSAPP_LINE",
+              "usage": 3
+            },
+            {
+              "productId": "NOTIFICATION_WA_FAILED",
+              "usage": 19
+            },
+            {
+              "productId": "COPILOT_WORDS",
+              "usage": 0
+            },
+            {
+              "productId": "GENERATIVE_BOT_WORDS",
+              "usage": 0
+            },
+            {
+              "productId": "ENCRYPTION",
+              "usage": 0
+            },
+            {
+              "productId": "KNOWLEDGE_BASE_WORDS",
+              "usage": 0
+            },
+            {
+              "productId": "TWITTER_SUBSCRIPTION",
+              "usage": 0
+            },
+            {
+              "productId": "EMAIL_MONTHLY_THREADS",
+              "usage": 0
+            },
+            {
+              "productId": "GENERATIVE_ADMINISTRATIVE_COSTS",
+              "usage": 62257555
+            },
+            {
+              "productId": "SHORT_CALL",
+              "usage": 3
+            },
+            {
+              "productId": "LONG_CALL",
+              "usage": 2
+            },
+            {
+              "productId": "AV_SCAN",
+              "usage": 2095
+            },
+            {
+              "productId": "URL_SCAN",
+              "usage": 201
+            },
+            {
+              "productId": "WA_USER_INITIATED_CONVERSATIONS",
+              "usage": 1326
+            },
+            {
+              "productId": "WA_BUSINESS_MKT_INITIATED_CONVERSATIONS",
+              "usage": 9335
+            },
+            {
+              "productId": "WA_BUSINESS_UTIL_INITIATED_CONVERSATIONS",
+              "usage": 220
+            },
+            {
+              "productId": "WA_BUSINESS_UTIL_INITIATED_CONVERSATIONS",
+              "usage": 96
+            },
+            {
+              "productId": "WA_USER_INITIATED_CONVERSATIONS",
+              "usage": 178
+            },
+            {
+              "productId": "WA_USER_INITIATED_CONVERSATIONS",
+              "usage": 512
+            },
+            {
+              "productId": "WA_BUSINESS_MKT_INITIATED_CONVERSATIONS",
+              "usage": 4760
+            },
+            {
+              "productId": "WA_BUSINESS_MKT_INITIATED_CONVERSATIONS",
+              "usage": 243
+            },
+            {
+              "productId": "WA_BUSINESS_UTIL_INITIATED_CONVERSATIONS",
+              "usage": 4388
+            },
+            {
+              "productId": "GENERATIVE_AGENT_TOKENS",
+              "usage": 49865
+            },
+            {
+              "productId": "GENERATIVE_NLU_TOKENS",
+              "usage": 1229580
+            },
+            {
+              "productId": "GENERATIVE_AGENT_TOKENS",
+              "usage": 55028744
+            },
+            {
+              "productId": "GENERATIVE_RESPONSES_TOKENS",
+              "usage": 2011454
+            },
+            {
+              "productId": "GENERATIVE_AGENT_TOKENS",
+              "usage": 28097
+            },
+            {
+              "productId": "GENERATIVE_PRODUCTIVITY_TOKENS",
+              "usage": 3909815
+            }
+          ],
+          "projectId": "fortaleza"
+        }
+      ],
+      "totalSpend": [
+        {
+          "total": 2492.87,
+          "currency": "USD"
+        }
+      ],
+      "accountAlias": "Fortaleza Inmuebles"
+    }
+  ],
+  "billingPeriod": "2026-08"
+}

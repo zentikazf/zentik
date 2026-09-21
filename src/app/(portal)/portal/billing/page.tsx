@@ -1,5 +1,7 @@
 'use client';
 
+import { PublishedBillingList } from '@/components/portal/published-billing-v2';
+import { FORTALEZA_CLIENT_ID } from '@/lib/billing-v2';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -88,6 +90,7 @@ export default function PortalBillingPage() {
  const canSeeBilling = user?.client?.portalBillingEnabled === true;
 
  const [invoices, setInvoices] = useState<PortalInvoice[] | null>(null);
+ const [publishedV2Count,setPublishedV2Count]=useState(0);
  const [creditNotes, setCreditNotes] = useState<PortalCreditNote[]>([]);
 
  useEffect(() => {
@@ -138,11 +141,12 @@ export default function PortalBillingPage() {
     <p className="mt-1 text-sm text-muted-foreground">Tus facturas por mes. Entrá a una para ver el detalle completo.</p>
    </div>
 
+   {user?.client?.id===FORTALEZA_CLIENT_ID&&<PublishedBillingList onLoaded={setPublishedV2Count}/>}
    {invoices === null ? (
     <div className="space-y-3">
      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
     </div>
-   ) : months.length === 0 ? (
+   ) : months.length === 0 ? publishedV2Count>0 ? null : (
     <div className="rounded-xl border border-border bg-card px-5 py-12 text-center">
      <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
      <p className="text-sm font-medium text-foreground">Estamos preparando tu facturación</p>
