@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Download, Save, Lock, ArrowRightLeft, AlertTriangle, Calculator, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Download, Save, Lock, ArrowRightLeft, AlertTriangle, Calculator, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,6 +39,14 @@ interface EditItem {
   unitPrice: string; // solo CALCULO (precio unitario en MULT; divisor unidades/USD en DIV)
   op: PricingOp; // solo CALCULO (default MULT)
   enabled: boolean; // ojito (default true)
+}
+
+// #72 B3.3 — Lo UNICO que edita el panel de la regla. El resto de la fila (nombre, comercial,
+// ojito) no pasa por el borrador: sigue mutando el item al instante, como siempre.
+interface RuleDraft {
+  incluidas: string;
+  unitPrice: string;
+  op: PricingOp;
 }
 
 interface Props {
@@ -80,6 +88,21 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
   const [importing, setImporting] = useState(false);
   const [confirmImport, setConfirmImport] = useState(false);
   const keySeq = useRef(0);
+
+  // #72 B2 — Filas cuyo panel de la regla el usuario CAMBIO respecto de su default (una CALCULO
+  // nace abierta; el resto, cerradas). Se guarda el DELTA y NO el estado absoluto porque `_key` es
+  // una clave sintetica del cliente (`nextKey()`) que se REGENERA en cada `load()`: un Set de
+  // "filas abiertas" quedaria lleno de claves muertas y dejaria paneles fantasma. Con XOR, una
+  // clave muerta simplemente no matchea y la fila vuelve a su default.
+  // Es el mismo patron (con el signo invertido) del `collapsedVars` del portal.
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
+
+  // #72 B3.3 — Borrador LOCAL de la regla, por fila. Hasta que se aprieta "Aplicar", el item NO se
+  // toca. Antes cada tecla llamaba a `update()` y mutaba el item al instante, asi que una regla a
+  // medio cargar (incluidas si, precio todavia no) dejaba el comercial en 0 — y una variable en 0
+  // SE CAE DE LA FACTURA sin que nadie se entere (billing-variables.service.ts:272,
+  // `Number(item.commercialValue) > 0`). Cerrar el panel sin aplicar descarta el borrador.
+  const [ruleDraft, setRuleDraft] = useState<Record<string, RuleDraft>>({});
 
   const nextKey = () => `k${keySeq.current++}`;
   const toEdit = (i: StatementItem): EditItem => ({
@@ -149,10 +172,80 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
 
   const remove = (key: string) => setItems((prev) => (prev ?? []).filter((i) => i._key !== key));
 
+  // ── #72 B — visibilidad de la regla y borrador del panel ───────────────────
+  //
+  // ⚠️ Nada de esto entra a `setItems`: es estado de UI. Si la visibilidad viviera en el item se
+  // persistiria sin querer al guardar el mes.
+
+  /** La regla que muestra el panel: el borrador si lo hay, si no lo que tiene el item. */
+  const draftOf = (i: EditItem): RuleDraft =>
+    ruleDraft[i._key] ?? { incluidas: i.incluidas, unitPrice: i.unitPrice, op: i.op };
+
+  const patchDraft = (i: EditItem, patch: Partial<RuleDraft>) =>
+    setRuleDraft((prev) => ({ ...prev, [i._key]: { ...draftOf(i), ...patch } }));
+
+  const discardDraft = (key: string) =>
+    setRuleDraft((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+  /** Abre/cierra el panel de UNA fila. Al CERRAR descarta el borrador sin aplicar (B3.3). */
+  const toggleRule = (key: string, estabaAbierto: boolean) => {
+    if (estabaAbierto) discardDraft(key);
+    setFlipped((prev) => {
+      const n = new Set(prev);
+      if (!n.delete(key)) n.add(key);
+      return n;
+    });
+  };
+
+  // #72 B3.2 — La fila NO pasa a CALCULO hasta que la regla DE un valor > 0. Mientras no lo de, el
+  // boton queda deshabilitado y la fila conserva su modo y su valor: "a medio cargar" es
+  // exactamente el estado en el que la linea desaparece de la factura sin avisar. El unico camino
+  // legitimo a un comercial 0 es el ojito (deshabilitar la variable), que si lo dice explicito.
+  const applyRule = (i: EditItem) => {
+    const d = draftOf(i);
+    if (effectiveCommercial({ ...i, mode: 'CALCULO', ...d }) <= 0) return;
+    update(i._key, { mode: 'CALCULO', incluidas: d.incluidas, unitPrice: d.unitPrice, op: d.op });
+    discardDraft(i._key);
+  };
+
   // Traspaso directo: crudo → comercial.
   const pasar = (key: string) => update(key, { mode: 'DIRECTO' });
   // Cálculo por unidad: activa la sub-fila incluidas × precio.
-  const calcular = (key: string) => update(key, { mode: 'CALCULO' });
+  // #72 B2.2: ademas LIMPIA el flip de esa fila. Sin esto, si el usuario la habia colapsado a
+  // mano, apretar el boton pasaria la fila a CALCULO con el panel cerrado — justo cuando mas
+  // necesita verlo.
+  const calcular = (key: string) => {
+    update(key, { mode: 'CALCULO' });
+    setFlipped((prev) => {
+      if (!prev.has(key)) return prev;
+      const n = new Set(prev);
+      n.delete(key);
+      return n;
+    });
+  };
+
+  // #72 B1.4 — "Colapsar / Expandir todo". Gobierna solo las filas CON regla: son las que nacen
+  // abiertas y las que vuelven ilegible la pantalla cuando hay 15. Expandir = volver al default.
+  const calcKeys = (items ?? []).filter((i) => i.mode === 'CALCULO').map((i) => i._key);
+  const allRulesOpen = calcKeys.length > 0 && calcKeys.every((k) => !flipped.has(k));
+  // Es una accion de VISTA: resetea los paneles y, con ellos, los borradores sin aplicar.
+  const toggleAllRules = () => {
+    setFlipped(allRulesOpen ? new Set(calcKeys) : new Set());
+    setRuleDraft({});
+  };
+
+  /** El precio unitario NO pasa por `formatUsd`: ese fija 2 decimales y un precio de 0.002 se
+   *  leeria "$0.00", que es justamente el dato que se viene a confirmar. En DIV ni siquiera es
+   *  plata (es un divisor de unidades por USD), asi que va sin simbolo. */
+  const precioLegible = (d: Pick<RuleDraft, 'unitPrice' | 'op'>) => {
+    const num = (parseFloat(d.unitPrice) || 0).toLocaleString('en-US', { maximumFractionDigits: 6 });
+    return d.op === 'DIV' ? `÷ ${num}` : `× ${num}`;
+  };
 
   const doImport = async () => {
     setConfirmImport(false);
@@ -288,12 +381,28 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
         <Skeleton className="h-48 rounded-xl" />
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="grid grid-cols-[1fr_90px_100px_120px_auto] items-center gap-2 border-b border-border px-4 py-2.5 text-xs uppercase tracking-wide text-muted-foreground">
+          {/* ⚠️ Esta grilla y la de la fila tienen que moverse JUNTAS: si se toca una sola, todas
+              las columnas quedan desalineadas. */}
+          <div className="grid grid-cols-[24px_1fr_90px_100px_120px_auto] items-center gap-2 border-b border-border px-4 py-2.5 text-xs uppercase tracking-wide text-muted-foreground">
+            <span />
             <span>Variable</span>
             <span className="text-right">Cantidad</span>
             <span className="text-right">Crudo (USD)</span>
             <span className="text-right">Comercial (USD)</span>
-            <span className="w-[124px]" />
+            <span className="flex w-[124px] justify-end">
+              {/* #72 B1.4 — Va en el HEADER y no en la barra de acciones: esa vive dentro de
+                  `{!readOnly && ...}` y desaparece en un mes ya facturado, que es justo cuando mas
+                  se leen las reglas (es como se responde despues "por que este mes salio sin
+                  variables"). */}
+              {calcKeys.length > 0 && (
+                <button
+                  onClick={toggleAllRules}
+                  className="text-[10px] font-medium normal-case tracking-normal text-muted-foreground transition-colors hover:text-primary"
+                >
+                  {allRulesOpen ? 'Colapsar todo' : 'Expandir todo'}
+                </button>
+              )}
+            </span>
           </div>
           {items.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -304,9 +413,36 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
               {items.map((i) => {
                 const isCalc = i.mode === 'CALCULO';
                 const isAuto = i.mode === 'DIRECTO' || i.mode === 'CALCULO';
+                // #72 B2 — XOR: `flipped` guarda el DELTA respecto del default (una CALCULO nace
+                // abierta, el resto cerradas), no el estado absoluto. Ver el comentario del estado.
+                const ruleOpen = isCalc !== flipped.has(i._key);
+                // #72 B3.3 — El panel lee y escribe el BORRADOR; el item queda intacto hasta
+                // "Aplicar". Por eso el comercial de la fila y el total de arriba no se mueven
+                // mientras se tipea una regla.
+                const d = draftOf(i);
+                const cobrablesBorrador = Math.max(0, (i.usage ?? 0) - (parseFloat(d.incluidas) || 0));
+                const valorBorrador = effectiveCommercial({ ...i, mode: 'CALCULO', ...d });
                 return (
                   <div key={i._key} className={`px-4 py-2 ${!i.enabled ? 'opacity-50' : ''}`}>
-                    <div className="grid grid-cols-[1fr_90px_100px_120px_auto] items-center gap-2">
+                    <div className="grid grid-cols-[24px_1fr_90px_100px_120px_auto] items-center gap-2">
+                      {/* #72 B1.1/B1.2 — El chevron controla la VISIBILIDAD; el boton de la
+                          calculadora sigue controlando el MODO. Hasta ahora ese boton hacia las dos
+                          cosas a la vez, asi que no podias MIRAR una regla sin cambiarle el modo ni
+                          ESCONDERLA sin perderla.
+                          Esta SIEMPRE —tenga o no regla, pedido explicito del dueño— y fuera de todo
+                          `{!readOnly && ...}`: en un mes ya facturado la regla se lee en solo
+                          lectura, que es como se responde despues "por que este mes salio sin
+                          variables". */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={() => toggleRule(i._key, ruleOpen)}
+                        aria-expanded={ruleOpen}
+                        aria-label={`${ruleOpen ? 'Colapsar' : 'Expandir'} la regla de ${i.label || 'la variable'}`}
+                      >
+                        {ruleOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </Button>
                       <div className="flex min-w-0 items-center gap-1.5">
                         <Input
                           value={i.label}
@@ -379,45 +515,91 @@ export function VariablesEditor({ orgId, clientId, period, accountId, onBack, on
                       </div>
                     </div>
 
-                    {/* Sub-fila del cálculo por unidad */}
-                    {isCalc && !readOnly && (
+                    {/* #72 B1.3 — Colapsada, la regla SE LEE IGUAL, en una linea bajo el nombre. El
+                        90% de las veces solo queres confirmar que esta bien, no editarla.
+                        `pl-8` = los 24px de la columna del chevron + los 8px del `gap-2`, asi el
+                        resumen arranca exactamente bajo el nombre. */}
+                    {isCalc && !ruleOpen && (
+                      <p className="pl-8 text-[10px] text-muted-foreground">
+                        {(parseFloat(i.incluidas) || 0).toLocaleString('en-US')} incl.
+                        {' · '}
+                        {precioLegible(i)}
+                        {' · '}= {formatUsd(effectiveCommercial(i))}
+                      </p>
+                    )}
+
+                    {/* Sub-fila del cálculo por unidad.
+                        #72 B3 — Los inputs van TAMBIEN en las filas sin regla (MANUAL/DIRECTO), que
+                        es la opcion comoda que eligio el dueño, y por eso llevan los TRES guards:
+                        rueda bloqueada · no flipear a CALCULO hasta que de > 0 · nada se guarda
+                        hasta "Aplicar". Cada uno tapa una via distinta de llegar a un comercial 0,
+                        y una variable en 0 SE CAE DE LA FACTURA sin avisar
+                        (billing-variables.service.ts:272). */}
+                    {ruleOpen && (
                       <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-muted/30 px-3 py-2 text-xs">
                         <span className="text-muted-foreground">Incluidas / no cobrables</span>
                         <Input
                           type="number"
                           min={0}
-                          value={i.incluidas}
-                          onChange={(e) => update(i._key, { incluidas: e.target.value })}
+                          value={d.incluidas}
+                          onChange={(e) => patchDraft(i, { incluidas: e.target.value })}
+                          // #72 B3.1 — Guard 1: la rueda del mouse NO toca la regla. Sobre un
+                          // `type="number"` enfocado, scrollear la pagina dispara `onChange`; con
+                          // el flujo viejo eso solo bastaba para mandar la fila a CALCULO con el
+                          // precio vacio. Solo el click y el tipeo cambian algo.
+                          onWheel={(e) => e.currentTarget.blur()}
+                          disabled={readOnly}
                           className="h-7 w-24 font-mono"
                         />
                         {/* Operación: × precio unitario o ÷ divisor (p. ej. tokens por USD) */}
                         <select
-                          value={i.op}
-                          onChange={(e) => update(i._key, { op: e.target.value as PricingOp })}
-                          className="h-7 rounded-md border border-input bg-background px-1.5 font-mono text-xs text-foreground"
+                          value={d.op}
+                          onChange={(e) => patchDraft(i, { op: e.target.value as PricingOp })}
+                          disabled={readOnly}
+                          className="h-7 rounded-md border border-input bg-background px-1.5 font-mono text-xs text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                           title="Multiplicar por precio unitario o dividir por un divisor"
                         >
                           <option value="MULT">× Multiplicar</option>
                           <option value="DIV">÷ Dividir</option>
                         </select>
                         <span className="text-muted-foreground">
-                          {i.op === 'DIV' ? 'Divisor (unidades por USD)' : 'Precio unitario (USD)'}
+                          {d.op === 'DIV' ? 'Divisor (unidades por USD)' : 'Precio unitario (USD)'}
                         </span>
                         <Input
                           type="number"
                           min={0}
                           step="0.0001"
-                          value={i.unitPrice}
-                          onChange={(e) => update(i._key, { unitPrice: e.target.value })}
-                          placeholder={i.op === 'DIV' ? 'ej: 625000' : '0.00'}
+                          value={d.unitPrice}
+                          onChange={(e) => patchDraft(i, { unitPrice: e.target.value })}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          disabled={readOnly}
+                          placeholder={d.op === 'DIV' ? 'ej: 625000' : '0.00'}
                           className="h-7 w-28 font-mono"
                         />
                         <span className="ml-auto font-mono text-foreground">
-                          = {formatUsd(effectiveCommercial(i))}
+                          = {formatUsd(valorBorrador)}
                           <span className="ml-1 text-[10px] text-muted-foreground">
-                            ({Math.max(0, (i.usage ?? 0) - (parseFloat(i.incluidas) || 0)).toLocaleString('en-US')} cobrables)
+                            ({cobrablesBorrador.toLocaleString('en-US')} cobrables)
                           </span>
                         </span>
+                        {/* #72 B3.2/B3.3 — Guards 2 y 3. Mientras la regla no de > 0 el boton queda
+                            deshabilitado: la fila NO pasa a CALCULO y conserva su modo y su valor.
+                            En un mes facturado no hay boton — la regla se lee, no se aplica. */}
+                        {!readOnly && (
+                          <Button
+                            size="sm"
+                            className="h-7"
+                            onClick={() => applyRule(i)}
+                            disabled={valorBorrador <= 0}
+                            title={
+                              valorBorrador > 0
+                                ? 'Aplicar la regla a esta variable'
+                                : 'La regla todavía da $0,00 y una variable en 0 no entra en la factura. Completá las dos partes, o usá el ojito si este mes no se cobra.'
+                            }
+                          >
+                            Aplicar
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
