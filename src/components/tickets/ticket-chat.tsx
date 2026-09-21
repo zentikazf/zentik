@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,6 +44,37 @@ interface PendingAttachment {
   file: File;
   preview: string | null;
   fileId?: string;
+}
+
+/**
+ * Clave de dia en la ZONA DEL USUARIO (America/Asuncion en la practica).
+ * 'en-CA' da YYYY-MM-DD, que es el mismo formato/criterio que ya usa
+ * ticket-side-panel.tsx para su `todayStr`.
+ *
+ * NO usar toISOString().slice(0,10): eso es UTC. Un mensaje de las 21:30 de
+ * Asuncion cae en el dia siguiente en UTC, asi que el separador se corre y
+ * aparecen DOS "Hoy".
+ */
+function dayKey(date: Date): string {
+  return date.toLocaleDateString('en-CA');
+}
+
+/** Etiqueta del separador: Hoy / Ayer / "14 sep" (con anio solo si no es el actual). */
+function dayLabel(date: Date): string {
+  const today = new Date();
+  // setDate sobre la fecha LOCAL: maneja los bordes de mes y anio solo.
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const key = dayKey(date);
+  if (key === dayKey(today)) return 'Hoy';
+  if (key === dayKey(yesterday)) return 'Ayer';
+
+  return date.toLocaleDateString('es-PY', {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() !== today.getFullYear() && { year: 'numeric' }),
+  });
 }
 
 /**
@@ -229,13 +260,29 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
     <div className={cn('flex flex-col rounded-xl border border-border bg-card min-h-0', className)}>
       <ScrollArea className="flex-1 min-h-0" ref={scrollRef}>
         <div className="p-3 space-y-3">
-          {messages.map((msg) => {
+          {messages.map((msg, i) => {
             const isTeam = msg.senderType !== 'client';
             const isMyMessage = msg.user.id === user?.id;
             const operatorLabel = isMyMessage ? 'Tu' : msg.user.name;
+            // Separador solo cuando CAMBIA el dia respecto del mensaje anterior
+            // (y siempre en el primero). La hora se queda en cada mensaje: el
+            // separador se suma, no reemplaza.
+            const createdAt = new Date(msg.createdAt);
+            const prev = messages[i - 1];
+            const showDaySeparator =
+              !prev || dayKey(new Date(prev.createdAt)) !== dayKey(createdAt);
             return (
+              <Fragment key={msg.id}>
+              {showDaySeparator && (
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                    {dayLabel(createdAt)}
+                  </span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              )}
               <div
-                key={msg.id}
                 className={cn('flex gap-2 max-w-[85%]', isTeam ? 'ml-auto flex-row-reverse' : '')}
               >
                 <div
@@ -285,12 +332,16 @@ export function TicketChat({ channelId, className }: TicketChatProps) {
                       )}
                     </div>
                   )}
-                  <span className="text-[10px] text-muted-foreground px-1">
+                  <span
+                    className="text-[10px] text-muted-foreground px-1"
+                    title={createdAt.toLocaleString('es-PY', { dateStyle: 'long', timeStyle: 'short' })}
+                  >
                     {isTeam && <span className="font-medium mr-1">{operatorLabel}</span>}
-                    {new Date(msg.createdAt).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
+                    {createdAt.toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               </div>
+              </Fragment>
             );
           })}
           {messages.length === 0 && (
