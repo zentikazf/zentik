@@ -62,7 +62,10 @@ interface HoursTransaction {
   // original NO se borra: las dos caen en el mismo mes aunque el cupo se movió UNA sola vez. Se
   // muestran las dos (el ledger tiene que ser auditable) pero sólo una suma en los totales.
   rebilledFromTransactionId: string | null;
-  task?: { id: string; title: string; type?: 'SUPPORT' | 'PROJECT' | null; project?: { id: string; name: string } } | null;
+  // #72 C: `ticket` viene por la relacion inversa (`Ticket.taskId @unique` -> `Task.ticket`) y es
+  // OPCIONAL de verdad: una tarea PROJECT nunca fue un ticket. El id de la TAREA no sirve para armar
+  // `/tickets/[ticketId]`, por eso el backend manda este.
+  task?: { id: string; title: string; type?: 'SUPPORT' | 'PROJECT' | null; project?: { id: string; name: string }; ticket?: { id: string } | null } | null;
 }
 
 interface HoursSummary {
@@ -945,9 +948,25 @@ export default function ClientTiempoPage() {
                                     {rowDateShort(tx)}
                                   </td>
                                   <td className="px-3 py-2.5">
-                                    <p className="text-sm text-foreground truncate max-w-[220px]">
-                                      {tx.task?.title ?? tx.note ?? conf.label}
-                                    </p>
+                                    {/* #72 C: ir al ticket que genero estas horas.
+                                        El link es CONDICIONAL y no decorativo: `Ticket.taskId` es nullable,
+                                        las tareas PROJECT nunca fueron un ticket y una carga manual no tiene
+                                        tarea. Sin `ticketId` el titulo se queda EXACTAMENTE como estaba —un
+                                        link muerto a un 404 es peor que no tener link—, y por eso solo la
+                                        variante con ticket se pinta clickeable. */}
+                                    {tx.task?.ticket?.id ? (
+                                      <Link
+                                        href={`/tickets/${tx.task.ticket.id}`}
+                                        title="Ver el ticket que genero estas horas"
+                                        className="block truncate max-w-[220px] text-sm text-primary underline-offset-2 transition-colors hover:underline"
+                                      >
+                                        {tx.task.title}
+                                      </Link>
+                                    ) : (
+                                      <p className="text-sm text-foreground truncate max-w-[220px]">
+                                        {tx.task?.title ?? tx.note ?? conf.label}
+                                      </p>
+                                    )}
                                     {tx.task && tx.note && tx.note !== tx.task.title && (
                                       <p className="text-[11px] text-muted-foreground truncate max-w-[220px]">{tx.note}</p>
                                     )}
