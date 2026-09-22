@@ -10,6 +10,7 @@ import { api, ApiError } from '@/lib/api-client';
 import { toast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
 import { taxLabel } from '@/lib/tax';
+import { BucketCard, TaxTag } from '@/components/client-billing/bucket-card';
 import { monthKeyOf, monthLabelEs, rowDateShort } from '@/lib/hours-month';
 import { invoiceRangeLabel, invoiceDateShort } from '@/lib/invoice-period';
 import { PortalVariablesBlock, PortalVariableItem, splitVariables } from '@/components/portal/portal-variables-block';
@@ -152,85 +153,9 @@ const isCredited = (t: HoursTransaction): boolean => Boolean(t.creditNoteNumber)
 const billingStateOf = (t: HoursTransaction): BillingState =>
  t.billingState ?? (t.billedCycleId ? 'INVOICED' : 'PENDING');
 
-// #63 — La etiqueta de IVA de un monto. Un solo componente para los TRES lugares que #62 alineó (la
-// card, el subtotal por mes y el badge de fila): si se etiquetara uno solo, la pantalla se
-// contradiría sola, que es justo el bug que #62 vino a arreglar.
-//
-// ⚠️ NO CALCULA NADA. Esta sección de #63 no cambia ni un número del portal: Pendiente sigue siendo
-// el NETO (sale de `priceAmount`, que nunca lleva IVA) y Facturado/Cobrado siguen saliendo de
-// `totalAmount`. La etiqueta avisa que a Pendiente le falta el IVA sin estimarlo — un estimado
-// cambiaría solo si se toca la tasa antes de facturar, y habría que recalcularlo en tres lugares.
-//
-// `null` no dibuja nada: los documentos anteriores a #63 no llevan etiqueta en vez de heredar una
-// que nunca tuvieron.
-function TaxTag({ taxMode, className }: { taxMode: string | null | undefined; className?: string }) {
- const label = taxLabel(taxMode);
- if (!label) return null;
- return (
-  <span className={cn('shrink-0 text-[10px] font-medium text-muted-foreground', className)}>{label}</span>
- );
-}
-
-// #62 — Una de las tres cards de plata.
-//
-// Las dos que tienen facturas detrás se ABREN (mismo mecanismo, distinta lista). "Pendiente" no
-// enlaza a nada a propósito: todavía no existe ninguna factura, y su detalle ya vive en el
-// listado de horas de esta misma pantalla.
-//
-// La leyenda no es decorativa: el número solo no dice si ya se cobró o no, que es justamente lo
-// que hoy confunde al cliente.
-function BucketCard({
- icon: Icon,
- label,
- legend,
- amount,
- currency,
- tone,
- open,
- onToggle,
- taxMode,
-}: {
- icon: typeof DollarSign;
- label: string;
- legend: string;
- amount: string;
- currency: string;
- tone: { border: string; icon: string; amount: string };
- open?: boolean;
- onToggle?: () => void;
- // #63 — Sólo lo pasa la card de Pendiente, con el modo del CLIENTE. Facturado y Cobrado NO se
- // etiquetan: son agregados de varias facturas que pueden tener modos distintos entre sí (y alguna
- // sin ninguno), así que una sola etiqueta arriba mentiría sobre parte de lo que suma. La etiqueta
- // de esas dos va POR FACTURA, en la lista que se abre.
- taxMode?: string | null;
-}) {
- const body = (
-  <>
-   <div className="flex items-center gap-2 mb-2">
-    <Icon className={cn('h-4 w-4 shrink-0', tone.icon)} />
-    <p className="text-xs text-muted-foreground">{label}</p>
-    {onToggle && (
-     <ChevronDown
-      className={cn('ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')}
-     />
-    )}
-   </div>
-   <div className="flex flex-wrap items-baseline gap-x-2">
-    <p className={cn('text-2xl font-bold', tone.amount)}>{formatCurrency(amount, currency)}</p>
-    <TaxTag taxMode={taxMode} />
-   </div>
-   <p className="text-[11px] text-muted-foreground">{legend}</p>
-  </>
- );
- const shell = cn('rounded-xl border p-5 text-left', tone.border);
- return onToggle ? (
-  <button type="button" onClick={onToggle} aria-expanded={open} className={cn(shell, 'w-full transition-colors hover:bg-muted/30')}>
-   {body}
-  </button>
- ) : (
-  <div className={shell}>{body}</div>
- );
-}
+// #72 A4.1 — `TaxTag` y `BucketCard` se mudaron a `@/components/client-billing/bucket-card`:
+// la pantalla de tiempos del staff pinta las MISMAS tres cards y no puede haber dos copias del
+// componente. Los números de esta pantalla no cambian — se comparte el componente, no el cálculo.
 
 // Las facturas que COMPONEN una card. Cada una enlaza a SU PÁGINA en /portal/billing/<id>.
 // #63: antes el enlace era `?invoice=<id>` y la lista abría sola el acordeón de esa factura —un
