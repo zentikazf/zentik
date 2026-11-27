@@ -47,6 +47,7 @@ const actionLabels: Record<string, string> = {
  'task.deleted': 'eliminó',
  'task.assigned': 'asignó',
  'task.status.changed': 'cambió el estado de',
+ 'task.ticket_chat.joined': 'se unió al chat del ticket de',
  'time_entry.created': 'registró horas en',
  'time_entry.corrected': 'corrigió horas en',
  'time_entry.deleted': 'eliminó horas de',

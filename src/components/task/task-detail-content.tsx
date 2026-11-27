@@ -17,8 +17,9 @@ import {
  ArrowLeft, Calendar, Tag, User, Clock, CheckCircle2, Paperclip,
  Download, File as FileIcon, Image, FileText, Plus, Send, MessageSquare,
  Upload, Shield, Eye, EyeOff, AlertTriangle, DollarSign, XCircle,
- Trash2, Pencil, Check,
+ Trash2, Pencil, Check, MessagesSquare,
 } from 'lucide-react';
+import { TicketChat } from '@/components/tickets/ticket-chat';
 import {
  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -87,7 +88,11 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  const [newSubtask, setNewSubtask] = useState('');
 
  // Tab
- const [tab, setTab] = useState<'comments' | 'activity'>('comments');
+ const [tab, setTab] = useState<'comments' | 'activity' | 'chat'>('comments');
+ // #74: chat del ticket. Estado propio (no dentro de `task`) porque `patchTask` reemplaza
+ // `task` con la respuesta del PATCH, que no trae `ticket` ni `isChannelMember`.
+ const [ticketChat, setTicketChat] = useState<{ channelId: string; isMember: boolean } | null>(null);
+ const [joiningChat, setJoiningChat] = useState(false);
  const [showRejections, setShowRejections] = useState(false);
  const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -122,6 +127,9 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  try {
  const res = await api.get(`/tasks/${taskId}`);
  setTask(res.data);
+ const chatChannelId: string | null = res.data.ticket?.channelId ?? null;
+ setTicketChat(chatChannelId ? { channelId: chatChannelId, isMember: !!res.data.isChannelMember } : null);
+ if (!chatChannelId) setTab((t) => (t === 'chat' ? 'comments' : t));
  setTitleDraft(res.data.title || '');
  setDescDraft(res.data.description || '');
  setHoursDraft(
@@ -337,6 +345,20 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  }
  };
 
+ // #74: "Unirme" — entrada explícita y auditada al chat del ticket (requiere manage:projects).
+ const handleJoinChat = async () => {
+ setJoiningChat(true);
+ try {
+ const res = await api.post(`/tasks/${taskId}/ticket-chat/join`, {});
+ setTicketChat({ channelId: res.data.channelId, isMember: true });
+ } catch (err) {
+ const msg = err instanceof ApiError ? err.message : 'No se pudo unir al chat';
+ toast.error('Error', msg);
+ } finally {
+ setJoiningChat(false);
+ }
+ };
+
  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
  const file = e.target.files?.[0];
  if (!file) return;
@@ -529,12 +551,17 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </div>
  </div>
 
- {/* Comments / Activity Tabs */}
+ {/* Comments / Client chat / Activity Tabs (#74: rótulos explícitos — dos conversaciones con audiencias distintas) */}
  <div className={isSheet ? '' : 'rounded-xl border border-border bg-card p-6'}>
  <div className="flex gap-4 mb-4 border-b border-border">
  <button onClick={() => setTab('comments')} className={`pb-2.5 text-sm font-medium transition-colors ${tab === 'comments' ? 'text-foreground border-b-2 border-borderborder-primary' : 'text-muted-foreground hover:text-muted-foreground'}`}>
- <MessageSquare className="inline h-3.5 w-3.5 mr-1.5"/>Comentarios
+ <MessageSquare className="inline h-3.5 w-3.5 mr-1.5"/>Comentarios internos
  </button>
+ {ticketChat && (
+ <button onClick={() => setTab('chat')} className={`pb-2.5 text-sm font-medium transition-colors ${tab === 'chat' ? 'text-foreground border-b-2 border-borderborder-primary' : 'text-muted-foreground hover:text-muted-foreground'}`}>
+ <MessagesSquare className="inline h-3.5 w-3.5 mr-1.5"/>Chat con el cliente
+ </button>
+ )}
  <button onClick={() => setTab('activity')} className={`pb-2.5 text-sm font-medium transition-colors ${tab === 'activity' ? 'text-foreground border-b-2 border-borderborder-primary' : 'text-muted-foreground hover:text-muted-foreground'}`}>
  <Clock className="inline h-3.5 w-3.5 mr-1.5"/>Actividad
  </button>
@@ -590,6 +617,20 @@ export function TaskDetailContent({ taskId, projectId, mode, onClose, onUpdated 
  </Button>
  </div>
  </div>
+ ) : tab === 'chat' && ticketChat ? (
+ // Montado sólo con la pestaña activa: TicketChat entra a la room del socket al montarse.
+ ticketChat.isMember ? (
+ <TicketChat channelId={ticketChat.channelId} className="h-[28rem]" />
+ ) : (
+ <div className="flex flex-col items-center gap-3 py-8 text-center">
+ <p className="text-sm text-muted-foreground">No sos parte de esta conversación.</p>
+ {canApprove && (
+ <Button size="sm" className="rounded-full" onClick={handleJoinChat} disabled={joiningChat}>
+ Unirme
+ </Button>
+ )}
+ </div>
+ )
  ) : (
  <ActivityFeed endpoint={`/tasks/${taskId}/activity`} emptyMessage="No hay actividad" maxItems={15} />
  )}
