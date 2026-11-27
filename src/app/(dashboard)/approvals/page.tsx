@@ -32,6 +32,7 @@ interface ApprovalTask {
  assignee?: { id: string; name: string };
  estimatedHours?: number;
  reviewAttempts?: number;
+ ticketNumber?: string | null;
  createdAt: string;
 }
 
@@ -174,6 +175,11 @@ export default function ApprovalsPage() {
  <div className="min-w-0 flex-1">
  {/* Title row with badges */}
  <div className="flex items-center gap-2 flex-wrap">
+ {task.ticketNumber && (
+ <span className="text-xs font-mono text-muted-foreground">
+ #{task.ticketNumber}
+ </span>
+ )}
  <h3 className="text-[15px] font-semibold text-foreground">
  {task.title}
  </h3>

@@ -103,6 +103,11 @@ export default function ProjectApprovalsPage() {
  <div className="flex items-start justify-between gap-4">
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-3">
+ {task.ticketNumber && (
+ <span className="shrink-0 text-xs font-mono text-muted-foreground">
+ #{task.ticketNumber}
+ </span>
+ )}
  <h3 className="truncate text-[15px] font-semibold text-foreground">
  {task.title}
  </h3>
